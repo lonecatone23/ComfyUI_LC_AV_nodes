@@ -1,0 +1,22 @@
+[project]
+name = "ComfyUI_LC_AV_nodes"
+version = "0.3.1"
+description = "ComfyUI LC Audio_Video Nodes by lonecatone23 — Create/Save Video, AV pipe, Load Audio cut preview, EQ, volume, channel, separate, VAE Decode wrapper, Get Latent Size. Companion to ComfyUI_LC123_nodes; separate Registry name."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "lonecatone23" }]
+keywords = [
+  "comfyui", "custom-nodes", "video", "audio", "save-video", "metadata",
+  "civitai", "pipe", "fps", "waveform", "lonecat", "lc-av", "vae", "minimax",
+]
+
+[project.urls]
+Repository = "https://github.com/lonecatone23/ComfyUI_LC_AV_nodes"
+Homepage = "https://github.com/lonecatone23/ComfyUI_LC_AV_nodes"
+"Buy me a coffee" = "https://ko-fi.com/lonecatone"
+
+[tool.comfy]
+PublisherId = "lonecatone23"
+DisplayName = "ComfyUI LC Audio_Video Nodes"
+Icon = ""
