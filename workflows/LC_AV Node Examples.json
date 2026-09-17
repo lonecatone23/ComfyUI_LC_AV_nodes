@@ -1,0 +1,1284 @@
+{
+  "id": "b70f3ab4-1721-407c-857f-c3492dcfe102",
+  "revision": 0,
+  "last_node_id": 69,
+  "last_link_id": 28,
+  "nodes": [
+    {
+      "id": 48,
+      "type": "LCAudioVolume",
+      "pos": [
+        -720,
+        -690
+      ],
+      "size": [
+        270,
+        60
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 28
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            24
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCAudioVolume",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        1
+      ],
+      "widgets_values_named": {
+        "volume": 1
+      },
+      "color": "#2a6a6a",
+      "bgcolor": "#2a6a6a"
+    },
+    {
+      "id": 23,
+      "type": "LCAudioEqualizer3Band",
+      "pos": [
+        -730,
+        -520
+      ],
+      "size": [
+        270,
+        230
+      ],
+      "flags": {},
+      "order": 17,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 24
+        }
+      ],
+      "outputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            6,
+            25
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCAudioEqualizer3Band",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        7.3,
+        100,
+        -1.4,
+        1000,
+        0.707,
+        0,
+        5000
+      ],
+      "widgets_values_named": {
+        "low_gain_dB": 7.3,
+        "low_freq": 100,
+        "mid_gain_dB": -1.4,
+        "mid_freq": 1000,
+        "mid_q": 0.707,
+        "high_gain_dB": 0,
+        "high_freq": 5000
+      },
+      "color": "#2a6a6a",
+      "bgcolor": "#2a6a6a"
+    },
+    {
+      "id": 20,
+      "type": "LCAudioCrop",
+      "pos": [
+        -430,
+        -690
+      ],
+      "size": [
+        270,
+        110
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCAudioCrop",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        "0:00",
+        "1:00"
+      ],
+      "widgets_values_named": {
+        "start_time": "0:00",
+        "end_time": "1:00"
+      },
+      "color": "#2a6a6a",
+      "bgcolor": "#2a6a6a"
+    },
+    {
+      "id": 21,
+      "type": "LCAudioDuration",
+      "pos": [
+        -430,
+        -510
+      ],
+      "size": [
+        210,
+        120
+      ],
+      "flags": {},
+      "order": 19,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 25
+        }
+      ],
+      "outputs": [
+        {
+          "name": "seconds_int",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "seconds_float",
+          "type": "FLOAT",
+          "links": null
+        },
+        {
+          "name": "minutes_int",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "minutes_float",
+          "type": "FLOAT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCAudioDuration",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "color": "#2a6a6a",
+      "bgcolor": "#2a6a6a"
+    },
+    {
+      "id": 25,
+      "type": "PreviewAudio",
+      "pos": [
+        -70,
+        -540
+      ],
+      "size": [
+        270,
+        90
+      ],
+      "flags": {},
+      "order": 18,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 6
+        }
+      ],
+      "outputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.34.0",
+        "Node name for S&R": "PreviewAudio",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [],
+      "widgets_values_named": {}
+    },
+    {
+      "id": 22,
+      "type": "LCAudioChannel",
+      "pos": [
+        -430,
+        -340
+      ],
+      "size": [
+        210,
+        100
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "left",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "name": "right",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "name": "note",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCAudioChannel",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "color": "#2a6a6a",
+      "bgcolor": "#2a6a6a"
+    },
+    {
+      "id": 51,
+      "type": "LCAvPipeOut",
+      "pos": [
+        -700,
+        20
+      ],
+      "size": [
+        190,
+        310
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pipe",
+          "shape": 7,
+          "type": "LC_PIPE",
+          "link": null
+        },
+        {
+          "name": "av_pipe",
+          "shape": 7,
+          "type": "LC_AV_PIPE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "av_pipe",
+          "type": "LC_AV_PIPE",
+          "links": null
+        },
+        {
+          "name": "Video",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "name": "Audio",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "name": "frame_rate",
+          "type": "FLOAT",
+          "links": null
+        },
+        {
+          "name": "duration",
+          "type": "FLOAT",
+          "links": null
+        },
+        {
+          "name": "sample_rate",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "Width",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "Height",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "frame_count",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "Positive prompt",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "Negative prompt",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "Seed",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "total_steps",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "sampler_name",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "Models",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCAvPipeOut",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "color": "#1a5a7a",
+      "bgcolor": "#1a5a7a"
+    },
+    {
+      "id": 50,
+      "type": "LCPipeToAvPipe",
+      "pos": [
+        -700,
+        -50
+      ],
+      "size": [
+        190,
+        30
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pipe",
+          "type": "LC_PIPE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "av_pipe",
+          "type": "LC_AV_PIPE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCPipeToAvPipe",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "color": "#1a5a7a",
+      "bgcolor": "#1a5a7a"
+    },
+    {
+      "id": 49,
+      "type": "LCAvPipeEdit",
+      "pos": [
+        -920,
+        20
+      ],
+      "size": [
+        200,
+        330
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pipe",
+          "shape": 7,
+          "type": "LC_PIPE",
+          "link": null
+        },
+        {
+          "name": "av_pipe",
+          "shape": 7,
+          "type": "LC_AV_PIPE",
+          "link": null
+        },
+        {
+          "name": "video",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": null
+        },
+        {
+          "name": "frame_rate",
+          "shape": 7,
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "duration",
+          "shape": 7,
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "sample_rate",
+          "shape": 7,
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "width",
+          "shape": 7,
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "height",
+          "shape": 7,
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "frame_count",
+          "shape": 7,
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "positive_prompt",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "negative_prompt",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "seed",
+          "shape": 7,
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "total_steps",
+          "shape": 7,
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "sampler_name",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "models",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "av_pipe",
+          "type": "LC_AV_PIPE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCAvPipeEdit",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "color": "#1a5a7a",
+      "bgcolor": "#1a5a7a"
+    },
+    {
+      "id": 55,
+      "type": "LCCreateVideo",
+      "pos": [
+        -940,
+        470
+      ],
+      "size": [
+        270,
+        140
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": null
+        },
+        {
+          "name": "pipe",
+          "shape": 7,
+          "type": "LC_AV_PIPE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pipe",
+          "type": "LC_AV_PIPE",
+          "links": null
+        },
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "name": "frame_rate",
+          "type": "FLOAT",
+          "links": null
+        },
+        {
+          "name": "duration",
+          "type": "FLOAT",
+          "links": null
+        },
+        {
+          "name": "frame_count",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCCreateVideo",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        24
+      ],
+      "widgets_values_named": {
+        "frame_rate": 24
+      },
+      "color": "#1a5a7a",
+      "bgcolor": "#1a5a7a"
+    },
+    {
+      "id": 56,
+      "type": "LCSaveVideo",
+      "pos": [
+        -640,
+        480
+      ],
+      "size": [
+        270,
+        380
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": null
+        },
+        {
+          "name": "av_pipe",
+          "shape": 7,
+          "type": "LC_AV_PIPE",
+          "link": null
+        },
+        {
+          "name": "metadata",
+          "shape": 7,
+          "type": "LC_SAVE_META",
+          "link": null
+        },
+        {
+          "name": "pipe",
+          "shape": 7,
+          "type": "LC_PIPE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "saved_as",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCSaveVideo",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        24,
+        0,
+        "LC_AV",
+        "video/h264-mp4",
+        "yuv420p",
+        22,
+        true,
+        true,
+        false,
+        true,
+        true
+      ],
+      "widgets_values_named": {
+        "frame_rate": 24,
+        "loop_count": 0,
+        "filename_prefix": "LC_AV",
+        "format": "video/h264-mp4",
+        "pix_fmt": "yuv420p",
+        "crf": 22,
+        "save_metadata": true,
+        "civitai_still": true,
+        "pingpong": false,
+        "save_output": true,
+        "prune_outputs": true
+      },
+      "color": "#1a5a7a",
+      "bgcolor": "#1a5a7a"
+    },
+    {
+      "id": 26,
+      "type": "LCFinalFrame",
+      "pos": [
+        -930,
+        660
+      ],
+      "size": [
+        170,
+        30
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCFinalFrame",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "color": "#1a5a7a",
+      "bgcolor": "#1a5a7a"
+    },
+    {
+      "id": 57,
+      "type": "LCSaveVideoMetadata",
+      "pos": [
+        -340,
+        480
+      ],
+      "size": [
+        400,
+        450
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pipe",
+          "shape": 7,
+          "type": "LC_PIPE",
+          "link": null
+        },
+        {
+          "name": "av_pipe",
+          "shape": 7,
+          "type": "LC_AV_PIPE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "metadata",
+          "type": "LC_SAVE_META",
+          "links": null
+        },
+        {
+          "name": "parameters",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCSaveVideoMetadata",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        "auto",
+        "",
+        "",
+        -1,
+        0,
+        "",
+        "",
+        0,
+        0,
+        0,
+        0,
+        "",
+        "",
+        ""
+      ],
+      "widgets_values_named": {
+        "target": "auto",
+        "positive": "",
+        "negative": "",
+        "seed_value": -1,
+        "steps": 0,
+        "sampler": "",
+        "scheduler": "",
+        "cfg": 0,
+        "width": 0,
+        "height": 0,
+        "denoise": 0,
+        "models": "",
+        "civitai_air": "",
+        "extra_params": ""
+      },
+      "color": "#28281E",
+      "bgcolor": "#28281E"
+    },
+    {
+      "id": 59,
+      "type": "LCGetLatentSize",
+      "pos": [
+        -330,
+        980
+      ],
+      "size": [
+        270,
+        120
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": null
+        },
+        {
+          "name": "vae",
+          "shape": 7,
+          "type": "VAE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "width",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "batch",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "frames",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCGetLatentSize",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        8
+      ],
+      "widgets_values_named": {
+        "compression": 8
+      },
+      "color": "#324b4b",
+      "bgcolor": "#324b4b"
+    },
+    {
+      "id": 53,
+      "type": "MarkdownNote",
+      "pos": [
+        -1800,
+        -20
+      ],
+      "size": [
+        700,
+        930
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.8",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "# ComfyUI_LC_AV_nodes — node list\n\nClass names are what you search. Titles are the graph labels.\n\n## Pipe\n\n| Title | Class | What it does |\n| --- | --- | --- |\n| LC AV Pipe (in/edit) 🎬 | `LCAvPipeEdit` | Build or edit an `LC_AV_PIPE`. Inputs top-down: `pipe` (`LC_PIPE`), `av_pipe` (`LC_AV_PIPE`), then video, audio, fps, duration, prompts, seed, steps, etc. Wired slots override; empty slots pass through. Out: `av_pipe` only. |\n| LC AV Pipe Out 🎬 | `LCAvPipeOut` | Unpack. In: `pipe` + `av_pipe`. Out: `av_pipe` plus video, audio, fps, duration, and the shared LC123 fields. No `LC_PIPE` on the output side. |\n| LC Pipe → AV Pipe 🔌 | `LCPipeToAvPipe` | One socket in (`LC_PIPE`), one out (`LC_AV_PIPE`). Copies shared keys only. No widgets. |\n\n`LC_PIPE` and `LC_AV_PIPE` stay separate types. Video/audio never write back into `LC_PIPE`.\n\n## Video / I/O\n\n| Title | Class | What it does |\n| --- | --- | --- |\n| LC Create Video 🎬 | `LCCreateVideo` | Pack an `IMAGE` batch (+ optional `AUDIO`) into `LC_AV_PIPE`. Does **not** encode a file. Out: pipe, images, frame_rate, duration, frame_count. |\n| LC Save Video 💾 | `LCSaveVideo` | Encode frames to mp4/webm/av1 (ffmpeg). VHS-style options: frame_rate, loop_count, filename_prefix, format, pix_fmt, crf, pingpong, save_output, prune_outputs. Optional audio mux. In: images, audio, pipe, av_pipe, metadata. Preview after encode. `prune_outputs` keeps intermediate frame PNGs off disk. |\n| LC Save Video Metadata 🏷️ | `LCSaveVideoMetadata` | Builds `LC_SAVE_META` for Save Video **or** LC123 Save Image. Widgets: positive, negative, seed, steps, sampler, scheduler, cfg, width, height, denoise, models, civitai_air. Out: metadata dict + A1111 `parameters` string. |\n| LC Final Frame 🖼️ | `LCFinalFrame` | Last frame of an `IMAGE` batch. |\n| LC VAE Decode 🧩 | `LCVaeDecode` | Switch only: **full** = core `VAE Decode`, **tiled** = core `VAE Decode (Tiled)` (tile_size, overlap, temporal_size, temporal_overlap). No extra latent handling. |\n| LC Get Latent Size 📐 | `LCGetLatentSize` | Pixel `width` / `height` (latent × compression). Optional `vae` for compression, else widget (default 8). Also `batch` and `frames`. |\n\nCivitai: upload the first-frame **PNG** Save Video writes next to the mp4 (`civitai_still`). Civitai does not read mp4 comment. Fill `models` and `civitai_air` on the metadata node.\n\n## Audio\n\n| Title | Class | What it does |\n| --- | --- | --- |\n| LC Load Audio 📂 | `LCLoadAudio` | Load from input/output/temp. Out: `AUDIO`, duration (float seconds). Preview button on this node only. |\n| LC Audio Duration ⏱️ | `LCAudioDuration` | Out: seconds (int), seconds (float). |\n| LC Audio Crop ✂️ | `LCAudioCrop` | Crop `AUDIO` with `start_time` / `end_time` as `MM:SS`. |\n| LC Audio Channel 🎚️ | `LCAudioChannel` | Stereo → L / R. Mono is copied to both. |\n| LC Audio Separate 🎼 | `LCAudioSeparate` | Hybrid Demucs stems: Bass, Drums, Other, Vocals. Needs torchaudio. No Numba/SoX. |\n| LC Audio EQ 3-Band 🎛️ | `LCAudioEqualizer3Band` | Low shelf, peaking mid, high shelf. NumPy biquads. 0 dB bands skipped. |\n| LC Audio Volume 🔊 | `LCAudioVolume` | Gain slider 0–4 (1.0 = unity). Soft-clip after gain. |\n\n\n"
+      ],
+      "widgets_values_named": {
+        "text": "# ComfyUI_LC_AV_nodes — node list\n\nClass names are what you search. Titles are the graph labels.\n\n## Pipe\n\n| Title | Class | What it does |\n| --- | --- | --- |\n| LC AV Pipe (in/edit) 🎬 | `LCAvPipeEdit` | Build or edit an `LC_AV_PIPE`. Inputs top-down: `pipe` (`LC_PIPE`), `av_pipe` (`LC_AV_PIPE`), then video, audio, fps, duration, prompts, seed, steps, etc. Wired slots override; empty slots pass through. Out: `av_pipe` only. |\n| LC AV Pipe Out 🎬 | `LCAvPipeOut` | Unpack. In: `pipe` + `av_pipe`. Out: `av_pipe` plus video, audio, fps, duration, and the shared LC123 fields. No `LC_PIPE` on the output side. |\n| LC Pipe → AV Pipe 🔌 | `LCPipeToAvPipe` | One socket in (`LC_PIPE`), one out (`LC_AV_PIPE`). Copies shared keys only. No widgets. |\n\n`LC_PIPE` and `LC_AV_PIPE` stay separate types. Video/audio never write back into `LC_PIPE`.\n\n## Video / I/O\n\n| Title | Class | What it does |\n| --- | --- | --- |\n| LC Create Video 🎬 | `LCCreateVideo` | Pack an `IMAGE` batch (+ optional `AUDIO`) into `LC_AV_PIPE`. Does **not** encode a file. Out: pipe, images, frame_rate, duration, frame_count. |\n| LC Save Video 💾 | `LCSaveVideo` | Encode frames to mp4/webm/av1 (ffmpeg). VHS-style options: frame_rate, loop_count, filename_prefix, format, pix_fmt, crf, pingpong, save_output, prune_outputs. Optional audio mux. In: images, audio, pipe, av_pipe, metadata. Preview after encode. `prune_outputs` keeps intermediate frame PNGs off disk. |\n| LC Save Video Metadata 🏷️ | `LCSaveVideoMetadata` | Builds `LC_SAVE_META` for Save Video **or** LC123 Save Image. Widgets: positive, negative, seed, steps, sampler, scheduler, cfg, width, height, denoise, models, civitai_air. Out: metadata dict + A1111 `parameters` string. |\n| LC Final Frame 🖼️ | `LCFinalFrame` | Last frame of an `IMAGE` batch. |\n| LC VAE Decode 🧩 | `LCVaeDecode` | Switch only: **full** = core `VAE Decode`, **tiled** = core `VAE Decode (Tiled)` (tile_size, overlap, temporal_size, temporal_overlap). No extra latent handling. |\n| LC Get Latent Size 📐 | `LCGetLatentSize` | Pixel `width` / `height` (latent × compression). Optional `vae` for compression, else widget (default 8). Also `batch` and `frames`. |\n\nCivitai: upload the first-frame **PNG** Save Video writes next to the mp4 (`civitai_still`). Civitai does not read mp4 comment. Fill `models` and `civitai_air` on the metadata node.\n\n## Audio\n\n| Title | Class | What it does |\n| --- | --- | --- |\n| LC Load Audio 📂 | `LCLoadAudio` | Load from input/output/temp. Out: `AUDIO`, duration (float seconds). Preview button on this node only. |\n| LC Audio Duration ⏱️ | `LCAudioDuration` | Out: seconds (int), seconds (float). |\n| LC Audio Crop ✂️ | `LCAudioCrop` | Crop `AUDIO` with `start_time` / `end_time` as `MM:SS`. |\n| LC Audio Channel 🎚️ | `LCAudioChannel` | Stereo → L / R. Mono is copied to both. |\n| LC Audio Separate 🎼 | `LCAudioSeparate` | Hybrid Demucs stems: Bass, Drums, Other, Vocals. Needs torchaudio. No Numba/SoX. |\n| LC Audio EQ 3-Band 🎛️ | `LCAudioEqualizer3Band` | Low shelf, peaking mid, high shelf. NumPy biquads. 0 dB bands skipped. |\n| LC Audio Volume 🔊 | `LCAudioVolume` | Gain slider 0–4 (1.0 = unity). Soft-clip after gain. |\n\n\n"
+      },
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 60,
+      "type": "Label (rgthree)",
+      "pos": [
+        -1320,
+        -880
+      ],
+      "size": [
+        1290.0390625,
+        125
+      ],
+      "flags": {
+        "allow_interaction": true
+      },
+      "order": 11,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "LC_AV Node examples",
+      "properties": {
+        "fontSize": 125,
+        "fontFamily": "Arial",
+        "fontColor": "#ffffff",
+        "textAlign": "left",
+        "backgroundColor": "transparent",
+        "padding": 0,
+        "borderRadius": 0,
+        "angle": 0,
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "color": "#fff0",
+      "bgcolor": "#fff0"
+    },
+    {
+      "id": 16,
+      "type": "LCAudioSeparate",
+      "pos": [
+        -1020,
+        -440
+      ],
+      "size": [
+        270,
+        190
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Bass",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "name": "Drums",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "name": "Other",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "name": "Vocals",
+          "type": "AUDIO",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCAudioSeparate",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        "channel_split",
+        10,
+        0.1
+      ],
+      "widgets_values_named": {
+        "chunk_fade_shape": "channel_split",
+        "chunk_length": 10,
+        "chunk_overlap": 0.1
+      },
+      "color": "#2a6a6a",
+      "bgcolor": "#2a6a6a"
+    },
+    {
+      "id": 66,
+      "type": "Label (rgthree)",
+      "pos": [
+        -1680,
+        -170
+      ],
+      "size": [
+        1809.29443359375,
+        45
+      ],
+      "flags": {
+        "allow_interaction": true
+      },
+      "order": 13,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "BETA. These nodes are examples only. do not cut & paste. Get the node from the directory",
+      "properties": {
+        "fontSize": 45,
+        "fontFamily": "Arial",
+        "fontColor": "#ffffff",
+        "textAlign": "left",
+        "backgroundColor": "transparent",
+        "padding": 0,
+        "borderRadius": 0,
+        "angle": 0,
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "color": "#fff0",
+      "bgcolor": "#fff0"
+    },
+    {
+      "id": 67,
+      "type": "LCVaeDecode",
+      "pos": [
+        -630,
+        920
+      ],
+      "size": [
+        270,
+        180
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": null
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCVaeDecode",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        false,
+        512,
+        64,
+        64,
+        8
+      ],
+      "widgets_values_named": {
+        "tiled": false,
+        "tile_size": 512,
+        "overlap": 64,
+        "temporal_size": 64,
+        "temporal_overlap": 8
+      },
+      "color": "#322",
+      "bgcolor": "#533"
+    },
+    {
+      "id": 69,
+      "type": "LCLoadAudio",
+      "pos": [
+        -1030,
+        -710
+      ],
+      "size": [
+        270,
+        220
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            28
+          ]
+        },
+        {
+          "name": "duration",
+          "type": "FLOAT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LCLoadAudio",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        "HumeAI_voice-preview_Nova.mp3",
+        2.13,
+        32.62,
+        "",
+        null,
+        null
+      ],
+      "widgets_values_named": {
+        "audio": "HumeAI_voice-preview_Nova.mp3",
+        "start_time": 2.13,
+        "end_time": 32.62,
+        "lc_audio_bar": "",
+        "Load audio": null,
+        "preview / pause": null
+      },
+      "color": "#2a6a6a",
+      "bgcolor": "#2a6a6a"
+    }
+  ],
+  "links": [
+    [
+      6,
+      23,
+      0,
+      25,
+      0,
+      "AUDIO"
+    ],
+    [
+      24,
+      48,
+      0,
+      23,
+      0,
+      "AUDIO"
+    ],
+    [
+      25,
+      23,
+      0,
+      21,
+      0,
+      "AUDIO"
+    ],
+    [
+      28,
+      69,
+      0,
+      48,
+      0,
+      "AUDIO"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.5131581182307076,
+      "offset": [
+        2089.5902224654187,
+        427.8778177329146
+      ]
+    },
+    "ue_links": [],
+    "k2cf_state_id": "k2cf_1782395516386_1ufts1mp18p",
+    "links_added_by_ue": [],
+    "frontendVersion": "1.51.9",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}
