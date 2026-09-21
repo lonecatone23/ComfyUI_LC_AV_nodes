@@ -1,6 +1,6 @@
 [project]
 name = "ComfyUI_LC_AV_nodes"
-version = "0.3.3"
+version = "0.3.4"
 description = "ComfyUI LC Audio_Video Nodes by lonecatone23 — Create/Save Video, AV pipe, Load Audio cut preview, EQ, volume, channel, separate, VAE Decode wrapper, Get Latent Size. Companion to ComfyUI_LC123_nodes; separate Registry name."
 readme = "README.md"
 requires-python = ">=3.10"

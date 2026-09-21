@@ -162,7 +162,7 @@ class LCSaveVideoMetadata:
                     "STRING",
                     {
                         "default": "",
-                        "tooltip": "Exact Civitai AIR URN paste or model URL. Optional. Do not invent version/file ids.",
+                        "tooltip": "Exact Civitai AIR URN paste or model URL. Optional. Do not invent version/file ids. Fill it to link your workflow/model on Civitai. Trade-off: Civitai then labels the image \"made on-site\". Leave it empty and the image reads as an external generator.",
                     },
                 ),
                 "extra_params": (
