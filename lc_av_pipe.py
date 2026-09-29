@@ -139,9 +139,7 @@ class LCAvPipeOut:
     RETURN_NAMES = ("av_pipe",) + tuple(DISPLAY[k] for k, _ in SLOT_ORDER)
     FUNCTION = "unpack"
     CATEGORY = "LC AV/pipe"
-    DESCRIPTION = (
-        "Inputs: pipe (LC_PIPE or H3 Pipe / V2), av_pipe. Out: av_pipe plus slots. No LC_PIPE out."
-    )
+    DESCRIPTION = "Unpacks the video, audio and settings from an AV pipe."
 
     def unpack(self, pipe=None, av_pipe=None):
         base = _normalize_pipe(av_pipe)
@@ -171,10 +169,7 @@ class LCAvPipeEdit:
     RETURN_NAMES = ("av_pipe",)
     FUNCTION = "edit"
     CATEGORY = "LC AV/pipe"
-    DESCRIPTION = (
-        "In/edit for LC_AV_PIPE. Top sockets: pipe (LC_PIPE or H3 Pipe / V2), av_pipe (LC_AV_PIPE), "
-        "then video, audio, … Out is av_pipe only."
-    )
+    DESCRIPTION = "Packs your video, audio and its settings into one wire, or changes only what you wire on an existing one. Takes an LC pipe or H3 pipe in too."
 
     def edit(self, pipe=None, av_pipe=None, **kwargs):
         base = _normalize_pipe(av_pipe)
@@ -206,10 +201,7 @@ class LCPipeToAvPipe:
     RETURN_NAMES = ("av_pipe",)
     FUNCTION = "convert"
     CATEGORY = "LC AV/pipe"
-    DESCRIPTION = (
-        "Convert LC_PIPE or LC MiniMax H3 Pipe / V2 to LC_AV_PIPE. Shared fields only. "
-        "Does not copy models, CLIP, VAE, latent, image, or mask."
-    )
+    DESCRIPTION = "Turns an LC pipe or H3 pipe into an AV pipe. Only the shared settings carry over (no models, image or latent)."
 
     def convert(self, pipe):
         base = _empty()
