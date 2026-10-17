@@ -52,6 +52,14 @@ _load("lc_audio_eq")
 _load("lc_audio_volume")
 _load("lc_vae_decode")
 _load("lc_latent_size")
+_load("lc_h3_segment")
+_load("lc_h3_proof")
+_load("lc_h3_upscale")
+_load("lc_h3_ultimate_upscale")
+_load("lc_h3_refs")
+_load("lc_h3_audio_sync")
+_load("lc_h3_dialogue_check")
+_load("lc_frame_interpolate")
 
 WEB_DIRECTORY = "./web"
 

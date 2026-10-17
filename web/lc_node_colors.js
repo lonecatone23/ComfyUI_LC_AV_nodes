@@ -34,6 +34,16 @@ const COLORS = {
     LCAudioSeparate: { color: "#2a6a6a", bgcolor: "#2a6a6a" },
     LCAudioEqualizer3Band: { color: "#2a6a6a", bgcolor: "#2a6a6a" },
     LCAudioVolume: { color: "#2a6a6a", bgcolor: "#2a6a6a" },
+    LCFrameInterpolate: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
+    LCH3Segment: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
+    LCH3SegmentSave: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
+    LCH3Assemble: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
+    LCH3ProofSheet: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
+    LCH3ReferenceAssembler: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
+    LCH3Upscale: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
+    LCH3UltimateUpscale: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
+    LCH3AudioSync: { color: "#2a6a6a", bgcolor: "#2a6a6a" },
+    LCH3DialogueCheck: { color: "#2a6a6a", bgcolor: "#2a6a6a" },
 };
 
 app.registerExtension({

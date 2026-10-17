@@ -1,0 +1,6 @@
+rife_arch.py is copied unchanged from
+ComfyUI-Frame-Interpolation by Fannovel16, MIT License (see LICENSE):
+https://github.com/Fannovel16/ComfyUI-Frame-Interpolation  (vfi_models/rife/rife_arch.py)
+which is based on Practical-RIFE by hzwer (MIT): https://github.com/hzwer/Practical-RIFE
+and vs-rife by HolyWu (MIT): https://github.com/HolyWu/vs-rife
+Weights (rife426.pth etc.) are hzwer's RIFE checkpoints, MIT.

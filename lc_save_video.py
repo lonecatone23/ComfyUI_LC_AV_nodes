@@ -317,7 +317,15 @@ class LCSaveVideoMetadata:
 
 
 def _ffmpeg_bin():
-    return shutil.which("ffmpeg")
+    ff = shutil.which("ffmpeg")
+    if ff:
+        return ff
+    # no ffmpeg on PATH (common on portable installs): the copy imageio-ffmpeg ships (VHS installs it)
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return None
 
 
 def _write_wav(path, wave, sr):

@@ -8,3 +8,6 @@ node.zip
 *.egg-info/
 dist/
 build/
+
+# internal research, not shipped
+notes/
