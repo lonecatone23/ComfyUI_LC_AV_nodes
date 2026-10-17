@@ -16,10 +16,11 @@ import subprocess
 import tempfile
 
 import numpy as np
+import torch
 
 import folder_paths
 
-from .lc_av_media import audio_duration_sec, audio_parts, tensor_to_uint8_frames
+from .lc_av_media import audio_duration_sec, audio_parts
 from .lc_av_meta import (
     META_TYPE,
     as_meta,
@@ -345,19 +346,6 @@ def _write_wav(path, wave, sr):
         w.writeframes(interleaved.tobytes())
 
 
-def _apply_pingpong(frames):
-    if frames.shape[0] < 2:
-        return frames
-    return np.concatenate([frames, frames[-2:0:-1]], axis=0)
-
-
-def _apply_loops(frames, loop_count):
-    extra = int(loop_count or 0)
-    if extra <= 0:
-        return frames
-    return np.concatenate([frames] * (extra + 1), axis=0)
-
-
 _FORMATS = {
     "video/h264-mp4": {
         "ext": "mp4",
@@ -392,16 +380,47 @@ _FORMATS = {
 }
 
 
-def _encode_ffmpeg(frames_u8, dest, fps, fmt_key, crf, pix_fmt, audio=None, comment="", audio_bitrate="192k"):
+def _frame_u8(src, i):
+    """One frame of an IMAGE batch (tensor or array, [B,H,W,C]) as H x W x 3 uint8, converted on its own: a whole long
+    clip at once is many GB."""
+    f = src[i]
+    if hasattr(f, "detach"):
+        f = f.detach()
+        if f.dtype != torch.uint8:
+            f = (f.float().clamp(0, 1) * 255.0).round().to(torch.uint8)
+        f = f.cpu().numpy()
+    else:
+        f = np.asarray(f)
+        if f.dtype != np.uint8:
+            f = np.clip(f.astype(np.float32) * 255.0, 0, 255).astype(np.uint8)
+    if f.shape[-1] > 3:
+        f = f[..., :3]
+    elif f.shape[-1] == 1:
+        f = np.repeat(f, 3, axis=-1)
+    return np.ascontiguousarray(f)
+
+
+def _frame_order(n, pingpong, loop_count):
+    """Frame indices to write: pingpong appends the reversed frames (no endpoints), loops repeat the lot."""
+    order = list(range(n))
+    if pingpong and n >= 2:
+        order += list(range(n - 2, 0, -1))
+    return order * (max(0, int(loop_count or 0)) + 1)
+
+
+def _encode_ffmpeg(src, order, dest, fps, fmt_key, crf, pix_fmt, audio=None, comment="", audio_bitrate="192k"):
+    """Frames go to ffmpeg one at a time through a pipe (no raw dump on disk), with a progress bar; Cancel stops ffmpeg
+    and removes the unfinished file."""
+    import comfy.model_management
+    import comfy.utils
+
     ff = _ffmpeg_bin()
     if not ff:
         raise RuntimeError("ffmpeg not on PATH")
     spec = _FORMATS[fmt_key]
-    n, h, w, _c = frames_u8.shape
+    h, w = _frame_u8(src, order[0]).shape[:2]
     tmpdir = tempfile.mkdtemp(prefix="lc_av_")
     try:
-        raw = os.path.join(tmpdir, "frames.rgb")
-        frames_u8.tofile(raw)
         vcodec = [x if x != "PIX" else pix_fmt for x in spec["vcodec"]]
         cmd = [
             ff, "-y",
@@ -409,7 +428,7 @@ def _encode_ffmpeg(frames_u8, dest, fps, fmt_key, crf, pix_fmt, audio=None, comm
             "-pix_fmt", "rgb24",
             "-s", f"{w}x{h}",
             "-r", str(fps),
-            "-i", raw,
+            "-i", "pipe:0",
         ]
         wav_path = None
         wave, sr = audio_parts(audio)
@@ -428,7 +447,28 @@ def _encode_ffmpeg(frames_u8, dest, fps, fmt_key, crf, pix_fmt, audio=None, comm
         if wav_path:
             cmd += spec["acodec"] + ["-b:a", str(audio_bitrate), "-shortest"]
         cmd.append(dest)
-        subprocess.run(cmd, check=True, capture_output=True)
+        log_path = os.path.join(tmpdir, "ffmpeg.log")
+        with open(log_path, "wb") as log:
+            proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=log)
+            pbar = comfy.utils.ProgressBar(len(order))
+            try:
+                for i in order:
+                    comfy.model_management.throw_exception_if_processing_interrupted()
+                    proc.stdin.write(_frame_u8(src, i).tobytes())
+                    pbar.update(1)
+                proc.stdin.close()
+            except comfy.model_management.InterruptProcessingException:
+                proc.kill()
+                proc.wait()
+                if os.path.exists(dest):
+                    os.remove(dest)
+                raise
+            except BrokenPipeError:
+                pass  # ffmpeg stopped early: its log says why
+            code = proc.wait()
+        if code != 0:
+            tail = open(log_path, "rb").read()[-1500:].decode("utf-8", "replace")
+            raise RuntimeError(f"[LC Save Video] ffmpeg failed ({code}):\n{tail}")
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
@@ -592,11 +632,14 @@ class LCSaveVideo:
                 "A Comfy VIDEO object also works. Metadata/pipe-only is not enough."
             )
 
-        frames = tensor_to_uint8_frames(frames_src)
-        if pingpong:
-            frames = _apply_pingpong(frames)
-        frames = _apply_loops(frames, loop_count)
-        n, h, w, _c = frames.shape
+        src = frames_from_any(frames_src)
+        if hasattr(src, "dim") and src.dim() == 3:
+            src = src[None]
+        elif isinstance(src, np.ndarray) and src.ndim == 3:
+            src = src[None]
+        order = _frame_order(len(src), pingpong, loop_count)
+        first = _frame_u8(src, 0)
+        n, (h, w) = len(order), first.shape[:2]
 
         fps_f = float(frame_rate or 0.0)
         if fps_f <= 0 and isinstance(pipe, dict):
@@ -646,14 +689,14 @@ class LCSaveVideo:
 
         comment = params if save_metadata else ""
         _encode_ffmpeg(
-            frames, dest, fps_f, fmt_key, crf, pix_fmt,
+            src, order, dest, fps_f, fmt_key, crf, pix_fmt,
             audio=aud, comment=comment, audio_bitrate="192k",
         )
 
         if save_metadata and civitai_still:
             still = os.path.splitext(dest)[0] + ".png"
             try:
-                _write_civitai_png(still, frames[0], meta, params)
+                _write_civitai_png(still, first, meta, params)
             except Exception as e:
                 print(f"[LC AV] Civitai still skip: {e}")
 

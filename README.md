@@ -87,6 +87,8 @@ VHS-style options: frame_rate, loop_count, filename_prefix, format, pix_fmt, crf
 
 `save_metadata` writes sidecar JSON + container comment. **Civitai** reads PNG chunks, not mp4 comment — keep `civitai_still` on and upload the first-frame PNG (fill `models` + `civitai_air` on the metadata node).
 
+Frames stream into ffmpeg one at a time with a progress bar, so long clips don't fill your RAM, and Cancel stops it (no half-written file is left).
+
 On-node preview after encode. Resize the node; the player follows aspect.
 
 Wire **IMAGE** from VAE Decode (or Create Video `images`) into `images`. Metadata is optional. `av_pipe` can carry frames if they were packed there.
