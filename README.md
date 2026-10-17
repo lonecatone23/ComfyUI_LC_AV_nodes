@@ -100,6 +100,8 @@ Wire **IMAGE** from VAE Decode (or Create Video `images`) into `images`. Metadat
 
 Same latent + same VAE as the two core nodes. Use the MiniMax **Video** VAE for video latents.
 
+Shows a progress bar per tile (also on the MiniMax Video VAE, which tiles itself), and Cancel stops it between tiles.
+
 ---
 
 ## Load Audio 📂
