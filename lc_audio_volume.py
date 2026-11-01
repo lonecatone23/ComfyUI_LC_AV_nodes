@@ -40,7 +40,7 @@ class LCAudioVolume:
     def apply(self, audio, volume=1.0):
         wave, sr = audio_parts(audio)
         gain = float(volume)
-        if gain == 1.0:
+        if gain == 1.0 or wave is None or sr <= 0:  # no sound (e.g. a video without audio): pass it through
             return (audio,)
         out = np.clip(wave.astype(np.float32) * gain, -1.0, 1.0)
         return (make_audio(out, sr),)

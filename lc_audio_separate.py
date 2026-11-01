@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import numpy as np
 
+import comfy.model_management
+
 from .lc_av_media import audio_parts, make_audio
 
 _STEMS = ("bass", "drums", "other", "vocals")
@@ -34,8 +36,20 @@ def _fade_window(n, shape):
 def _get_demucs():
     if "model" in _model_cache:
         return _model_cache["model"], _model_cache["sr"]
+    import os
+
+    import torch
     import torchaudio
-    bundle = torchaudio.pipelines.HDEMUCS_HIGH_FINDLY
+
+    # HDEMUCS_HIGH_FINDLY never existed in torchaudio: MUSDB_PLUS is the best Hybrid Demucs bundle
+    bundle = torchaudio.pipelines.HDEMUCS_HIGH_MUSDB_PLUS
+    key = getattr(bundle, "_model_path", "")
+    if key:  # fetch it ourselves first so the download shows a toast and Stop cancels it
+        path = os.path.join(torch.hub.get_dir(), "torchaudio", *key.split("/"))
+        if not os.path.isfile(path):
+            from .lc_first_download import download
+
+            download(f"https://download.pytorch.org/torchaudio/{key}", path, "Hybrid Demucs", "320 MB")
     model = bundle.get_model()
     model.eval()
     sr = int(bundle.sample_rate)
@@ -119,7 +133,7 @@ class LCAudioSeparate:
     DESCRIPTION = (
         "Hybrid Demucs four-stem split: Bass, Drums, Other, Vocals. "
         "Same layout as common AudioSeparation nodes. Needs torchaudio "
-        "(HDEMUCS_HIGH_FINDLY). No Numba/SoX. Chunk length/overlap trade VRAM vs seams."
+        "(HDEMUCS_HIGH_MUSDB_PLUS). No Numba/SoX. Chunk length/overlap trade VRAM vs seams."
     )
 
     def separate(self, audio, chunk_fade_shape="linear", chunk_length=10.0, chunk_overlap=0.1):
@@ -133,13 +147,16 @@ class LCAudioSeparate:
             wave = np.repeat(wave, 2, axis=0)
         elif wave.shape[0] > 2:
             wave = wave[:2]
+        if wave.shape[-1] == 0:  # zero-length audio: four empty stems, no model load
+            empty = make_audio(wave, sr)
+            return (empty, empty, empty, empty)
 
         try:
             model, model_sr = _get_demucs()
         except Exception as e:
             raise RuntimeError(
                 "LC Audio Separate needs torchaudio Hybrid Demucs "
-                f"(HDEMUCS_HIGH_FINDLY). Install failed or model download blocked: {e}"
+                f"(HDEMUCS_HIGH_MUSDB_PLUS). Install failed or model download blocked: {e}"
             )
 
         work = _resample(wave.astype(np.float32), sr, model_sr)
@@ -155,6 +172,7 @@ class LCAudioSeparate:
 
         pos = 0
         while pos < total:
+            comfy.model_management.throw_exception_if_processing_interrupted()
             end = min(total, pos + chunk_n)
             chunk = work[:, pos:end]
             if chunk.shape[-1] < chunk_n:

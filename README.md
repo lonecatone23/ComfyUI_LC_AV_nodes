@@ -4,11 +4,11 @@ Custom nodes for ComfyUI by lonecatone23.
 
 * **Repo:** https://github.com/lonecatone23/ComfyUI_LC_AV_nodes
 * **Image companion:** https://github.com/lonecatone23/ComfyUI_LC123_nodes
-* **Civitai:** lonecatone23
+* **CivitAI:** lonecatone23
 * **Support:** https://ko-fi.com/lonecatone
 * **Version:** 0.3.13
 
-> Small tools that remove friction — frames, soundtrack, metadata, fewer extra packs.
+> Small tools that remove friction: frames, soundtrack, metadata, fewer extra packs.
 
 This pack is **not** a fork of LC123. Do not merge the two folders.
 `LC_PIPE` stays on the image pack. This pack uses **`LC_AV_PIPE`**.
@@ -23,7 +23,7 @@ Release history lives in **git tags**. This page describes the pack as it is now
 ComfyUI/custom_nodes/ComfyUI_LC_AV_nodes/__init__.py
 ```
 
-`__init__.py` must sit **directly** in that folder — not in `ComfyUI_LC_AV_nodes/ComfyUI_LC_AV_nodes/`.
+`__init__.py` must sit **directly** in that folder, not in `ComfyUI_LC_AV_nodes/ComfyUI_LC_AV_nodes/`.
 If you unzip a pack zip *inside* an existing clone, move the inner files up one level.
 
 Restart ComfyUI. Console should print `[LC AV] total … nodes`.
@@ -33,7 +33,7 @@ Hard-refresh the browser after a `web/` JS update.
 Audio Separate needs **torchaudio** (no Numba / SoX).
 
 Optional example graph: `workflows/LC_AV Node Examples.json`  
-(BETA — examples only. Add nodes from the node menu; do not treat the graph as a production template.)
+(BETA: examples only. Add nodes from the node menu; do not treat the graph as a production template.)
 
 ---
 
@@ -46,6 +46,8 @@ Optional example graph: `workflows/LC_AV Node Examples.json`
 | LC Pipe → AV Pipe 🔌 | `LCPipeToAvPipe` | One `LC_PIPE` in, one `LC_AV_PIPE` out. Shared keys only. |
 | LC Create Video 🎬 | `LCCreateVideo` | IMAGE batch + fps (+ optional AUDIO) → `LC_AV_PIPE`. Does not encode a file. |
 | LC Save Video 💾 | `LCSaveVideo` | ffmpeg encode. Inputs: images, audio, av_pipe, metadata. No `LC_PIPE` socket. |
+| LC Load Video 🎞️ | `LCLoadVideo` | A video file in, its frames, sound and frame rate out, exactly as the file has them. Streams with a progress bar; Cancel works. |
+| LC Preview Video 📺 | `LCPreviewVideo` | Plays a video file, or frames with their sound, on the node. Nothing saved to output. |
 | LC Save Video Metadata 🏷️ | `LCSaveVideoMetadata` | `LC_SAVE_META` + A1111 `parameters`. Works with Save Video or LC123 Save Image. |
 | LC Final Frame 🖼️ | `LCFinalFrame` | Last frame of an IMAGE batch. |
 | LC VAE Decode 🧩 | `LCVaeDecode` | Boolean wrapper: core `VAEDecode` or core `VAEDecodeTiled`. |
@@ -75,7 +77,17 @@ Wired slots override; empty slots pass through.
 
 Do **not** put video into `LC_PIPE`. Convert shared fields with **LC Pipe → AV Pipe**.
 
-No **civitai_air** on the pipe — paste AIR on **Save Video Metadata**.
+No **civitai_air** on the pipe. Paste AIR on **Save Video Metadata**.
+
+---
+
+## Load Video 🎞️
+
+Path in (a full path, or one inside ComfyUI's output or input folder): every frame at the file's own size, its sound and its frame rate out. Nothing to set: no resizing, frame skipping or trimming. Frames stream in through ffmpeg with a progress bar, and Cancel stops it. Wire LC H3 Make's video straight in.
+
+## Preview Video 📺
+
+Plays a video on the node: a file (path), or a batch of frames with its sound (fps sets the rate). Frames are encoded to a temp file, so nothing lands in your output folder.
 
 ---
 
@@ -85,7 +97,7 @@ VHS-style options: frame_rate, loop_count, filename_prefix, format, pix_fmt, crf
 
 `prune_outputs` keeps intermediate frame PNGs off disk.
 
-`save_metadata` writes sidecar JSON + container comment. **Civitai** reads PNG chunks, not mp4 comment — keep `civitai_still` on and upload the first-frame PNG (fill `models` + `civitai_air` on the metadata node).
+`save_metadata` writes sidecar JSON + container comment. **CivitAI** reads PNG chunks, not the mp4 comment. Keep `civitai_still` on and upload the first-frame PNG (fill `models` + `civitai_air` on the metadata node).
 
 Frames stream into ffmpeg one at a time with a progress bar, so long clips don't fill your RAM, and Cancel stops it (no half-written file is left).
 
@@ -118,32 +130,45 @@ Shows a progress bar per tile (also on the MiniMax Video VAE, which tiles itself
 
 ## H3 Long Video 🎬
 
-Minute-long MiniMax H3 videos made in short pieces, one segment per Run, on the same card that makes 5 s clips. The plan comes from **LC Vision Director 🎬** (LC Vision). Example workflow: `LC H3 Long Video Example.json`.
+Minute-long MiniMax H3 videos made in short pieces, one shot at a time, on the same card that makes 5 s clips. **LC H3 Story 🎬** holds the cast, places and shots. **LC H3 Make 🎥** renders them and joins the movie. Example workflow: `LC H3 Story Workflow`.
 
-**LC H3 Segment 🎞️**
-- Builds one segment for your sampler: positive + latent out, seed passed through.
-- **index** 0 = the next segment not saved yet. Set a number to redo that one.
-- A CONTINUE segment starts from the last 1.6 s (picture and sound) of the one before, so the motion carries straight on.
-- **memory** `clip` (default): about 1 s of segment 1 (her head only) goes in as a reference on a CUT your story writes, and as a gentle nudge on any CONTINUE that starts with no clear face (she walked away or turned round). **memory_gap** 5 s keeps the cut from opening on that clip's pose.
-- **color_match** 0 = off. Turn it on (0.2 to 0.4) when Assemble flags a scene drifting warmer or cooler.
-- 💡 960 x 544 is the low VRAM size. Keep one size for the whole project.
-- **prompt** output: the segment's prompt, quotes and all. Wire it into LC H3 Dialogue Check to check each segment's speech.
+**LC H3 Story (BETA) 🎬**
+- The whole movie on one node: **cast**, **places** and **shots**, each on its own card.
+- ✋ **The text a shot builds is exactly what H3 gets.** Nothing rewrites it behind your back.
+- **Cast card:** a name, who they are (woman, man, cat, etc.), their look, a face picture and a voice.
+    - 💡 Use a neutral face on a plain grey background. A card's background, props and expression leak into every shot it's in.
+- **Place card:** a description, the sound of the room ("rain on the window, soft cafe chatter") and a picture of it empty. A **360 panorama** lets close-ups face any side of the room: aim them with the 🌐 viewer on the shot.
+- **Shot card:** framing, who it's on, camera move, cut or keep rolling, the action, who speaks and the line.
+    - **seconds**: **auto** fits the beats and the line, or type your own. The number you type wins.
+    - 🖼 **start** / 🏁 **end** pin the first or last frame. H3 copies a pinned frame exactly, so make it sharp.
+    - 📐 draws boxes: who stands where. The storyboard group turns them into a start frame.
+    - Count props once ("each holds one cup") or extras show up.
+- **✨ Write the story** turns a short pitch into cards with a local LLM, once. After that it's plain text you edit.
+- **🔗 Check the join** (keep-rolling shots) looks at the end of the shot before and suggests an action that carries on from it.
+- **The board** under the shots: a tile per shot. ✅ made, ✏️ changed since it was made, 🔒 locked. ▶ plays it, ↻ makes it again, 📌 on a paused frame sets that place's anchor.
+- **max_shot_seconds**: the longest shot this machine renders in one go (20 default). A longer shot is made in parts, each carrying on from the one before.
+- ⚠️ A keep-rolling shot that changes framing (wide to close-up) breaks: H3 cuts by itself to a room it invents. Use a cut.
+- Everything saves to `output/LC_H3/<project>/` (story.json, plan.json, the takes and the movie). Pictures go in `input/lc_h3_refs/<project>/`.
 
-**LC H3 Segment Save 💾**
-- Decodes and saves the segment to `output/LC_H3/<project>/`: a preview mp4, the part for the final video and the ending the next segment starts from.
-- Shows a **face match** to segment 1 (0 to 1): 0.55 and up = same person, under 0.40 = someone else, redo it with another seed. Other people in the shot and faces turned away are left out.
-- Face check models: `face_detection_yunet_2023mar.onnx` + `face_recognition_sface_2021dec.onnx` in `models/facerestore` (OpenCV zoo). Without them it just skips the check.
-
-**LC H3 Assemble 🧩**
-- Joins every saved segment into `<project>_full.mp4`, straight from disk (never the whole video in RAM).
-- **blend_frames** crossfades each CONTINUE join over the shared frames so it doesn't pop.
-- Reports how smooth every join is, how far the color drifts inside each scene, and every face match. Wire Segment Save's **info** into **after** so it runs after the new segment is saved.
+**LC H3 Make (BETA) 🎥**
+- Renders the Story's shots one after another and joins them into the movie. Wire in the Story's **plan** and **refs**, and an **LC MiniMax H3 Pipe V2** (model, text encoder, both VAEs, size, steps, sampler, seed).
+- **make**: **all remaining** (default) makes the whole movie in one Run. **next segment** makes one. **redo** makes segment number **index** again, with a new seed.
+    - 💡 One Run does it all. **Stop** ends it with nothing left in the queue. Run again to carry on.
+    - Edited a shot that's already made? Run remakes only the ones marked ✏️, the rest stay.
+- **redo_after**: redoing a shot also sets aside the keep-rolling shots after it, since they no longer join. The old take is always kept in `takes/`.
+- **refs_on**: **cuts only** (default) gives the smoothest joins. A keep-rolling shot carries on from the frames before it, and a fresh reference pulls it away.
+- **hold_scene** (on): the first wide shot of a place becomes its layout, so later shots there keep who sits where.
+- **memory**: **clip** (default) feeds about 1 s of the first shot back on every cut so faces, clothes and voices stay put. **memory_gap** 5 s stops the cut from opening on that clip's pose.
+- **color_match**: 0 = off. 0.2 to 0.4 when **info** flags a scene drifting warmer or cooler.
+- **crf** 16 is close to lossless.
+- **info** reports the face match per shot (0.55 and up = same person, under 0.40 = someone else, redo it) and how smooth each join is.
+- 💡 960 x 544 is the low VRAM size. Keep one size for the whole project, then upscale the finished movie (VOSR2 2x + Frame Interpolate to 48 gave the best result in my tests).
 
 **LC H3 Audio Sync (BETA) 🎤**
 - Makes an H3 video perform YOUR track (a song, a line of dialogue) instead of sound the model invents. Put it between the latent and the sampler.
 - Your recording is locked into the sound half, so the model only decides the picture that fits it, mouth included.
 - 💡 Wire the H3 **positive** conditioning through it too: the track is also handed to H3 as a clean guide.
-- ✋ **Put each line in the prompt with its time:** `At 0 seconds she says, "Hello there."` H3 moves the mouth when the prompt says the words are spoken, not when it hears them. Without the time she talks over the silence instead. LC H3 Dialogue Check's **prompt_line** writes these lines for you from your recording.
+- ✋ **Put each line in the prompt with its time:** `At 0 seconds she says, "Hello there."` H3 moves the mouth when the prompt says the words are spoken, not when it hears them. Without the time she talks over the silence instead.
 - **start_seconds** picks where in the track the clip starts. A track shorter than the clip is filled with **silence** or **loop**ed.
 - The **audio** output is the track cut to the clip's length: wire it to the save node so picture and sound end together.
 - ⚠️ H3 was trained to about 15 s; longer clips get a warning in **info**.
@@ -155,19 +180,13 @@ Minute-long MiniMax H3 videos made in short pieces, one segment per Run, on the 
 - **model**: rife426.pth (best on AI video in our tests, downloads once, 21 MB) or **crossfade** (no model, fast, soft on motion). Uses `models/rife/` or ComfyUI-Frame-Interpolation's checkpoints if you have them.
 - RIFE code from ComfyUI-Frame-Interpolation (Fannovel16) and Practical-RIFE (hzwer), both MIT.
 
-**LC H3 Dialogue Check (BETA) 🗣️**
-- Listens to a finished clip with Whisper and compares what was said with the dialogue in quotes in your prompt. A low **match** means garbled speech: redo the shot.
-- **cut_points** lists the pauses, the clean places to cut or start the next segment.
-- **prompt_line** gives the transcript back as timed lines: `At 0 seconds they say, "..."`. Feed your recording through it before LC H3 Audio Sync, paste the lines into the prompt and change "they" to the character.
-- Whisper downloads once to `models/stt/` (small = about 460 MB) and runs on the CPU: a few seconds a clip, and the GPU stays free for H3.
-
 💡 **Vision Assistant → Movie** (LC Vision) shows all of it in plain words, with one-click redo and Make all remaining.
 
 ---
 
 ## Colors
 
-`web/lc_node_colors.js` — AV family teal (`#2a6a6a` audio, `#1a5a7a` video). Distinct from LC123 sigma `#1c6d6d`. VAE Decode uses stock Comfy red.
+`web/lc_node_colors.js`: AV family teal (`#2a6a6a` audio, `#1a5a7a` video). Distinct from LC123 sigma `#1c6d6d`. VAE Decode uses stock Comfy red.
 
 `web/lc_color.js` is the launch-color helper (does not overwrite a saved color).
 

@@ -25,6 +25,8 @@ const COLORS = {
     LCGetLatentSize: { color: "#324b4b", bgcolor: "#324b4b" },
     LCFinalFrame: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
     LCSaveVideo: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
+    LCLoadVideo: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
+    LCPreviewVideo: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
     LCPipeToAvPipe: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
     LCSaveVideoMetadata: { color: "#28281E", bgcolor: "#28281E" },
     LCLoadAudio: { color: "#2a6a6a", bgcolor: "#2a6a6a" },
@@ -35,15 +37,13 @@ const COLORS = {
     LCAudioEqualizer3Band: { color: "#2a6a6a", bgcolor: "#2a6a6a" },
     LCAudioVolume: { color: "#2a6a6a", bgcolor: "#2a6a6a" },
     LCFrameInterpolate: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
-    LCH3Segment: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
-    LCH3SegmentSave: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
-    LCH3Assemble: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
-    LCH3ProofSheet: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
-    LCH3ReferenceAssembler: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
     LCH3Upscale: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
     LCH3UltimateUpscale: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
     LCH3AudioSync: { color: "#2a6a6a", bgcolor: "#2a6a6a" },
-    LCH3DialogueCheck: { color: "#2a6a6a", bgcolor: "#2a6a6a" },
+    LCH3Story: { color: "#1a5a7a", bgcolor: "#0a0a0a" },
+    LCH3Make: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
+    LCH3StoryCardPrompt: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
+    LCH3SaveToStory: { color: "#1a5a7a", bgcolor: "#1a5a7a" },
 };
 
 app.registerExtension({

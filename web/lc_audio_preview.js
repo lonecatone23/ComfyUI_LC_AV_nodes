@@ -250,9 +250,14 @@ function playSelected(node) {
     return;
   }
   ensureBar(node);
+  if (node._lcRaf) {
+    cancelAnimationFrame(node._lcRaf); // else the old tick loop keeps running next to the new one
+    node._lcRaf = 0;
+  }
   if (node._lcPlayer) {
     try {
       node._lcPlayer.pause();
+      node._lcPlayer.src = "";
     } catch (_e) {}
     node._lcPlayer = null;
   }
@@ -307,6 +312,7 @@ function togglePreview(node) {
     }
     player.play()?.catch(() => {});
     setPlaying(node, true);
+    if (node._lcRaf) cancelAnimationFrame(node._lcRaf);
     node._lcRaf = requestAnimationFrame(() => tick(node));
     return;
   }
@@ -343,6 +349,7 @@ async function uploadAndSelect(node) {
   input.accept = ACCEPT;
   input.style.display = "none";
   document.body.appendChild(input);
+  input.addEventListener("cancel", () => input.remove()); // dialog closed without a file
   input.addEventListener("change", async () => {
     const file = input.files && input.files[0];
     input.remove();
@@ -395,6 +402,12 @@ app.registerExtension({
         if (old) old.callback = () => togglePreview(this);
       }
       return r;
+    };
+
+    const origRemoved = nodeType.prototype.onRemoved;
+    nodeType.prototype.onRemoved = function () {
+      stopPlayer(this); // a deleted node must not keep playing
+      return origRemoved?.apply(this, arguments);
     };
   },
 });

@@ -11,7 +11,47 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
-const NODE_CLASS = "LCSaveVideo";
+// video sound: off until you turn it on, then remembered (in this browser) and shared by every LC video player.
+// Muting one mutes them all, and a player that loads a new video (the next segment) picks up the current setting.
+function lcSound(v) {
+  const KEY = "lc.video.sound", VOL = "lc.video.volume";
+  const players = (window.__lcVideoPlayers ||= new Set());
+  let on = false, vol = 1;
+  try {
+    on = localStorage.getItem(KEY) === "on";
+    vol = Math.min(1, Math.max(0, parseFloat(localStorage.getItem(VOL) ?? "1")));
+  } catch (_e) {}
+  v.__lcSoundSync = true; // a change made here, not by the viewer: don't spread it
+  v.muted = !on;
+  if (Number.isFinite(vol)) v.volume = vol;
+  setTimeout(() => (v.__lcSoundSync = false), 0); // volumechange arrives after this returns
+  players.add(v);
+  if (!v.__lcSound) {
+    v.__lcSound = true;
+    v.addEventListener("volumechange", () => {
+      if (v.__lcSoundSync) return;
+      try {
+        localStorage.setItem(KEY, v.muted ? "off" : "on");
+        localStorage.setItem(VOL, String(v.volume));
+      } catch (_e) {}
+      for (const o of players) {
+        if (!o.isConnected) {
+          players.delete(o);
+          continue;
+        }
+        if (o !== v && (o.muted !== v.muted || o.volume !== v.volume)) {
+          o.__lcSoundSync = true;
+          o.muted = v.muted;
+          o.volume = v.volume;
+          setTimeout(() => (o.__lcSoundSync = false), 0);
+        }
+      }
+    });
+  }
+  return v;
+}
+
+const NODE_CLASSES = new Set(["LCSaveVideo", "LCPreviewVideo"]);
 const PAD = 10;
 
 function viewUrl(info) {
@@ -19,6 +59,7 @@ function viewUrl(info) {
     filename: info.filename || "",
     type: info.type || "output",
     subfolder: info.subfolder || "",
+    t: String(Date.now()), // the joined movie keeps its name and grows: without this the browser plays its old copy
   });
   return api.apiURL(`/view?${q.toString()}`);
 }
@@ -126,8 +167,8 @@ function ensurePreview(node) {
   vid.controls = true;
   vid.controlsList = "nodownload";
   vid.loop = true;
-  vid.muted = false;
-  vid.autoplay = true;
+  lcSound(vid);
+  vid.autoplay = false; // a new video (the next segment) loads paused: press play when you want to watch
   vid.playsInline = true;
   vid.preload = "metadata";
   vid.style.cssText =
@@ -142,6 +183,10 @@ function ensurePreview(node) {
     },
     setValue() {},
   });
+
+  // The right side Parameters panel writes its own column width onto widgets it lists; on this one that left the
+  // video wider or narrower than the node after selecting it. Always follow the node's width instead.
+  Object.defineProperty(widget, "width", { get: () => undefined, set: () => {}, configurable: true });
 
   widget.computeSize = function () {
     const w = nodeWidth(node);
@@ -162,9 +207,9 @@ function playMessage(node, message) {
   const info = message?.video?.[0] || message?.gifs?.[0];
   if (!info || !info.filename) return;
   const { vid, wrap } = ensurePreview(node);
+  lcSound(vid); // the current sound setting, not the one this player started with
   vid.src = viewUrl(info);
   wrap.style.display = "block";
-  vid.play()?.catch(() => {});
   layout(node);
 }
 
@@ -172,7 +217,7 @@ app.registerExtension({
   name: "LC.AV.SaveVideoPreview",
 
   async beforeRegisterNodeDef(nodeType, nodeData) {
-    if ((nodeData?.name || "") !== NODE_CLASS) return;
+    if (!NODE_CLASSES.has(nodeData?.name || "")) return;
 
     const origExecuted = nodeType.prototype.onExecuted;
     nodeType.prototype.onExecuted = function (message) {

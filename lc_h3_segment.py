@@ -2,7 +2,7 @@
 LC H3 Segment / LC H3 Segment Save / LC H3 Assemble
 ---------------------------------------------------
 Makes a long MiniMax H3 video one short segment per queue run, from an
-LC Vision Director plan (output/LC_H3/<project>/plan.json).
+LC Vision Showrunner plan (output/LC_H3/<project>/plan.json).
 
 - Segment: builds the conditioning + empty AV latent for one segment. A
   CONTINUE segment anchors the previous segment's saved tail (last
@@ -33,6 +33,7 @@ import numpy as np
 import torch
 
 import folder_paths
+import comfy.model_management
 import comfy.nested_tensor
 import comfy.utils
 import node_helpers
@@ -41,7 +42,7 @@ from comfy_extras.nodes_minimax_h3 import _empty_av_latent, _encode_ref_audio, _
 
 from .lc_av_media import audio_parts
 from .lc_h3_refs import REFS_TYPE, subset as _refs_subset
-from .lc_save_video import _ffmpeg_bin, _write_wav
+from .lc_save_video import _ffmpeg_bin, _write_wav, comfy_tags, metadata_args
 
 PLAN_TYPE = "LC_H3_PLAN"
 NL = chr(10)
@@ -80,34 +81,247 @@ _patch_ref_gap()
 
 
 def project_dir(project: str) -> str:
-    """Same folder rule as LC Vision Director."""
-    safe = re.sub(r"[^A-Za-z0-9 _.-]", "_", (project or "").strip()) or "untitled"
+    """Same folder rule as LC Vision Showrunner."""
+    safe = re.sub(r"[^A-Za-z0-9 _.-]", "_", (project or "").strip())
+    if not safe.strip(" ."):  # "" / "." / ".." would be LC_H3 itself or the output folder
+        safe = "untitled"
     return os.path.join(folder_paths.get_output_directory(), "LC_H3", safe)
 
 
+_WORK_SEEN = set()
+
+
+def work_dir(folder: str) -> str:
+    """Everything a project makes along the way lives in <project>/takes/, so the top of the folder is only
+    project.json, plan.json and the finished movie. An older project's loose files (and an earlier work/ folder) move
+    in there the first time it is touched."""
+    takes = os.path.join(folder, "takes")
+    if folder not in _WORK_SEEN and os.path.isdir(folder):
+        name = os.path.basename(folder)
+        loose = [os.path.join(folder, f) for f in os.listdir(folder)
+                 if os.path.isfile(os.path.join(folder, f)) and (re.match(r"seg_\d{3}", f) or f.startswith("cast_")
+                                                                   or f == "seams.json" or f.startswith(name + "_full"))]
+        old_work = os.path.join(folder, "work")
+        if os.path.isdir(old_work):
+            loose += [os.path.join(old_work, f) for f in os.listdir(old_work)]
+        if loose:
+            os.makedirs(takes, exist_ok=True)
+            for f in loose:
+                os.replace(f, os.path.join(takes, os.path.basename(f)))
+            print(f"[LC H3] Tidied {os.path.basename(folder)}: {len(loose)} working files moved into takes/.")
+        if os.path.isdir(old_work) and not os.listdir(old_work):
+            os.rmdir(old_work)
+        _WORK_SEEN.add(folder)
+    if os.path.isdir(folder):
+        os.makedirs(takes, exist_ok=True)
+    return takes
+
+
 def _seg_path(folder: str, index: int, suffix: str) -> str:
-    return os.path.join(folder, f"seg_{index:03d}{suffix}")
+    return os.path.join(work_dir(folder), f"seg_{index:03d}{suffix}")
 
 
 def _is_done(folder: str, index: int) -> bool:
     return os.path.exists(_seg_path(folder, index, ".json")) and os.path.exists(_seg_path(folder, index, "_part.mp4"))
 
 
+def _warn_ui(project: str, message: str):
+    """A problem the chain carries on through (the join failed): a sticky toast in the browser that queued the run."""
+    try:
+        from server import PromptServer
+        PromptServer.instance.send_sync("lc_h3_join_failed", {"project": project, "message": message},
+                                        getattr(PromptServer.instance, "client_id", None))
+    except Exception:
+        pass
+
+
+def _tell_ui(data: dict):
+    """Segment Save -> the browser: how many segments are left, so make: all remaining knows whether to queue the next."""
+    try:
+        from server import PromptServer
+        # only the browser that queued this run: every open tab with the workflow would queue the next segment
+        PromptServer.instance.send_sync("lc_h3_segment_saved", data, getattr(PromptServer.instance, "client_id", None))
+    except Exception:
+        pass
+
+
 def _resolve_index(plan: dict, index: int) -> int:
     count = len(plan.get("shots", []))
-    if index > 0:
-        return min(index, count)
     folder = project_dir(plan.get("project", ""))
+    if index > 0:
+        i = want = min(index, count)
+        shots = plan.get("shots", [])
+        # a CONTINUE needs the segment before it: step back to the first one of that run that isn't made yet
+        while i > 1 and shots[i - 1].get("mode") == "CONTINUE" and not _is_done(folder, i - 1):
+            i -= 1
+        if i != want:
+            print(f"[LC H3] index {index}: segment {want} carries on from segment {i}, which isn't made yet, so segment {i} is made first."
+                  " Set index to 0 to make the segments in order.")
+        return i
     for i in range(1, count + 1):
         if not _is_done(folder, i):
             return i
     return count
 
 
+def _latent_tail(path: str, frames: int, width: int, height: int) -> dict | None:
+    """The previous segment's tail sliced straight out of its saved latent, video and audio, instead of the mp4 -> VAE
+    round trip (idea from NikoDemon80's H3 Motion Context). None = no usable latent: use the mp4 tail."""
+    from comfy.ldm.minimax.model import FRAME_PER_TOKEN, FRAME_RESCALE
+    if not os.path.exists(path):
+        return None
+    try:
+        sd = comfy.utils.load_torch_file(path)
+        video, audio = sd["video"], sd["audio"]
+    except Exception as e:  # a torn or older latent file: the mp4 tail still works
+        print(f"[LC H3] latent tail: can't read {os.path.basename(path)} ({e}), using the mp4 tail")
+        return None
+    if video.ndim == 4:
+        video, audio = video[None], audio[None]
+    if video.shape[3] * 16 != height or video.shape[4] * 16 != width:
+        print(f"[LC H3] latent tail: size changed ({video.shape[4] * 16}x{video.shape[3] * 16}), using the mp4 tail")
+        return None
+    steps, covered = 0, 0
+    while covered < frames:
+        covered += FRAME_PER_TOKEN[steps % 5]
+        steps += 1
+    start = video.shape[2] - steps
+    if covered != frames or start < 0 or start % 5:
+        print(f"[LC H3] latent tail: {frames} frames don't line up with the latent grid, using the mp4 tail")
+        return None
+    a_steps = int(round(frames * FRAME_RESCALE))
+    print(f"[LC H3] latent tail: {steps} video steps ({frames} frames) + {a_steps} audio steps from the saved latent")
+    return {"resolved_frame_index": 0, "latent": video[:, :, start:].float().contiguous(),
+            "audio_latent": audio[..., -a_steps:].float().contiguous()}
+
+
 def _frames(plan: dict):
     seg = int(round(plan["segment_s"] * FPS))
     ovl = int(round(plan["overlap_s"] * FPS))
     return seg, ovl
+
+
+def _middle_frame(path: str, width: int, height: int, frames: int) -> torch.Tensor | None:
+    """The middle frame of an mp4 (frames long) as IMAGE [1, H, W, 3], or None."""
+    raw = subprocess.run([_ffmpeg_bin(), "-v", "error", "-ss", f"{max(0, frames // 2) / FPS:.3f}", "-i", path,
+                          "-vf", f"scale={width}:{height}", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                         capture_output=True).stdout
+    if len(raw) < width * height * 3:
+        return None
+    return torch.from_numpy(np.frombuffer(raw[:width * height * 3], np.uint8).reshape(1, height, width, 3).astype(np.float32) / 255.0)
+
+
+def _place_of(action: str) -> str:
+    line = next((ln for ln in str(action or "").split("\n") if ln.strip().lower().startswith("place:")), "")
+    return _norm_words(line.split(":", 1)[1]) if ":" in line else ""
+
+
+def _place_key(shot: dict) -> str:
+    """Where a segment is: the Shot List's place name when the plan has one, else its Place line."""
+    return "@" + _norm_words(shot["place_name"]) if shot.get("place_name") else _place_of(shot.get("action", ""))
+
+
+def _same_place(a: str, b: str) -> bool:
+    import difflib
+
+    if a.startswith("@") or b.startswith("@"):  # place names: exact
+        return a == b
+    return bool(a and b) and (a == b or difflib.SequenceMatcher(None, a, b).ratio() >= 0.75)
+
+
+def _place_groups(plan: dict) -> list:
+    """A place number per shot (None = the shot doesn't say). Place names group exactly. Without them, Place lines
+    group by wording, and a one-place story keeps one place: when one group holds at least two thirds of the shots and
+    the rest are odd ones out (a Place line the planner filled with camera words), those join it."""
+    shots = plan.get("shots", [])
+    keys = [_place_key(sh) for sh in shots]
+    reps, ids = [], []
+    for k in keys:
+        if not k:
+            ids.append(None)
+            continue
+        g = next((n for n, r in enumerate(reps) if _same_place(k, r)), None)
+        if g is None:
+            reps.append(k)
+            g = len(reps) - 1
+        ids.append(g)
+    if not any(sh.get("place_name") for sh in shots) and len(reps) > 1:
+        sizes = [ids.count(g) for g in range(len(reps))]
+        big = max(range(len(reps)), key=lambda g: sizes[g])
+        if sizes[big] * 3 >= 2 * sum(sizes) and all(sizes[g] == 1 for g in range(len(reps)) if g != big):
+            ids = [None if g is None else big for g in ids]
+    return ids
+
+
+_OUTDOOR_RE = re.compile(r"\b(outside|outdoors?|street|sidewalk|curb|road|highway|alley|parking|exterior|plaza|"
+                         r"beach|park|field|forest|desert|bridge)\b", re.I)
+_MOVING_RE = re.compile(r"\b(track(s|ing)?|follow(s|ing)?|chas(e|es|ing)|pan(s|ning)?|run(s|ning)?|sprint(s|ing)?|"
+                        r"rac(e|es|ing)|jump(s|ing)?|driv(e|es|ing)|drove|pulls? up|screech(es|ing)?|speed(s|ing)?|"
+                        r"tears? away|dives?|flee(s|ing)?|crash(es|ing)?)\b", re.I)
+
+
+def _moving_outdoors(shot: dict) -> bool:
+    """An outdoor shot where things move (a van pulling up, people running): a layout anchor would freeze it into the
+    anchor's frame, so it gets the anchor as setting (the place and its light) instead."""
+    where = (shot.get("place_name") or "") + " " + _place_of(shot.get("action", ""))
+    return bool(_OUTDOOR_RE.search(where)) and bool(_MOVING_RE.search(shot.get("action", "")))
+
+
+_CLOSE_RE = re.compile(r"\b(extreme\s+)?close[- ]?ups?\b", re.I)
+
+
+def _is_close_up(action: str) -> bool:
+    cam = next((ln for ln in str(action or "").split("\n") if ln.strip().lower().startswith("camera:")), "")
+    return bool(_CLOSE_RE.search(cam))
+
+
+def _scene_anchor(plan: dict, folder: str, i: int, width: int, height: int, empty_first: bool = False):
+    """hold_scene: the first saved shot AT THE SAME PLACE that isn't a close-up (that place's establishing shot), as
+    (segment number, its middle frame, its part's mtime). Later shots there keep the room: who sits where, the table,
+    the window. A new place gets its own anchor the first time it is made (the street = anchor 1, the café = anchor 2,
+    and back to the street uses 1 again). empty_first: a shot whose Camera line names none of the cast wins (a
+    setting anchor should show the place, not people who would walk into the new shot). None when there is none yet."""
+    groups = _place_groups(plan)
+    here = groups[i - 1]
+    names = _cast_names(plan)
+    order = list(range(1, i))
+    if empty_first:
+        def _cam(k):
+            return next((ln for ln in plan["shots"][k - 1].get("action", "").split("\n") if ln.strip().lower().startswith("camera:")), "")
+        order.sort(key=lambda k: any(re.search(rf"\b{re.escape(n)}\b", _cam(k), re.I) for n in names))
+    for k in order:
+        sh = plan["shots"][k - 1]
+        if here is not None and groups[k - 1] != here:
+            continue
+        if not _is_close_up(sh.get("action", "")) and _is_done(folder, k):
+            part = _seg_path(folder, k, "_part.mp4")
+            with open(_seg_path(folder, k, ".json"), encoding="utf-8") as f:
+                frames = int(json.load(f).get("part_frames", 85))
+            img = _middle_frame(part, width, height, frames)
+            if img is not None:
+                return k, img, os.path.getmtime(part)
+    return None
+
+
+def _room_from(folder: str, i: int):
+    """Segment i's Room from (plan.json, set with ✎ on the Proof Sheet): None = auto, 0 = none, k = segment k."""
+    try:
+        with open(os.path.join(folder, "plan.json"), encoding="utf-8") as f:
+            v = json.load(f)["shots"][i - 1].get("anchor_from")
+        return None if v is None else int(v)
+    except Exception:
+        return None
+
+
+def _anchor_of(folder: str, k: int, width: int, height: int):
+    """Segment k's middle frame as the room picture, like _scene_anchor, or None when it isn't made."""
+    if not _is_done(folder, k):
+        return None
+    part = _seg_path(folder, k, "_part.mp4")
+    with open(_seg_path(folder, k, ".json"), encoding="utf-8") as f:
+        frames = int(json.load(f).get("part_frames", 85))
+    img = _middle_frame(part, width, height, frames)
+    return (k, img, os.path.getmtime(part)) if img is not None else None
 
 
 def _read_mp4_frames(path: str, width: int, height: int) -> torch.Tensor:
@@ -134,7 +348,10 @@ def _encode(frames_u8, dest, crf, pix_fmt="yuv420p", audio=None):
             _write_wav(wav, wave, sr)
             cmd += ["-i", wav, "-c:a", "aac", "-b:a", "192k"]
         cmd += ["-c:v", "libx264", "-crf", str(int(crf)), "-pix_fmt", pix_fmt, "-movflags", "+faststart", dest]
-        subprocess.run(cmd, check=True, capture_output=True)
+        res = subprocess.run(cmd, capture_output=True)
+        if res.returncode:  # say why (e.g. the old file is open in a player), not just "exit status 1"
+            err = res.stderr.decode("utf-8", "replace").strip()[-400:]
+            raise RuntimeError(f"[LC H3] ffmpeg could not write {dest}: {err}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -155,10 +372,6 @@ def _color_match(frames: torch.Tensor, ref: torch.Tensor, strength: float) -> to
     rm, rs = ref.mean(dim=(0, 1, 2)), ref.std(dim=(0, 1, 2)) + 1e-5
     matched = (frames - fm) / fs * rs + rm
     return (frames + (matched - frames) * strength).clamp(0, 1)
-
-
-def _shift_stamps(text: str, offset: float) -> str:
-    return _STAMP_RE.sub(lambda m: f"{float(m.group(1)) + offset:.2f}{m.group(2)}", text)
 
 
 def _scene_start(plan: dict, i: int, folder: str = "") -> int:
@@ -294,15 +507,44 @@ def _frame_match(pair, refs: np.ndarray, rgb: np.ndarray):
     return best
 
 
-def _face_score(frames_u8: np.ndarray, refs_path: str):
+def _pic_face_refs(images: list) -> np.ndarray | None:
+    """SFace features of the largest clear face in each reference picture (the Reference Assembler's face pictures)."""
+    pair = _face_models()
+    if pair is None:
+        return None
+    # your own picture is a portrait you chose: any clear face counts (a beard or grey hair scores lower than the
+    # 0.8 the video frames need), the largest one wins
+    det, feats = pair[0], []
+    det.setScoreThreshold(0.5)
+    try:
+        for img in images:
+            rgb = (img[0].clamp(0, 1).cpu().numpy() * 255).astype(np.uint8)
+            bgr = np.ascontiguousarray(rgb[..., ::-1])
+            det.setInputSize((bgr.shape[1], bgr.shape[0]))
+            _, faces = det.detect(bgr)
+            if faces is None or not len(faces):
+                continue
+            f = max(faces, key=lambda t: t[2] * t[3])
+            feats.append(pair[1].feature(pair[1].alignCrop(bgr, f)).reshape(-1))
+    finally:
+        det.setScoreThreshold(0.7)
+    return np.stack(feats) if feats else None
+
+
+def _face_score(frames_u8: np.ndarray, refs_path):
     """How much the main person matches segment 1: per frame the best match of any face against any reference
     (so a passer-by or a new expression doesn't count against her), then the median over the segment. Frames where
     the only clear face is somebody else (under FACE_OTHER, e.g. the barista while she has her back to us) are
     left out instead of scored as drift."""
     pair = _face_models()
-    if pair is None or not os.path.exists(refs_path):
+    if pair is None:
         return None
-    refs = np.load(refs_path)
+    if isinstance(refs_path, np.ndarray):
+        refs = refs_path
+    elif refs_path and os.path.exists(refs_path):
+        refs = np.load(refs_path)
+    else:
+        return None
     scores, others = [], 0
     for k in range(0, len(frames_u8), 6):
         best = _frame_match(pair, refs, frames_u8[k])
@@ -343,6 +585,14 @@ def _load_json(path: str):
             return json.load(f)
     except Exception:
         return None
+
+
+def _save_json(path: str, data, **kw):
+    """Write json to a temp file, then swap it in: the Proof Sheet never reads a half-written file."""
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, **kw)
+    os.replace(tmp, path)
 
 
 HEAD_SIDE = 384  # memory head clip size: small, and only the face, hair and hood, never the place
@@ -422,24 +672,69 @@ def _style_for(style: str, name: str, names: dict) -> str:
     return " ".join(keep).strip() or style
 
 
+_PERSON_CLAUSE_RE = re.compile(r"\b(man|woman|boy|girl|guy|lady)\b", re.I)
+_PEOPLE_WORDS_RE = re.compile(r"\b(he|she|him|her|his|hers|they|them|their|man|woman|men|women|boy|girl|guy|lady)\b", re.I)
+_STOP = {"a", "an", "the", "in", "with", "and", "of", "his", "her", "wearing", "under", "on", "black", "dark", "man", "woman"}
+
+
+def _style_cast(style: str, plan: dict, action: str) -> str:
+    """The STYLE block goes into every segment, and every person it describes shows up. Keep only the people this
+    segment names; a segment that names nobody and mentions no person (a van pulling up) keeps no one. Clauses that
+    don't name anyone ("a stocky man in a grey hoodie") are matched to the cast by gender and look words. The camera
+    and look clauses always stay."""
+    names = _cast_names(plan)
+    if len(names) < 1 or not style:
+        return style
+    here = {n for n in names if re.search(rf"\b{re.escape(n)}\b", action, re.I)}
+    if not here and _PEOPLE_WORDS_RE.search(re.sub(r"[\"“][^\"”]*[\"”]", "", _action_body(action))):
+        return style  # someone is in it, unnamed ("she walks in"): keep everyone
+    story = plan.get("story", "")
+    looks = {}
+    for n in names:
+        m = re.search(rf"\b{re.escape(n)},\s+an?\s+(.*?)(?=\b(?:{'|'.join(map(re.escape, names))}),\s+an?\s|$)", story, re.S)
+        looks[n] = {w for w in re.findall(r"[a-z]+", (m.group(1) if m else "").lower()) if w not in _STOP}
+
+    def owner(clause: str):
+        named = [n for n in names if re.search(rf"\b{re.escape(n)}\b", clause, re.I)]
+        if named:
+            return named[0]
+        g = _PERSON_CLAUSE_RE.search(clause)
+        if not g:
+            return None
+        words = {w for w in re.findall(r"[a-z]+", clause.lower()) if w not in _STOP}
+        same = [n for n in names if _GENDER.get(names[n], names[n]) == _GENDER.get(g.group(1).lower(), g.group(1).lower())]
+        return max(same or names, key=lambda n: len(looks[n] & words))
+
+    parts = re.split(r"(?<=[.;])\s+", style)
+    keep = [x for x in parts if (o := owner(x)) is None or o in here]
+    return " ".join(keep).strip()
+
+
+_GENDER = {"man": "m", "guy": "m", "boy": "m", "woman": "f", "lady": "f", "girl": "f"}
+
+
+def _action_body(action: str) -> str:
+    """The timed part of a segment, after the Place / Holding / Sound / Camera lines."""
+    return "\n".join(ln for ln in str(action or "").split("\n")
+                     if not re.match(r"\s*(place|holding|sound)\s*:", ln, re.I))
+
+
+def _beats_only(action: str) -> str:
+    """The timed beats alone, without the Place / Holding / Sound / Camera lines ("close-up of Nova" names the shot,
+    not who else is in it)."""
+    return "\n".join(ln for ln in str(action or "").split("\n")
+                     if not re.match(r"\s*(place|holding|sound|camera)\s*:", ln, re.I))
+
+
 def _read_mp4_native(path: str) -> torch.Tensor:
     """mp4 -> IMAGE tensor at the file's own size."""
     # ffmpeg -i prints the stream size (ffprobe isn't always there, imageio-ffmpeg ships ffmpeg only)
     info = subprocess.run([_ffmpeg_bin(), "-hide_banner", "-i", path], capture_output=True, text=True).stderr
-    w, h = (int(v) for v in re.search(r"Video:.*?(\d{2,5})x(\d{2,5})", info).groups())
+    size = re.search(r"Video:.*?(\d{2,5})x(\d{2,5})", info)
+    if size is None:  # missing or broken clip: say which one
+        raise ValueError(f"[LC H3] Can't read the video {path} (missing or broken).")
+    w, h = (int(v) for v in size.groups())
     return _read_mp4_frames(path, w, h)
-
-
-def _sharpest(frames_u8: np.ndarray) -> int:
-    """Index of the crispest frame in the middle half: a good memory picture of the cast."""
-    n = len(frames_u8)
-    best, best_i = -1.0, n // 2
-    for k in range(n // 4, max(n // 4 + 1, 3 * n // 4), 2):
-        g = frames_u8[k, ::2, ::2].astype(np.float32).mean(axis=2)
-        score = float(np.var(np.diff(g, axis=0)) + np.var(np.diff(g, axis=1)))
-        if score > best:
-            best, best_i = score, k
-    return best_i
 
 
 def _portrait_crop(frame: np.ndarray) -> np.ndarray:
@@ -495,13 +790,17 @@ def _speaker(text: str, end: int):
 
 def _dialogue(text: str, style: str = "") -> str:
     """Quoted lines as <d>[English] ... </d>, and the person who says each one tagged (S1), (S2) the way H3 was
-    trained ("Claire (S1) squeezes his hand and says <d>[English] ... </d>"), so the right mouth moves. Speakers are
-    numbered in the order the style block names them, then in the order they speak."""
+    trained ("Claire (S1) squeezes his hand and says <d>[English] ... </d>"), so the right mouth moves. Everyone the
+    style block names is numbered in that order, speaking or not, so a person keeps the same number in every segment
+    (a CONTINUE where only the second person speaks would otherwise call her S1, and the first speaker's mouth moves).
+    Speakers the style block doesn't name follow in the order they speak."""
     quotes = list(_SPOKEN.finditer(text))
     who = [_speaker(text, m.start()) for m in quotes]
     names = [w[2] for w in who if w]
     low = style.lower()
-    order = sorted(set(names), key=lambda k: (low.find(k) if k in low else 10 ** 6, names.index(k)))
+    cast = [m.group(1).lower() for m in re.finditer(r"(?:^|[;.\n]\s*)([A-Z][a-z]+):", style.strip())]  # "Anika: ...; Nova: ..."
+    order = list(dict.fromkeys(cast + names))
+    order = sorted(order, key=lambda k: (low.find(k) if k in low else 10 ** 6, order.index(k)))
     ids = {k: i + 1 for i, k in enumerate(order)}
     out, last = [], 0
     for m, w in zip(quotes, who):
@@ -566,17 +865,102 @@ def _mentions(text: str, name: str) -> bool:
 _PEOPLE = re.compile(r"\b(she|he|her|him|his|they|them|their|couple|both|everyone|people|man|woman|girl|boy|friends|crowd)\b", re.I)
 
 
-def _shot_refs(refs: dict, shot: dict, style: str, genders: dict | None = None) -> dict | None:
-    """The reference pictures one shot needs, renumbered from <Picture 1>: the people named in its action (everyone
-    when it names nobody but clearly has people in it), the settings and props it names (the only setting when there is just one), style always."""
+def _norm_words(t: str) -> str:
+    return " ".join(re.sub(r"[^a-z0-9' ]+", " ", str(t).lower().replace("’", "'")).split())
+
+
+def _says_line(line_text: str, quotes: list) -> bool:
+    """A recorded line matches a quote in the shot: the same words, give or take punctuation and a word or two."""
+    import difflib
+
+    a = _norm_words(line_text)
+    return bool(a) and any(a == q or a in q or q in a or difflib.SequenceMatcher(None, a, q).ratio() >= 0.8
+                           for q in (_norm_words(x) for x in quotes) if q)
+
+
+def _line_time(action: str, line_text: str) -> float:
+    """When the shot says this line: the "At N seconds" before its quote (0 when the shot gives no time)."""
+    want = _norm_words(line_text)
+    for m in _SPOKEN.finditer(action):
+        if _says_line(want, [m.group(1)]):
+            stamps = list(_STAMP_RE.finditer(action[:m.start()]))
+            return float(stamps[-1].group(1)) if stamps else 0.0
+    return 0.0
+
+
+def _lock_line(latent: dict, audio_vae, audio: dict, start_s: float) -> dict:
+    """LC H3 Audio Sync for one recorded line: the line goes into the sound half at start_s and only that stretch is
+    held (noise mask 0); the rest of the sound and all of the picture are still made by H3. Several lines add up."""
+    import comfy.audio
+    from .lc_h3_audio_sync import AUDIO_LATENT_FPS
+
+    video, a_cur = latent["samples"].unbind()[:2]
+    t = a_cur.shape[-1]
+    vae_sr = int(getattr(audio_vae, "audio_sample_rate", 32000))
+    wave, sr = audio["waveform"][:1], int(audio["sample_rate"])
+    if sr != vae_sr:
+        wave = comfy.audio.resample(wave, sr, vae_sr)
+    want = int(round(t / AUDIO_LATENT_FPS * vae_sr))
+    start = max(0, min(want, int(round(start_s * vae_sr))))
+    piece = wave[..., :want - start]
+    full = torch.zeros(1, wave.shape[1], want, dtype=wave.dtype)
+    full[..., start:start + piece.shape[-1]] = piece
+    z = audio_vae.encode(full.movedim(1, -1))
+    z = z[..., :t] if z.shape[-1] >= t else torch.cat([z, z[..., -1:].repeat_interleave(t - z.shape[-1], dim=-1)], dim=-1)
+    z = z.to(device=a_cur.device, dtype=a_cur.dtype)
+    a0 = int(start_s * AUDIO_LATENT_FPS)
+    a1 = min(t, a0 + math.ceil(piece.shape[-1] / vae_sr * AUDIO_LATENT_FPS) + 1)
+    old = latent.get("noise_mask")
+    v_mask, a_mask = (old.unbind()[:2] if old is not None else (torch.ones_like(video), torch.ones_like(a_cur)))
+    a_mask = a_mask.clone()
+    a_mask[..., a0:a1] = 0.0
+    a_new = a_cur.clone()
+    a_new[..., a0:a1] = z[..., a0:a1]
+    out = dict(latent)
+    out["samples"] = comfy.nested_tensor.NestedTensor((video, a_new))
+    out["noise_mask"] = comfy.nested_tensor.NestedTensor((v_mask, a_mask))
+    return out
+
+
+def _abs_input(path: str) -> str:
+    """A plan picture path: absolute (output pictures) or relative to input/; "" outside ComfyUI's folders."""
+    from .lc_h3_refs import inside_comfy
+
+    return inside_comfy(path if os.path.isabs(path) else os.path.join(folder_paths.get_input_directory(), path))
+
+
+def _shot_refs(refs: dict, shot: dict, style: str, genders: dict | None = None, one_place: bool = True) -> dict | None:
+    """What one shot needs from the Reference Assembler, renumbered: the people named in its action (everyone when it
+    names nobody but clearly has people in it) with their face, full body, outfit and voice; the settings and props
+    it names (the only setting when there is just one); look and composition always; and a recorded line only when the
+    shot says those words."""
+    from .lc_h3_refs import PERSON
+
     pics = refs.get("pictures") or []
-    if not pics:
+    auds = refs.get("audios") or []
+    if not pics and not auds:
         return None
     action = shot.get("action", "")
     text = action + NL + style
-    cast = sorted({p["name"] for p in pics if p["role"].startswith("cast") and p["name"]})
+    cast = sorted({p["name"] for p in pics + auds if p["role"] in PERSON and p["name"]})
     who = [n for n in cast if _mentions(action, n)]
-    if not who and _PEOPLE.search(action):
+    solo = _solo(action, genders or {n: "" for n in cast})
+    if solo in cast:
+        # a close-up of one person: only their pictures, or H3 pulls the others into the frame. Anyone else the action
+        # names comes along: "she turns toward Anika" with no picture or look made H3 invent a stranger (Coffee Date)
+        who = [solo] + [n for n in cast if n != solo and _mentions(_beats_only(action), n)]
+    # people the story names but who have no picture (switched off) still count as named: "Vince ... he says" sent
+    # the only man with a picture (the old guard) into the robbers' van
+    if shot.get("subject") in cast:
+        # LC H3 Story: a close-up or medium shot is its subject alone. "Anika stares at Nova" sent Nova's face and outfit
+        # too, and Anika turned into Nova halfway through her own close-up (2026-11-01)
+        who = [shot["subject"]]
+        solo = shot["subject"]
+    named_any = any(_mentions(action, n) for n in (genders or {}))
+    # everyone the story names counts for the layout rule, pictures or not (Marco had none, so the café's walk-up
+    # shot counted one person and lost its layout)
+    in_shot = len({n for n in (genders or {}) if _mentions(action, n)} | set(who))
+    if not who and not named_any and _PEOPLE.search(action):
         who = cast
         # only "she" (or only "he"): the people of that sex, from the story's cast list ("Lonecat, a woman ...")
         she = bool(re.search(r"\b(she|her|hers)\b", action, re.I))
@@ -585,15 +969,92 @@ def _shot_refs(refs: dict, shot: dict, style: str, genders: dict | None = None) 
             want = {"woman", "girl", "lady"} if she else {"man", "boy", "guy"}
             picked = [n for n in cast if (genders.get(n) or "") in want]
             who = picked or cast
-    settings = sorted({p["name"] for p in pics if p["role"] == "setting"})
-    where = [n for n in settings if _mentions(text, n)] or (settings if len(settings) == 1 else [])
+    settings = sorted({p["name"] for p in pics if p["role"] in ("setting", "view", "layout") and p["name"]})
+    place = _norm_words(shot.get("place_name") or "")
+    if place:
+        # the Shot List says where this shot is: that place's pictures only, or none when it has none. Matching words in
+        # the action sent "outside the bank" to every "inside the bank lobby" shot and missed "the black van".
+        where = [n for n in settings if _norm_words(re.sub(r"^(the|a|an)\s+", "", n, flags=re.I))
+                 == _norm_words(re.sub(r"^(the|a|an)\s+", "", place, flags=re.I))]
+    else:
+        # the only setting goes to every shot only when the whole story stays in one place
+        where = [n for n in settings if _mentions(text, n)] or (settings if len(settings) == 1 and one_place else [])
+    view = str(shot.get("view_name") or "").strip().lower()
+    if view:
+        # LC H3 Story: the angle picked for this shot in the place's 360 panorama is its only background picture
+        where = [n for n in settings if n.strip().lower() == view] or where
     props = [p["name"] for p in pics if p["role"] == "prop" and _mentions(text, p["name"])]
     keep = {n.strip().lower() for n in who + where + props}
-    sub = _refs_subset(refs, keep)
-    return sub if sub["pictures"] else None
+    quotes = _SPOKEN.findall(action)
+    lines = {a["id"] for a in auds if a["role"] == "line" and a["name"] in who and _says_line(a.get("text", ""), quotes)}
+    sub = _refs_subset(refs, keep, lines)
+    if "outfits" in shot:
+        # LC H3 Story: each person wears one outfit per shot, the one the story is up to (none = their look)
+        worn = set(shot.get("outfits") or [])
+        sub["pictures"] = [{**q, "n": k + 1} for k, q in enumerate(q for q in sub["pictures"] if q["role"] != "outfit" or q["id"] in worn)]
+    # a recorded line is locked into the sound at its second, not sent as <Audio n> as well (H3 plays a fully_copy
+    # reference from 0 s, so the line came out twice)
+    from .lc_h3_refs import sentences as _ref_sentences
+
+    if solo in cast or max(in_shot, len(who)) <= 1:
+        # a layout picture is about where people are: one person's shot never gets it (in the café test H3 also took
+        # the layout's camera position, and every CONTINUE after it was stuck on that wide frame)
+        sub["pictures"] = [{**q, "n": k + 1} for k, q in enumerate(q for q in sub["pictures"] if q["role"] != "layout")]
+    # one picture per place: its layout (who stands where) when several people are in the shot, else its setting
+    named = {(q["role"], (q["name"] or "").strip().lower()) for q in sub["pictures"]}
+    drop = "setting" if len(who) > 1 else "layout"
+    sub["pictures"] = [{**q, "n": k + 1} for k, q in enumerate(
+        q for q in sub["pictures"]
+        if not (q["role"] == drop and ({"setting", "layout"} - {drop}).pop() in {r for r, n in named if n == (q["name"] or "").strip().lower()}))]
+    if shot.get("room") is False:
+        # LC H3 Story marks tight framings (medium, close-up): a room picture pins H3 to its camera position, and a
+        # close-up came out as a giant head pasted over the wide room (Coffee Date). The Place words still go in.
+        sub["pictures"] = [{**q, "n": k + 1} for k, q in enumerate(q for q in sub["pictures"] if q["role"] not in ("setting", "layout"))]
+    sub["lock"] = [a for a in sub["audios"] if a["role"] == "line"]
+    sub["audios"] = [{**a, "n": k + 1} for k, a in enumerate(a for a in sub["audios"] if a["role"] != "line")]
+    sub["text"] = _ref_sentences(sub)
+    return sub if sub["pictures"] or sub["audios"] or sub["lock"] else None
 
 
-def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = None, people: int = 1) -> str:
+_CAM_MOVE = re.compile(r"\b(push(es|ing)?|pull(s|ing)? (back|out|away)|pan(s|ning)?|dolly|dollies|zoom(s|ing)?|track(s|ing)?|"
+                       r"moves?|moving|widens?|follows?|crane|tilts?|orbits?|circles?|walks? (with|behind|beside)|passes)\b", re.I)
+_NO_MOVE = re.compile(r"\b(with\s+)?(no|without( any)?)\s+(camera\s+)?(move(ment)?s?|moving)\b", re.I)
+_CLOTHES = re.compile(r"\b(sweater|jumper|blouse|shirt|t-shirt|tee|top|jacket|coat|parka|hoodie|dress|skirt|suit|blazer|vest|"
+                      r"cardigan|jeans|trousers|pants|shorts|uniform|scarf|hat|cap|gown|robe|apron|overalls|tank)\b", re.I)
+
+
+def _unsay_looks(style: str, story: str, cast: dict) -> str:
+    """The Showrunner's look line describes everyone in words ("a man in his early forties with short dark hair ...").
+    H3 follows the words far more than the picture, so the words have to describe the picture. When a face or full
+    body picture has a note (its look: "early twenties, dark curls, clean-shaven") the note takes that person's place,
+    plus the story's clothes for a face picture. No note: the story's words stay. Each description is matched to its
+    person through the story ("Daniel, a man in his early forties ...")."""
+    import difflib
+
+    if not cast or ";" not in style and not re.match(r"\s*an?\s+(man|woman|boy|girl|guy|lady)\b", style, re.I):
+        return style
+    head, sep, rest = style.partition(". ")
+    named = {m.group(1): story[m.end():m.end() + 200] for m in re.finditer(r"\b([A-Z][a-z]+),\s+(?=an?\s)", story)}
+    out = []
+    for part in head.split(";"):
+        d = part.strip()
+        who = max(named, key=lambda n: difflib.SequenceMatcher(None, d.lower(), named[n][:len(d) + 10].lower()).ratio(), default=None)
+        r = cast.get(who) if who else None
+        pics = (r or {}).get("face", []) + (r or {}).get("full body", [])
+        look = next((p["note"].strip() for p in pics if str(p.get("note", "")).strip()), "")
+        if not look:
+            out.append(d)
+            continue
+        wear = []
+        if not (r.get("full body") or r.get("outfit")):
+            wear = [w.strip() for w in re.split(r",|\band\b|\bwith\b|\bwearing\b|\bin\b(?=\s+an?\b)", d) if _CLOTHES.search(w)]
+        out.append(f"{who}: {look}" + (", wearing " + " and ".join(wear) if wear else ""))
+    if not out:
+        return rest
+    return "; ".join(out) + sep + rest
+
+
+def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = None, people: int = 1, auds: list | None = None, story: str = "") -> str:
     """H3's trained reference layout for the Reference Assembler's pictures: one <Subject k> per named person (their
     face / full body pictures), and retention lines for each setting, prop and style picture. memory: "video" or
     "video_audio" when segment 1's memory clip rides along (no cast pictures in this shot), as <Video 1> / <Audio 1>."""
@@ -607,22 +1068,28 @@ def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = 
     sound = re.sub(r"\s*No music\.?", "", sound).strip()
     desc = (style + NL + NL + body).strip()
     tail = NL + NL + "overall_soundscape: " + (sound or "quiet natural ambience.") + NL + NL + "non_diegetic_music: none"
+    from .lc_h3_refs import people as _ref_people, retention as _ref_retention
+
     tag = lambda p: f"<Picture {p['n']}>"  # noqa: E731
     join = lambda t: t[0] if len(t) == 1 else ", ".join(t[:-1]) + " and " + t[-1]  # noqa: E731
-    people_pics = {}
-    for p in pics:
-        if p["role"].startswith("cast"):
-            people_pics.setdefault(p["name"] or "the person", []).append(p)
+    shift = 1 if memory == "video_audio" else 0  # segment 1's memory clip takes <Audio 1> (it comes before your clips)
+    auds = [{**a, "n": a["n"] + shift} for a in (auds or [])]
+    bundle = {"pictures": pics, "audios": auds}
+    cast = _ref_people(bundle)
+    style = _unsay_looks(style, story, cast)
+    desc = (style + NL + NL + body).strip()
+    people_pics = {n: r for n, r in cast.items() if r.get("face") or r.get("full body")}
     defs, kept, subjects = [], [], []
-    for k, (name, ps) in enumerate(people_pics.items(), 1):
+    subject_of = {}
+    for k, (name, r) in enumerate(cast.items(), 1):
         subj = f"<Subject {k}>"
         subjects.append(subj)
-        tags = [tag(p) for p in ps]
-        defs.append(f"{subj} is {name}, the person shown in {join(tags)}.")
-        what = "face, hair and clothing" if any(p["role"] == "cast full body" for p in ps) else "face and hair"
-        note = "; ".join(p["note"].strip() for p in ps if p.get("note", "").strip())
-        kept.append(f"{subj} ({', '.join(tags)}): fully_preserved - the {what} of {subj} are retained"
-                    + (f" ({note})" if note else "") + ". Only the person comes from " + join(tags) + "; not the background.")
+        subject_of[name] = subj
+        look = [tag(p) for p in r.get("face", []) + r.get("full body", [])]
+        voice = [f"<Audio {a['n']}>" for a in r.get("voice", [])]
+        defs.append(f"{subj} is {name}" + (f", the person shown in {join(look)}" if look else "")
+                    + (f"; their voice is {join(voice)}" if voice else "") + ".")
+    kept += _ref_retention(bundle, subject_of)
     if memory and not people_pics:
         subj = "<Subject 1> and <Subject 2>" if people > 1 else "<Subject 1>"
         subjects.append(subj)
@@ -631,16 +1098,11 @@ def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = 
                     "Only the people come from <Video 1>; the place, the poses and the framing are new.")
         if memory == "video_audio":
             kept.append(f"<Audio 1>: reference - the voice{'s' if people > 1 else ''} of {subj}.")
-    for p in pics:
-        name = p["name"] or ""
-        if p["role"] == "setting":
-            kept.append(f"{tag(p)} ({name or 'the place'}): reference - only the place and its light are used, none of its people.")
-        elif p["role"] == "prop":
-            kept.append(f"{tag(p)} ({name or 'the object'}): fully_preserved - the shape, colors and any printed text of the {name or 'object'} are retained.")
-        elif p["role"] == "style":
-            kept.append(f"{tag(p)}: reference - only the colors, light and grain are used.")
     follow = join(subjects) if subjects else "the scene"
-    task = "[reference generation + audio reference]" if memory == "video_audio" and not people_pics else "[reference generation]"
+    kinds = ["reference generation"]
+    if auds or (memory == "video_audio" and not people_pics):
+        kinds.append("audio reuse" if any(a["role"] == "line" for a in auds) else "audio reference")
+    task = "[" + " + ".join(kinds) + "]"
     return (("subject_definitions:" + NL + NL.join(defs) + NL + NL if defs else "")
             + f"summary: {task} The target video follows {follow}." + NL + NL
             + "retention_analysis:" + NL + NL.join(kept) + NL + NL + "detailed_description: " + desc + tail)
@@ -658,14 +1120,15 @@ def _cast_names(plan_or_story) -> dict:
 def _solo(text: str, names: dict) -> str | None:
     """The one named person a shot is of (its Camera line: "close-up of Daniel"), or None for a shot of several."""
     cam = next((ln for ln in text.split("\n") if ln.strip().lower().startswith("camera:")), "")
-    if not cam or re.search(r"\b(both|two|them|couple|together|everyone)\b", cam, re.I):
+    # "from behind Dex, tracking alongside as they sprint" is the group seen past one of them, not a close-up of Dex
+    if not cam or re.search(r"\b(both|two|three|four|them|they|couple|together|everyone|group|all)\b", cam, re.I):
         return None
     hits = [n for n in names if re.search(rf"\b{n}\b", cam)]
     return hits[0] if len(hits) == 1 else None
 
 
 def _cast_path(folder: str, name: str, ext: str) -> str:
-    return os.path.join(folder, f"cast_{re.sub(r'[^A-Za-z0-9]', '', name)}{ext}")
+    return os.path.join(work_dir(folder), f"cast_{re.sub(r'[^A-Za-z0-9]', '', name)}{ext}")
 
 
 def _cast_size(folder: str, width: int, height: int) -> int:
@@ -683,16 +1146,16 @@ class LCH3Segment:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "plan": (PLAN_TYPE, {"tooltip": "From LC Vision Director 🎬."}),
+                "plan": (PLAN_TYPE, {"tooltip": "From LC Vision Showrunner 🎬."}),
                 "clip": ("CLIP", {"tooltip": "MiniMax H3 text encoder."}),
                 "vae": ("VAE", {"tooltip": "MiniMax H3 video VAE."}),
                 "audio_vae": ("VAE", {"tooltip": "MiniMax H3 audio VAE."}),
-                "index": ("INT", {"default": 0, "min": 0, "max": 60, "tooltip": "Which segment to make. 0 = the next one not saved yet. Set a number to redo that segment."}),
+                "index": ("INT", {"default": 0, "min": 0, "max": 60, "tooltip": "Only used when make is redo: the segment to make again."}),
                 "width": ("INT", {"default": 960, "min": 256, "max": 2048, "step": 32, "tooltip": "960 x 544 is a good low VRAM size. Keep it the same for every segment of a project."}),
                 "height": ("INT", {"default": 544, "min": 256, "max": 2048, "step": 32}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF, "control_after_generate": True, "tooltip": "Passed through to your sampler and saved with the segment. Change it to redo a segment."}),
                 "carry_on_line": ("BOOLEAN", {"default": True, "tooltip": "CONTINUE segments: adds a line telling H3 the opening is the previous moment carrying straight on."}),
-                "color_match": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Pulls the carried frames' color toward the start of this scene (the last CUT) to fight drift. 0 = off. Turn it on (0.2 to 0.4) when Assemble's drift check flags a scene."}),
+                "color_match": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Pulls the carried frames' color toward the start of this scene (the last CUT) to fight drift. 0 = off. Turn it on (0.2 to 0.4) when Make's info flags a scene drifting."}),
                 "memory": (["clip", "on", "off"], {"default": "clip", "tooltip": "Keeps the cast the same. clip: about 1 s of segment 1 (picture and sound) goes in as a video reference so faces, hair, clothes and voices stay the same, on a CUT written into the story, and as a gentle nudge on any CONTINUE that starts with no clear face (or after a segment whose face drifted). on: a still portrait from segment 1 (or memory_image). off: the style text alone."}),
                 "memory_gap": ("FLOAT", {"default": 5.0, "min": 0.0, "max": 30.0, "step": 0.5, "tooltip": "Seconds of empty time H3 sees between the memory and the start of the cut. Without a gap H3 treats the memory as the moment just before the cut and opens on its pose. 5 s worked in tests. 0 = stock H3."}),
             },
@@ -702,7 +1165,9 @@ class LCH3Segment:
                 "prompt_format": (["sections (H3 trained)", "plain"], {"default": "sections (H3 trained)", "tooltip": "sections: the layout H3 was trained on (description / soundscape / non_diegetic_music: none, dialogue as <d>[English] ... </d>, and the reference block for the memory). plain: style + action text."}),
                 "redo_after": (["just this segment", "this + the CONTINUE ones after it"], {"default": "this + the CONTINUE ones after it", "tooltip": "When index redoes a segment that is already saved. The old take is always kept in the project's takes folder. this + the CONTINUE ones after it: the segments that carry straight on from this one no longer join, so they are set aside too; set index back to 0 and queue to make them again. A CUT after it stays."}),
                 "refs": (REFS_TYPE, {"tooltip": "From LC H3 Reference Assembler: your cast, setting, prop and style pictures. Each segment gets only the ones its shot names."}),
-                "refs_on": (["cuts + re-anchors", "every segment"], {"default": "cuts + re-anchors", "tooltip": "When the references are sent. cuts + re-anchors: CUT segments, and a CONTINUE that lost the face (a reference on a plain CONTINUE pulled the opening away from the carried frames in tests). every segment: always."}),
+                "refs_on": (["cuts only", "cuts + re-anchors", "cuts + places on continues", "every segment"], {"default": "cuts only", "tooltip": "When the references are sent. cuts only: CUT segments only, so every CONTINUE carries straight on from the frames before it (smoothest joins). cuts + re-anchors: CUT segments, and a CONTINUE that lost the face (a reference on a plain CONTINUE pulled the opening away from the carried frames in tests). cuts + places on continues: CUT segments get everything; a CONTINUE gets only the place, layout and prop pictures (who stands where, which way the door opens), never the faces, which carry on from the frames before it. A CONTINUE that isn't a close-up also gets the place's room (your room picture, or the place's first wide segment) so a camera that pulls back finds the same room. every segment: always."}),
+                "make": (["all remaining", "next segment", "redo"], {"default": "all remaining", "tooltip": "all remaining: one Run makes every segment not saved yet, one after another, however many there are (only one run ever waits in the queue, so Stop ends it right there; Run again to carry on). next segment: one Run, one segment. redo: makes segment number index again."}),
+                "hold_scene": ("BOOLEAN", {"default": True, "tooltip": "Keeps the room the same across cuts: every later shot with more than one person gets a frame of the first wide shot as a layout reference (who sits where, the table, the window). Close-ups of one person don't. A layout picture of your own takes its place."}),
             },
         }
 
@@ -711,30 +1176,54 @@ class LCH3Segment:
     RETURN_NAMES = ("positive", "latent", "seed", "segment", "info", "prompt")
     FUNCTION = "build"
     CATEGORY = "LC AV/H3 Long Video"
-    DESCRIPTION = "One segment of an LC Vision Director plan: conditioning + latent for your sampler. CONTINUE segments start from the previous segment's saved ending."
+    DESCRIPTION = "One segment of an LC Vision Showrunner plan: conditioning + latent for your sampler. CONTINUE segments start from the previous segment's saved ending."
 
     @classmethod
-    def IS_CHANGED(cls, plan=None, index=0, **kwargs):
+    def IS_CHANGED(cls, plan=None, index=0, make="all remaining", **kwargs):
         if not isinstance(plan, dict):
             # plan comes in through a link, and ComfyUI doesn't hand linked inputs to IS_CHANGED: always run, or a
             # second Run with a fixed seed would replay the cached segment instead of making the next one
             return float("nan")
-        i = _resolve_index(plan, index)
+        i = _resolve_index(plan, index if make == "redo" else 0)
         prev = _seg_path(project_dir(plan.get("project", "")), i - 1, "_tail.mp4")
         return f"{i}:{os.path.getmtime(prev) if os.path.exists(prev) else 0}"
 
     def build(self, plan, clip, vae, audio_vae, index, width, height, seed, carry_on_line, color_match, memory="clip", memory_gap=5.0,
               first_frame=None, memory_image=None, prompt_format="sections (H3 trained)",
-              redo_after="this + the CONTINUE ones after it", refs=None, refs_on="cuts + re-anchors"):
+              redo_after="this + the CONTINUE ones after it", refs=None, refs_on="cuts only", make="all remaining", hold_scene=True):
         shots = plan.get("shots") or []
         if not shots:
             raise ValueError("[LC H3] The plan has no segments.")
-        i = _resolve_index(plan, index)
+        if make == "redo" and int(index) <= 0:  # index 0 would quietly pick the last (or next) segment
+            raise ValueError("[LC H3] make is redo: set index to the segment to redo (1 and up), or use ↻ on the shot's tile in the Story board.")
+        i = _resolve_index(plan, index if make == "redo" else 0)
         shot = shots[i - 1]
+        folder0 = project_dir(plan["project"])
+        if make != "redo" and all(_is_done(folder0, k) for k in range(1, len(shots) + 1)):
+            # nothing left to make: stop quietly (the browser shows "all segments are made"), no error and no remake
+            from comfy_execution.graph import ExecutionBlocker
+            msg = (f"Every segment of {plan['project']} is made. To make one again, use ↻ on the shot's tile in the Story board "
+                   "(or make: redo with its index).")
+            print(f"[LC H3] {msg}")
+            _tell_ui({"project": plan["project"], "left": 0, "made": 0, "next": 0})
+            b = ExecutionBlocker(None)
+            return {"ui": {"text": [msg]}, "result": (b, b, b, b, msg, b)}
+        if make == "redo" and i in _locked(folder0) and _is_done(folder0, i):
+            raise ValueError(f"[LC H3] Segment {i} is locked 🔒. Unlock it on the Story board to make it again.")
+        if make == "redo" and _is_done(project_dir(plan["project"]), i):
+            try:
+                with open(_seg_path(project_dir(plan["project"]), i, ".json"), encoding="utf-8") as f:
+                    old_seed = int(json.load(f).get("seed", -1))
+            except Exception:
+                old_seed = -1
+            if int(seed) == old_seed:  # a fixed (or wired) seed would make the same take again
+                seed = (old_seed * 6364136223846793005 + 1442695040888963407) % (2 ** 63)
+                print(f"[LC H3] Redo segment {i}: same seed as the saved take, using {seed} so it comes out different.")
         folder = project_dir(plan["project"])
         os.makedirs(folder, exist_ok=True)
         seg_frames, ovl_frames = _frames(plan)
-        cont = shot["mode"] == "CONTINUE" and i > 1
+        seg_frames = int(shot.get("frames") or seg_frames)  # a long line gets its own longer segment (extend_segments)
+        cont = shot.get("mode") == "CONTINUE" and i > 1
         # memory: one picture of the cast (segment 1's crispest frame, or memory_image)
         mem = None
         if memory == "on":
@@ -760,15 +1249,33 @@ class LCH3Segment:
         if memory == "clip" and (not cont or reanchor) and i > 1 and os.path.exists(_seg_path(folder, 1, "_memory_clip.mp4")):
             head = _seg_path(folder, 1, "_memory_head.mp4")
             cast = _cast_size(folder, width, height)
-            # one person: the head-only clip (no background to copy); two or more: the whole frame, or every cut
-            # would get the one face the head crop centred on
-            cfr = _read_mp4_native(head) if os.path.exists(head) and cast < 2 else _read_mp4_frames(_seg_path(folder, 1, "_memory_clip.mp4"), width, height)
-            n_ok = cfr.shape[0]
-            while n_ok > 5 and n_ok % 17 != 5:
-                n_ok -= 1
-            mem_clip = (cfr[:n_ok], _read_wav(_seg_path(folder, 1, "_memory_clip.wav")) if os.path.exists(_seg_path(folder, 1, "_memory_clip.wav")) else None)
+            # the memory carries faces and voices, never its place: H3 copies the room it sees (a lobby shot went
+            # back into the van the memory was made in). One person: the head-only clip. Two or more: the whole
+            # frame, but only at the place the memory was made; elsewhere none (their looks come from the words),
+            # or every cut would get the one face the head crop centred on
+            try:
+                with open(_seg_path(folder, 1, "_memory.json"), encoding="utf-8") as f:
+                    mem_from = int(json.load(f).get("from", 1))
+            except Exception:
+                mem_from = 1
+            groups = _place_groups(plan)
+            same = mem_from > len(groups) or groups[i - 1] is None or groups[mem_from - 1] in (None, groups[i - 1])
+            if os.path.exists(head) and cast < 2:
+                cfr = _read_mp4_native(head)
+            elif same:
+                cfr = _read_mp4_frames(_seg_path(folder, 1, "_memory_clip.mp4"), width, height)
+            else:
+                cfr = None
+            if cfr is not None:
+                n_ok = cfr.shape[0]
+                while n_ok > 5 and n_ok % 17 != 5:
+                    n_ok -= 1
+                mem_clip = (cfr[:n_ok], _read_wav(_seg_path(folder, 1, "_memory_clip.wav")) if os.path.exists(_seg_path(folder, 1, "_memory_clip.wav")) else None)
             names = _cast_names(plan)
             solo = _solo(shot["action"], names)
+            named = [n for n in names if re.search(rf"\b{re.escape(n)}\b", shot["action"], re.I)]
+            if not solo and (len(names) > 2 or not named and not _PEOPLE_WORDS_RE.search(_action_body(shot["action"]))):
+                mem_clip, cast = None, 1
             if solo and os.path.exists(_cast_path(folder, solo, ".mp4")):
                 own = _read_mp4_native(_cast_path(folder, solo, ".mp4"))
                 wav = _cast_path(folder, solo, ".wav")
@@ -780,20 +1287,100 @@ class LCH3Segment:
             mem = None
         # your references (LC H3 Reference Assembler): the ones this shot names, on CUTs and re-anchors by default
         shot_refs = None
-        if refs and (not cont or refs_on == "every segment" or (cont and (reanchor if memory == "clip" else _needs_reanchor(folder, i, width, height)))):
-            shot_refs = _shot_refs(refs, shot, plan.get("style", ""), _cast_names(plan))
-        if shot_refs and any(p["role"].startswith("cast") for p in shot_refs["pictures"]):
+        places_only = cont and refs_on == "cuts + places on continues"
+        if refs and (not cont or places_only or refs_on == "every segment" or (cont and refs_on == "cuts + re-anchors" and (reanchor if memory == "clip" else _needs_reanchor(folder, i, width, height)))):
+            places = {g for g in _place_groups(plan) if g is not None}
+            shot_refs = _shot_refs(refs, shot, shot.get("style") or plan.get("style", ""), _cast_names(plan), len(places) <= 1)
+            if shot_refs and places_only:
+                # staging, not faces: the carried frames already hold the people, the place pictures hold the room
+                from .lc_h3_refs import sentences as _ref_sentences
+                pics = [p for p in shot_refs["pictures"] if p["role"] in ("setting", "view", "layout", "prop", "look", "composition")]
+                shot_refs = {**shot_refs, "pictures": [{**p, "n": k + 1} for k, p in enumerate(pics)], "audios": []}
+                shot_refs["text"] = _ref_sentences(shot_refs)
+                if not pics and not shot_refs.get("lock"):
+                    shot_refs = None
+            if shot_refs and not places_only:
+                # a person whose face picture goes in and who speaks here: their saved voice too (from their first line),
+                # unless the Assembler / Story already gives them one
+                from .lc_h3_refs import sentences as _ref_sentences
+                pictured = {p["name"] for p in shot_refs["pictures"] if p["role"] in ("face", "full body")}
+                voiced = {a["name"] for a in shot_refs["audios"] if a["role"] == "voice"}
+                added = False
+                for nm in dict.fromkeys(re.findall(r"\b([A-Z][\w'-]+) says\b", shot["action"])):
+                    vp = _voice_path(folder, nm) if nm in pictured and nm not in voiced else None
+                    if vp and len(shot_refs["audios"]) < 3:
+                        shot_refs["audios"].append({"id": f"voice_{nm}", "role": "voice", "name": nm, "note": "", "file": vp,
+                                                    "n": len(shot_refs["audios"]) + 1, "audio": _read_wav(vp), "text": ""})
+                        added = True
+                if added:
+                    shot_refs["text"] = _ref_sentences(shot_refs)
+        layout_from = None
+        # several people in the shot: the anchor keeps who is where (layout). One person, or an outdoor shot where
+        # things move: the place and its light only (setting), so nobody from the anchor walks in and the action isn't
+        # frozen into the anchor's frame. Close-ups never get it.
+        many = _solo(shot.get("action", ""), _cast_names(plan)) is None and len(_cast_names(plan)) > 1 \
+            and not _moving_outdoors(shot)
+        # a CONTINUE only sees the previous segment's last 1.6 s: after a close-up the room is not in those frames,
+        # and a camera that pulls back invents a new one (café test, segment 6). So a CONTINUE that isn't a
+        # close-up gets the place's room too: your own room picture for that place when there is one (above),
+        # else the place's establishing frame, as a setting (the place and its light, none of its people).
+        room_cont = cont and refs_on == "cuts + places on continues" and not _is_close_up(shot.get("action", ""))
+        if hold_scene and (not cont or room_cont) and not _is_close_up(shot.get("action", "")) \
+                and not any(p["role"] in ("layout", "setting", "view") for p in (shot_refs or {}).get("pictures", [])):
+            # ✎ Room from on the Proof Sheet: none, or one segment's frame (a reverse angle needs its own room)
+            af = _room_from(folder, i)
+            if af == 0:
+                anchor = None
+            elif af:
+                anchor = _anchor_of(folder, af, width, height)
+            else:
+                anchor = _scene_anchor(plan, folder, i, width, height, empty_first=not many or cont)
+            if anchor:
+                from .lc_h3_refs import sentences as _ref_sentences
+                k, img, mtime = anchor
+                shot_refs = shot_refs or {"pictures": [], "audios": [], "lock": [], "text": ""}
+                # on a CONTINUE the people are already in the opening frames: the anchor gives the room only
+                shot_refs["pictures"].append({"id": "scene", "role": "setting" if cont or not many else "layout", "name": "",
+                                              "note": f"segment {k}", "file": "", "n": len(shot_refs["pictures"]) + 1, "image": img})
+                shot_refs["text"] = _ref_sentences(shot_refs)
+                layout_from = {"index": k, "mtime": mtime}
+        if shot_refs and any(p["role"] in ("face", "full body") for p in shot_refs["pictures"]):
             mem_clip, mem = None, None  # your cast pictures take over from segment 1's memory
         latent, frame_count = _empty_av_latent(width, height, seg_frames)
 
         action = shot["action"]
+        # (tested 2026-10-26: SceneBuilder's "everyone does only what is described below ... keeps their position" line
+        # didn't help staging and once stalled her at the door with a camera move; left out)
+        cam = re.search(r"^Camera:\s*(.*)$", action, re.M)
+        # "with no camera move" (the Story's hold line) is not a move: read as one, a hold was told "then the camera
+        # moves as described below" and at 1 MP H3 cut to a close-up (Coffee Date shot 6, 2026-10-30)
+        cam_moves = bool(cam and _CAM_MOVE.search(_NO_MOVE.sub("", cam.group(1))))
         if cont and carry_on_line:
+            # a shot whose own camera line moves the camera must not be told to keep the camera as well: H3 obeyed
+            # "same ... camera" and the push-in / walk through the door never happened (café test)
+            keep = "the same pose and position; then the camera moves as described below" if cam_moves else "the same pose, position and camera"
             action = (f"From 0.00 to {plan['overlap_s']:.2f} seconds, the shot carries straight on from the previous "
-                      f"moment with the same pose, position and camera. ") + action
-        style = plan.get("style", "")
+                      f"moment with {keep}." + NL) + action
+        style = shot.get("style") or plan.get("style", "")  # LC H3 Story: the shot's own when someone changed outfit
+        if cam:  # the shot's own camera line is the only camera instruction (the style line had a second one)
+            style = re.sub(r"\s*Camera:[^;\n]*;?", "", style).strip()
         solo_now = _solo(shot["action"], _cast_names(plan))
         if solo_now:
-            style = _style_for(style, solo_now, _cast_names(plan))
+            # the others keep their look when the action names them (else H3 invents whoever "Anika" is)
+            names_all = _cast_names(plan)
+            style = _style_for(style, solo_now, {n: g for n, g in names_all.items()
+                                                 if n == solo_now or not _mentions(_beats_only(shot["action"]), n)})
+        else:
+            # a CONTINUE starts on the frames before it: whoever the shots since the last cut named is still on
+            # screen, so keep their looks ("Vince raises his pistol" had dropped the other two robbers' clothes)
+            cast_text = shot["action"]
+            if cont:
+                for s in sorted((s for s in plan.get("shots", []) if 0 < int(s.get("index", 0) or 0) < i),
+                                key=lambda s: -int(s["index"])):
+                    cast_text = s.get("action", "") + "\n" + cast_text
+                    if str(s.get("mode", "")).upper() != "CONTINUE":
+                        break
+            style = _style_cast(style, plan, cast_text)
         if not _SPOKEN.search(action):
             style, action = _silent(style), _silent(action)
         if mem_clip is not None:
@@ -814,11 +1401,22 @@ class LCH3Segment:
         if prompt_format.startswith("sections"):
             ref_kind = ("video_audio" if mem_clip[1] is not None else "video") if mem_clip is not None else "picture" if mem is not None else None
             if shot_refs:
-                prompt = _h3_sections_refs(style, action, shot_refs["pictures"], ref_kind if mem_clip is not None else None, cast)
+                prompt = _h3_sections_refs(style, action, shot_refs["pictures"], ref_kind if mem_clip is not None else None, cast,
+                                           shot_refs.get("audios"), plan.get("story", ""))
             else:
                 prompt = _h3_sections(style, action, ref_kind, cast, focus if cast > 1 else None)
         elif shot_refs:
             prompt = shot_refs["text"] + NL + NL + prompt
+        if cont:
+            # the memory lines were written for CUTs ("the place, the pose and the framing are new"): on a CONTINUE that
+            # told H3 to build a new room while it carries on from the opening frames
+            prompt = re.sub(r"the place, the poses? and the framing are new",
+                            "the place carries straight on from the opening frames; the pose and the framing follow the text", prompt)
+            prompt = prompt.replace("The place, the pose and the framing come from the text",
+                                    "The place carries straight on from the opening frames; the pose and the framing come from the text")
+        for a in (shot_refs or {}).get("lock", []):  # a locked line is already in the sound: quoted, not voiced again
+            prompt = re.sub(r"<d>\[English\]\s*(.*?)\s*</d>",
+                            lambda m: f'"{m.group(1)}"' if _says_line(a.get("text", ""), [m.group(1)]) else m.group(0), prompt)
 
         images, keyframes, ref_items, refs_out = [], [], [], []
         for p in (shot_refs or {}).get("pictures", []):  # pictures come first in H3's reference order
@@ -845,24 +1443,58 @@ class LCH3Segment:
             ref_items.append({"type": "image", "data": mem_r})
             refs_out.append({"kind": "image", "latent_h": rh // 16, "latent_w": rw // 16, "latent": vae.encode(mem_r),
                          "lc_time_gap": memory_gap * TIME_PER_SECOND})
+        for a in (shot_refs or {}).get("audios", []):  # your voices and lines: standalone audio, after pictures and videos
+            ref_items.append({"type": "audio"})
+            a_lat, a_t = _encode_ref_audio(audio_vae, a["audio"])
+            refs_out.append({"kind": "audio", "ref_audio_t": a_t, "audio_latent": a_lat, "lc_time_gap": memory_gap * TIME_PER_SECOND})
+        locked = []
+        for a in (shot_refs or {}).get("lock", []):  # a recorded line the shot says: lock it in at its second
+            at = _line_time(action, a.get("text", ""))
+            latent = _lock_line(latent, audio_vae, a["audio"], at)
+            locked.append(f"{a['name']} at {at:g} s")
         if cont:
             tail_mp4 = _seg_path(folder, i - 1, "_tail.mp4")
             tail_wav = _seg_path(folder, i - 1, "_tail.wav")
             if not os.path.exists(tail_mp4):
                 raise ValueError(f"[LC H3] Segment {i} continues segment {i - 1}, which isn't saved yet. Make segment {i - 1} first.")
-            tail = _read_mp4_frames(tail_mp4, width, height)[:ovl_frames]
-            ref_path = _seg_path(folder, _scene_start(plan, i - 1, folder), "_tail.mp4")
-            ref = _read_mp4_frames(ref_path, width, height) if color_match > 0 and os.path.exists(ref_path) else None
-            tail = _color_match(tail, ref, color_match)
-            kf = {"resolved_frame_index": 0, "latent": vae.encode(tail)}
-            if os.path.exists(tail_wav):
-                a_lat, _ = _encode_ref_audio(audio_vae, _read_wav(tail_wav))
-                kf["audio_latent"] = a_lat
+            lat_path = _seg_path(folder, i - 1, "_latent.safetensors")
+            kf = _latent_tail(lat_path, ovl_frames, width, height)
+            if kf is None:
+                tail = _read_mp4_frames(tail_mp4, width, height)[:ovl_frames]
+                ref_path = _seg_path(folder, _scene_start(plan, i - 1, folder), "_tail.mp4")
+                ref = _read_mp4_frames(ref_path, width, height) if color_match > 0 and os.path.exists(ref_path) else None
+                tail = _color_match(tail, ref, color_match)
+                kf = {"resolved_frame_index": 0, "latent": vae.encode(tail)}
+                if os.path.exists(tail_wav):
+                    a_lat, _ = _encode_ref_audio(audio_vae, _read_wav(tail_wav))
+                    kf["audio_latent"] = a_lat
             keyframes.append(kf)
+        elif shot.get("start_frame") and os.path.exists(_abs_input(shot["start_frame"])):
+            # LC H3 Story: the shot's own start frame (e.g. the person in front of the shot's 360 view). H3 treats a
+            # background picture as a hint only; a pinned first frame is followed exactly.
+            from PIL import Image
+            pic = torch.from_numpy(np.asarray(Image.open(_abs_input(shot["start_frame"])).convert("RGB"), dtype=np.float32) / 255.0)[None]
+            img = _resize(pic, width, height, "center")
+            images.append(img)
+            keyframes.append({"resolved_frame_index": 0, "latent": vae.encode(img)})
+        elif shot.get("return_to") and _is_done(folder, int(shot["return_to"])):
+            # LC H3 Story: a cut back to a setup already shown opens on that shot's first frame, so the camera, the room
+            # and who sits where come back exactly
+            img = _read_mp4_frames(_seg_path(folder, int(shot["return_to"]), ".mp4"), width, height)[:1]
+            images.append(img)
+            keyframes.append({"resolved_frame_index": 0, "latent": vae.encode(img)})
         elif first_frame is not None:
             img = _resize(first_frame[:1], width, height, "disabled")
             images.append(img)
             keyframes.append({"resolved_frame_index": 0, "latent": vae.encode(img)})
+        end_frame = shot.get("end_frame")  # storyboard end frame: the segment has to land on this picture
+        if end_frame:
+            from PIL import Image
+            p = _abs_input(end_frame)
+            if not p or not os.path.isfile(p):
+                raise ValueError(f"[LC H3] Segment {i}'s end frame {end_frame} isn't there (or is outside ComfyUI's input / output folders).")
+            pic = torch.from_numpy(np.asarray(Image.open(p).convert("RGB"), dtype=np.float32) / 255.0)[None]
+            keyframes.append({"resolved_frame_index": frame_count - 1, "latent": vae.encode(_resize(pic, width, height, "center"))})
 
         if ref_items:
             tokens = clip.tokenize(prompt, minimax_ref_items=ref_items)
@@ -879,13 +1511,26 @@ class LCH3Segment:
         segment = {"project": plan["project"], "folder": folder, "index": i, "count": len(shots), "mode": "CONTINUE" if cont else "CUT",
                    "seed": int(seed), "prompt": prompt, "width": width, "height": height, "frames": frame_count,
                    "overlap_frames": ovl_frames, "memory": "clip" if mem_clip is not None else (mem is not None), "reanchor": reanchor, "scene_start": _scene_start(plan, i, folder), "lead_frames": 0, "redo_after": redo_after.startswith("this +"),
-                   "refs": [f"<Picture {p['n']}> {p['role']} {p['name']}".strip() for p in (shot_refs or {}).get("pictures", [])],
+                   "refs": [f"<Picture {p['n']}> {p['role']} {p['name']}".strip() for p in (shot_refs or {}).get("pictures", [])]
+                           + [f"<Audio {x['n']}> {x['role']} {x['name']}".strip() for x in (shot_refs or {}).get("audios", [])],
+                   "locked_lines": locked, "layout_from": layout_from,
+                   "action": shot.get("action", ""), "start_frame": shot.get("start_frame") or None,  # the Story board's "changed since made"
                    "from_tail_mtime": os.path.getmtime(_seg_path(folder, i - 1, "_tail.mp4")) if cont else None}
+        segment["_plan"], segment["_refs"] = plan, refs  # for Segment Save's join and the Proof Sheet, not saved
+        segment["_face_pics"] = {}  # every person's face pictures, for Segment Save's face check
+        for pic in (refs or {}).get("pictures", []):
+            if pic.get("role") in ("face", "full body") and pic.get("name"):
+                segment["_face_pics"].setdefault(pic["name"], []).append(pic["image"])
         info = (f"Segment {i} of {len(shots)} | {segment['mode']} | {frame_count} frames | seed {seed}"
                 + (f" | starts from the end of segment {i - 1}" if cont else "") + (" | memory clip" if mem_clip is not None else " | memory on" if mem is not None else "")
                 + (f" (face re-anchored: {reanchor})" if mem_clip is not None and reanchor else "")
-                + (" | refs: " + ", ".join(f"<Picture {p['n']}> {p['name'] or p['role']}" for p in shot_refs["pictures"]) if shot_refs else ""))
-        print(f"[LC H3] {info}")
+                + (" | refs: " + ", ".join([f"<Picture {p['n']}> {p['name'] or p['role']}" for p in shot_refs["pictures"]]
+                                          + [f"<Audio {x['n']}> {x['name']} ({x['role']})" for x in shot_refs.get("audios", [])]) if shot_refs else "")
+                + (" | line locked: " + ", ".join(locked) if locked else ""))
+        n_pics = len((shot_refs or {}).get("pictures", []))
+        if n_pics > SHOT_PICTURES_OK:
+            info += (f" | ⚠️ {n_pics} pictures in one shot: heavy on VRAM, and H3 starts mixing them up. Fewer, named "
+                     f"pictures hold better (one face per person, the place).")
         return (cond, latent, int(seed), segment, info, prompt)
 
 
@@ -909,10 +1554,42 @@ def _cast_refs(folder: str, name: str) -> str | None:
 def _solo_name(segment: dict) -> str | None:
     """The one named person this segment is of ("Camera: close-up of Daniel"), from the project's plan."""
     try:
-        plan = json.load(open(os.path.join(segment["folder"], "plan.json"), encoding="utf-8"))
+        with open(os.path.join(segment["folder"], "plan.json"), encoding="utf-8") as f:
+            plan = json.load(f)
     except Exception:
         return None
     return _solo(segment.get("prompt", ""), _cast_names(plan))
+
+
+_SAID_AT = re.compile(r"At (\d+(?:\.\d+)?) seconds, ([A-Z][\w'-]+)(?: \(S\d+\))? says:?\s*(?:<d>\[\w+\]\s*(.+?)\s*</d>|[\"“](.+?)[\"”])", re.S)
+
+
+def _voice_path(folder: str, name: str) -> str | None:
+    """A person's saved voice: from their first line, else from their first solo close-up."""
+    for p in (_cast_path(folder, name, "_voice.wav"), _cast_path(folder, name, ".wav")):
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def _save_voice_memory(segment: dict, wave, sr: int):
+    """The first line each person speaks ("At 1.20 seconds, Nova says: ..."): about 3 s of that stretch of sound, kept
+    as their voice. A later shot that sends their face picture sends this as their voice too; without it H3 made up a
+    new voice on every cut (Coffee Date: Nova's voice drifted in her close-up)."""
+    if wave is None or not sr:
+        return
+    folder = segment["folder"]
+    for m in _SAID_AT.finditer(segment.get("prompt", "")):
+        name, words = m.group(2), (m.group(3) or m.group(4) or "")
+        if os.path.exists(_cast_path(folder, name, "_voice.wav")):
+            continue
+        t0 = float(m.group(1))
+        t1 = t0 + max(2.0, len(words.split()) / 2.5 + 0.6)
+        a, b = int(t0 * sr), min(wave.shape[-1], int(t1 * sr))
+        if b - a < int(1.5 * sr):  # too little of the line made it into the segment
+            continue
+        _write_wav(_cast_path(folder, name, "_voice.wav"), wave[:, a:b], sr)
+        print(f"[LC H3] Saved {name}'s voice from their line in segment {segment['index']}.")
 
 
 def _save_cast_memory(segment: dict, frames_u8: np.ndarray, wave, sr: int):
@@ -921,7 +1598,8 @@ def _save_cast_memory(segment: dict, frames_u8: np.ndarray, wave, sr: int):
     and nobody else is pulled into their close-up. Only the first solo shot of each person is kept."""
     folder = segment["folder"]
     try:
-        plan = json.load(open(os.path.join(folder, "plan.json"), encoding="utf-8"))
+        with open(os.path.join(folder, "plan.json"), encoding="utf-8") as f:
+            plan = json.load(f)
     except Exception:
         return
     name = _solo(segment.get("prompt", ""), _cast_names(plan))
@@ -950,6 +1628,31 @@ def _save_cast_memory(segment: dict, frames_u8: np.ndarray, wave, sr: int):
 _TAKE_FILES = (".mp4", "_part.mp4", "_tail.mp4", "_tail.wav", ".json", "_latent.safetensors", "_up.mp4")
 
 
+def _locked(folder: str) -> set:
+    """Segments locked 🔒 on the Story board (read from plan.json, so a lock set a moment ago counts)."""
+    try:
+        with open(os.path.join(folder, "plan.json"), encoding="utf-8") as f:
+            return {k for k, sh in enumerate(json.load(f).get("shots", []), start=1) if sh.get("locked")}
+    except Exception:
+        return set()
+
+
+def _history(folder: str, entry: dict) -> None:
+    """One step for ↶ Undo on the Proof Sheet (takes/history.json, newest last)."""
+    path = os.path.join(folder, "takes", "history.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            hist = json.load(f)
+    except Exception:
+        hist = []
+    hist.append({**entry, "time": time.time()})
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    _save_json(path, hist[-50:], indent=1)
+
+
+SHOT_PICTURES_OK = 4  # more than this in one shot: the Proof Sheet tags it
+
+
 def _keep_take(folder: str, i: int, move: bool = False) -> str:
     """Put a saved segment's files in takes/ as seg_00N_takeK (copied, or moved so the segment counts as not made
     yet). Returns the take's name."""
@@ -972,23 +1675,33 @@ def _redo(segment: dict) -> str:
     folder, i = segment["folder"], segment["index"]
     if not _is_done(folder, i):
         return ""
-    note = f" | redo: old take kept as takes/{_keep_take(folder, i)}"
+    take = _keep_take(folder, i)
+    note = f" | redo: old take kept as takes/{take}"
+    aside = []
     if os.path.exists(_seg_path(folder, i, "_up.mp4")):  # the old upscale is of the old take: make it again
-        os.remove(_seg_path(folder, i, "_up.mp4"))
+        try:
+            os.remove(_seg_path(folder, i, "_up.mp4"))
+        except OSError as e:  # open in a player: keep going, the new take's json has no "up", so it counts as not upscaled
+            print(f"[LC H3] Could not remove segment {i}'s old upscale: {e}")
         note += " (its upscale too: run LC H3 Upscale for it again)"
     if segment.get("redo_after"):
         nxt = []
         k = i + 1
+        locked = _locked(folder)
         while k <= segment["count"] and _is_done(folder, k):
             with open(_seg_path(folder, k, ".json"), encoding="utf-8") as f:
                 if json.load(f).get("mode") != "CONTINUE":
                     break
-            _keep_take(folder, k, move=True)
+            if k in locked:  # a locked segment stays (it shows yellow: made from the old ending)
+                note += f" | segment {k} is locked, so it was kept"
+                break
+            aside.append([k, _keep_take(folder, k, move=True)])
             nxt.append(k)
             k += 1
         if nxt:
             note += (f" | segment{'s' if len(nxt) > 1 else ''} {', '.join(map(str, nxt))} set aside (they continue from this one):"
                      f" set index to 0 and queue {len(nxt)} more")
+    _history(folder, {"kind": "redo", "index": i, "take": take, "aside": aside})
     return note
 
 
@@ -1010,33 +1723,49 @@ def _write_segment(segment: dict, frames_u8: np.ndarray, wave, sr: int, crf: int
     _encode(frames_u8[n - ovl:], _seg_path(folder, i, "_tail.mp4"), 8, "yuv444p")
     if wave is not None:
         _write_wav(_seg_path(folder, i, "_tail.wav"), wave[:, int((n - ovl) * per_frame):], sr)
-    if i == 1:
+    # the cast memory (kept under segment 1's name) comes from the first segment that shows a face: a story can open
+    # on a van pulling up, and a memory of the van would be sent as "the people" to every later cut
+    mem_files = ("_memory.png", "_face_ref.png", "_face_refs.npy", "_memory_clip.mp4", "_memory_head.mp4", "_memory_clip.wav",
+                 "_memory.json")
+    bi = _best_face_frame(frames_u8) if i == 1 or not os.path.exists(_seg_path(folder, 1, "_memory_clip.mp4")) else None
+    if i == 1 and bi is None:
+        for ext in mem_files:  # an older segment 1 left its memory behind
+            if os.path.exists(_seg_path(folder, 1, ext)):
+                os.remove(_seg_path(folder, 1, ext))
+    if bi is not None:
         from PIL import Image
-        bi = _best_face_frame(frames_u8)
-        bi = _sharpest(frames_u8) if bi is None else bi
         best = frames_u8[bi]
-        Image.fromarray(np.ascontiguousarray(_portrait_crop(best))).save(_seg_path(folder, i, "_memory.png"))
-        Image.fromarray(best).save(_seg_path(folder, i, "_face_ref.png"))
+        Image.fromarray(np.ascontiguousarray(_portrait_crop(best))).save(_seg_path(folder, 1, "_memory.png"))
+        Image.fromarray(best).save(_seg_path(folder, 1, "_face_ref.png"))
         refs = _face_refs(frames_u8)
         if refs is not None:
-            np.save(_seg_path(folder, i, "_face_refs.npy"), refs)
+            np.save(_seg_path(folder, 1, "_face_refs.npy"), refs)
         c0 = min(max(0, bi - 11), max(0, n - 22))  # the memory clip is centred on the best face too
-        _encode(frames_u8[c0:c0 + 22], _seg_path(folder, i, "_memory_clip.mp4"), 8, "yuv444p")
+        _encode(frames_u8[c0:c0 + 22], _seg_path(folder, 1, "_memory_clip.mp4"), 8, "yuv444p")
         head = _head_crop(frames_u8[c0:c0 + 22])
         if head is not None:
-            _encode(head, _seg_path(folder, i, "_memory_head.mp4"), 8, "yuv444p")
+            _encode(head, _seg_path(folder, 1, "_memory_head.mp4"), 8, "yuv444p")
         if wave is not None:
-            _write_wav(_seg_path(folder, i, "_memory_clip.wav"), wave[:, int(c0 * per_frame):int((c0 + 22) * per_frame)], sr)
+            _write_wav(_seg_path(folder, 1, "_memory_clip.wav"), wave[:, int(c0 * per_frame):int((c0 + 22) * per_frame)], sr)
+        with open(_seg_path(folder, 1, "_memory.json"), "w", encoding="utf-8") as f:
+            json.dump({"from": i}, f)
     _save_cast_memory(segment, frames_u8, wave, sr)
+    _save_voice_memory(segment, wave, sr)
     solo = _solo_name(segment) if i > 1 else None
-    own = _cast_refs(folder, solo) if solo else None
-    face = _face_score(frames_u8, own or _seg_path(folder, 1, "_face_refs.npy"))
-    if face is not None and own:
+    # your face pictures (Reference Assembler) are the truth: a close-up is checked against that person's picture,
+    # any other shot against the whole cast. Without pictures: their first close-up, else segment 1.
+    pics = segment.get("_face_pics") or {}
+    mine = pics.get(solo) if solo else [im for ims in pics.values() for im in ims]
+    pic_refs = _pic_face_refs(mine) if mine else None
+    own = None if pic_refs is not None else (_cast_refs(folder, solo) if solo else None)
+    face = _face_score(frames_u8, pic_refs if pic_refs is not None else (own or _seg_path(folder, 1, "_face_refs.npy")))
+    if face is not None and (own or (pic_refs is not None and solo)):
         face["who"] = solo  # matched against this person's own face, not segment 1's
-    meta = {**segment, "decoded_frames": n, "part_frames": n - start, "look": _look(frames_u8[n - ovl:]),
+    if face is not None and pic_refs is not None:
+        face["against"] = "picture"
+    meta = {**{k: v for k, v in segment.items() if not k.startswith("_")}, "decoded_frames": n, "part_frames": n - start, "look": _look(frames_u8[n - ovl:]),
             "face": face, "saved": time.strftime("%Y-%m-%d %H:%M:%S")}
-    with open(_seg_path(folder, i, ".json"), "w", encoding="utf-8") as f:
-        json.dump(meta, f, indent=1, ensure_ascii=False)
+    _save_json(_seg_path(folder, i, ".json"), meta, indent=1, ensure_ascii=False)
 
     info = f"Saved segment {i} of {segment['count']} ({n - start} new frames) to {folder}"
     if face and i > 1 and face.get("match") is None:
@@ -1045,10 +1774,16 @@ def _write_segment(segment: dict, frames_u8: np.ndarray, wave, sr: int, crf: int
     elif face and i > 1:
         verdict = "same person" if face["match"] >= FACE_SAME else "close" if face["match"] >= FACE_CLOSE else "⚠️ looks like someone else, try another seed"
         info += f". Face match{' to ' + face['who'] if face.get('who') else ''} {face['match']:.2f} ({verdict})"
-    if i < segment["count"]:
-        info += f". Next: segment {i + 1}."
+    left = [k for k in range(1, int(segment["count"]) + 1) if not _is_done(folder, k)]
+    more = [k for k in segment.get("_more") or [] if k != i and _is_done(folder, k)]  # LC H3 Make: edited shots still to remake
+    if not left and more:
+        _tell_ui({"project": segment["project"], "made": i, "left": len(more), "next": more[0], "changed": True})
     else:
-        info += ". All segments done: run LC H3 Assemble."
+        _tell_ui({"project": segment["project"], "made": i, "left": len(left), "next": left[0] if left else 0})
+    if left:  # a redo can leave earlier segments (or none after it) still to make
+        info += f". Next: segment {left[0]}."
+    else:
+        info += ". All segments done: the full video is joined."
     return info + redo_note
 
 
@@ -1063,16 +1798,20 @@ class LCH3SegmentSave:
                 "audio_vae": ("VAE", {"tooltip": "MiniMax H3 audio VAE."}),
                 "crf": ("INT", {"default": 16, "min": 0, "max": 40, "tooltip": "mp4 quality. Lower = better and bigger. 16 is close to lossless."}),
             },
+            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }
 
-    RETURN_TYPES = ("IMAGE", "AUDIO", "STRING")
-    RETURN_NAMES = ("images", "audio", "info")
+    RETURN_TYPES = ("AUDIO", "STRING", "STRING")
+    RETURN_NAMES = ("audio", "info", "video")
+    OUTPUT_TOOLTIPS = ("This segment's sound, for LC H3 Dialogue Check.",
+                       "What was saved, the face match and how smooth every join is.", "The full video so far: every saved segment joined.")
     FUNCTION = "save"
     OUTPUT_NODE = True
     CATEGORY = "LC AV/H3 Long Video"
-    DESCRIPTION = "Decodes and saves one segment: a preview mp4, the part for the final video (overlap cut off) and the ending the next segment starts from."
+    DESCRIPTION = ("Decodes and saves one segment (a preview mp4, the part for the final video and the ending the next segment "
+                   "starts from), then joins every saved segment into <project>_full.mp4 and reports how smooth each join is.")
 
-    def save(self, segment, samples, vae, audio_vae, crf):
+    def save(self, segment, samples, vae, audio_vae, crf, prompt=None, extra_pnginfo=None):
         latent = samples["samples"]
         if not getattr(latent, "is_nested", False):
             raise ValueError("[LC H3] Segment Save expects a MiniMax H3 AV latent.")
@@ -1096,7 +1835,35 @@ class LCH3SegmentSave:
         frames_u8 = (images.clamp(0, 1) * 255.0).round().to(torch.uint8).cpu().numpy()
         info = _write_segment(segment, frames_u8, wave, sr, crf)
         print(f"[LC H3] {info}")
-        return {"ui": {"text": [info]}, "result": (images, audio, info)}
+        video, seams, failed = "", "", ""
+        plan = segment.get("_plan")
+        if plan:
+            try:
+                joined = LCH3Assemble().assemble(plan, 8, 15, crf, prompt=prompt, extra_pnginfo=extra_pnginfo)["result"]
+                video, seams = joined[0], joined[1]
+            except ValueError as exc:  # segment 1 is redone and not saved yet, etc.
+                seams = str(exc)
+            except comfy.model_management.InterruptProcessingException:
+                raise
+            except Exception as exc:  # ffmpeg failed: the segment is saved, so the run (and the chain) carries on, loudly
+                failed = f"NOT JOINED: the full movie was not updated ({exc}). The segment itself is saved."
+                seams = "⚠️ " + failed
+                print(f"[LC H3] WARNING {failed}")
+        if video and os.path.exists(video) and plan and all(_is_done(segment["folder"], k) for k in range(1, len(plan.get("shots", [])) + 1)):
+            final = os.path.join(segment["folder"], f"{os.path.basename(segment['folder'])}.mp4")  # top of the project
+            try:
+                shutil.copy2(video, final)
+                seams = f"🎬 Finished movie: {final}" + (NL + NL + seams if seams else "")
+            except OSError as exc:  # e.g. the old movie is open in a player
+                failed = f"NOT COPIED: the finished movie {final} was not updated (is it open in a player?): {exc}"
+                seams = "⚠️ " + failed + (NL + NL + seams if seams else "")
+                print(f"[LC H3] WARNING {failed}")
+        if failed:
+            _warn_ui(segment.get("project", ""), failed)
+            text = "⚠️ " + failed + NL + NL + info + (NL + NL + seams if seams else "")  # on top, so it is seen
+        else:
+            text = info + (NL + NL + seams if seams else "")
+        return {"ui": {"text": [text]}, "result": (audio, text, video)}
 
 
 def _read_audio(path: str, sr: int = 48000) -> np.ndarray:
@@ -1115,7 +1882,7 @@ class LCH3Assemble:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "plan": (PLAN_TYPE, {"tooltip": "From LC Vision Director 🎬 (a saved plan loads instantly)."}),
+                "plan": (PLAN_TYPE, {"tooltip": "From LC Vision Showrunner 🎬 (a saved plan loads instantly)."}),
                 "blend_frames": ("INT", {"default": 8, "min": 0, "max": 30, "tooltip": "CONTINUE joins: crossfades this many frames of the old ending into the remade start (picture and sound), so the join doesn't pop. 0 = hard join."}),
                 "seam_fade_ms": ("INT", {"default": 15, "min": 0, "max": 200, "tooltip": "CUT joins: a tiny audio fade so the cut doesn't click."}),
                 "crf": ("INT", {"default": 16, "min": 0, "max": 40}),
@@ -1124,6 +1891,7 @@ class LCH3Assemble:
                 "after": ("STRING", {"forceInput": True, "tooltip": "Wire LC H3 Segment Save's info here, so the join runs after the new segment is saved (in the same workflow)."}),
                 "version": (["normal", "upscaled"], {"default": "normal", "tooltip": "upscaled: joins the LC H3 Upscale copies instead (every segment needs one) into <project>_full_upscaled.mp4."}),
             },
+            "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }
 
     RETURN_TYPES = ("STRING", "STRING")
@@ -1138,7 +1906,7 @@ class LCH3Assemble:
     def IS_CHANGED(cls, **kwargs):
         return float("nan")
 
-    def assemble(self, plan, blend_frames, seam_fade_ms, crf, after=None, version="normal"):
+    def assemble(self, plan, blend_frames, seam_fade_ms, crf, after=None, version="normal", prompt=None, extra_pnginfo=None):
         folder = project_dir(plan["project"])
         segs = []
         for i in range(1, len(plan.get("shots", [])) + 1):
@@ -1160,7 +1928,7 @@ class LCH3Assemble:
         sr = 48000
         spf = sr / FPS
         ff = _ffmpeg_bin()
-        dest = os.path.join(folder, f"{os.path.basename(folder)}_full{'_upscaled' if up else ''}.mp4")
+        dest = os.path.join(work_dir(folder), f"{os.path.basename(folder)}_full{'_upscaled' if up else ''}.mp4")
         tmp = tempfile.mkdtemp(prefix="lc_h3_")
         video = os.path.join(tmp, "v.mp4")
         enc = subprocess.Popen([ff, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "-r", str(FPS), "-i", "-",
@@ -1190,12 +1958,13 @@ class LCH3Assemble:
         try:
             held_v, held_a = None, None  # the previous segment's last frames / audio, held back for blending
             for k, seg in enumerate(segs):
+                comfy.model_management.throw_exception_if_processing_interrupted()
                 i = seg["index"]
                 full = _seg_path(folder, i, "_up.mp4" if up else ".mp4")
                 frames = (_read_mp4_frames(full, w, h) * 255.0).round().to(torch.uint8).numpy()
                 aud = _read_audio(full, sr)
-                n, ovl = len(frames), int(seg.get("overlap_frames", 0))
                 nxt = segs[k + 1] if k + 1 < len(segs) else None
+                n, ovl = len(frames), int(seg.get("overlap_frames", 0))
                 if seg["mode"] == "CONTINUE" and k > 0:
                     # the old ending and the remade start show the same moments: crossfade them, then go on with new frames
                     nb = len(held_v) if held_v is not None else 0
@@ -1209,7 +1978,7 @@ class LCH3Assemble:
                     start = ovl
                     joins.append((i, "CONTINUE", state["written"]))
                 else:
-                    start = 0
+                    start = int(seg.get("trim_start", 0))  # it carried on from a shot that was cut since
                     if k > 0:
                         d = int(sr * seam_fade_ms / 1000)
                         audio_out[-1] = fade(audio_out[-1], d, True)
@@ -1226,11 +1995,15 @@ class LCH3Assemble:
             enc.wait()
             wav = os.path.join(tmp, "a.wav")
             _write_wav(wav, np.concatenate(audio_out, axis=1), sr)
-            subprocess.run([ff, "-y", "-v", "error", "-i", video, "-i", wav, "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-                            "-movflags", "+faststart", dest], check=True, capture_output=True)
+            # the prompt + workflow go on the joined movie as tags: CivitAI reads those from an uploaded video
+            meta_in, meta_map = metadata_args(comfy_tags(prompt, extra_pnginfo), tmp, 2)
+            subprocess.run([ff, "-y", "-v", "error", "-i", video, "-i", wav] + meta_in + ["-map", "0:v", "-map", "1:a"] + meta_map +
+                           ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart+use_metadata_tags", dest],
+                           check=True, capture_output=True)
         finally:
             if enc.poll() is None:
                 enc.kill()
+                enc.wait()  # let go of v.mp4, or the temp folder can't be removed on Windows
             shutil.rmtree(tmp, ignore_errors=True)
 
         # seam check: the biggest frame-to-frame jump around each join vs the normal motion nearby
@@ -1282,8 +2055,7 @@ class LCH3Assemble:
             faces.append({"segment": s["index"], "mode": s["mode"], "match": m, "low": fc.get("low"), "flag": flag, "who": fc.get("who")})
             face_lines.append(f"segment {s['index']} ({s['mode'].lower()}{', ' + fc['who'] if fc.get('who') else ''}): {m:.2f} "
                               + ("same person" if m >= FACE_SAME else "close" if m >= FACE_CLOSE else "⚠️ looks like someone else, redo with another seed"))
-        with open(os.path.join(folder, "seams.json"), "w", encoding="utf-8") as f:
-            json.dump({"joins": report, "drift": drift, "faces": faces}, f, indent=1)
+        _save_json(os.path.join(work_dir(folder), "seams.json"), {"joins": report, "drift": drift, "faces": faces}, indent=1)
         seam_text = ("Join smoothness (1.00x = as smooth as the rest of the video, over 1.60x is flagged):\n" + "\n".join(lines)) if lines else "No joins yet."
         if stale:
             seam_text += NL + NL + "⚠️ " + ", ".join(f"segment {k}" for k in stale) + (
@@ -1293,7 +2065,7 @@ class LCH3Assemble:
             seam_text += ("\n\nColor drift inside each scene (under 3 = invisible, over 6 is flagged; a scene that walks "
                           "into new light on purpose will read high):\n" + "\n".join(drift_lines))
         if face_lines:
-            seam_text += (NL + NL + f"Face match to segment 1, or to that person's first close-up for a shot of one person (0 to 1; {FACE_SAME:.2f} and up = same person, "
+            seam_text += (NL + NL + f"Face match to your cast card pictures, or without pictures to segment 1 / that person's first close-up (0 to 1; {FACE_SAME:.2f} and up = same person, "
                           f"{FACE_CLOSE:.2f} to {FACE_SAME:.2f} = close, under {FACE_CLOSE:.2f} = someone else):" + NL + NL.join(face_lines))
         written = state["written"]
         info = f"Joined {len(segs)} segment(s) into {dest} ({written} frames, {written / FPS:.2f} s)"
@@ -1301,257 +2073,7 @@ class LCH3Assemble:
         return {"ui": {"text": [info + "\n\n" + seam_text]}, "result": (dest, seam_text)}
 
 
-def _face_track(frames_u8: np.ndarray) -> list:
-    """Per frame the main person's face box (x0, y0, x1, y1) or None, smoothed over time and filled across short
-    gaps. The main person = the largest face, any angle (profiles included: their face still needs fixing)."""
-    pair = _face_models()
-    if pair is None:
-        return [None] * len(frames_u8)
-    det = pair[0]
-    raw = []
-    for fr in frames_u8:
-        bgr = np.ascontiguousarray(fr[..., ::-1])
-        h, w = bgr.shape[:2]
-        det.setInputSize((w, h))
-        _, faces = det.detect(bgr)
-        if faces is None or not len(faces):
-            raw.append(None)
-            continue
-        f = max(faces, key=lambda r: r[2] * r[3])
-        raw.append(None if f[2] * f[3] < 0.003 * w * h else (float(f[0]), float(f[1]), float(f[0] + f[2]), float(f[1] + f[3])))
-    # fill gaps up to 12 frames from the nearest box, then a 7-frame moving average so the mask doesn't jitter
-    filled = list(raw)
-    for k in range(len(raw)):
-        if raw[k] is None:
-            near = [(abs(j - k), raw[j]) for j in range(max(0, k - 12), min(len(raw), k + 13)) if raw[j] is not None]
-            filled[k] = min(near)[1] if near else None
-    out = []
-    for k in range(len(filled)):
-        win = [b for b in filled[max(0, k - 3):k + 4] if b is not None]
-        out.append(tuple(float(np.mean([b[c] for b in win])) for c in range(4)) if win and filled[k] is not None else None)
-    return out
+# Segment, Segment Save and Assemble are no longer nodes: LC H3 Make runs them (2026-11-01).
+NODE_CLASS_MAPPINGS = {}
 
-
-def _face_mask_latent(track: list, frames: int, lat_t: int, lat_h: int, lat_w: int, px_h: int, px_w: int,
-                      grow: float = 1.7) -> torch.Tensor:
-    """The face boxes as a soft video-latent mask [1, 1, T, H, W]: 1 = redraw, 0 = keep. Each latent frame covers
-    1 pixel frame (the first) then 4 (FRAME_PER_TOKEN), and takes the union of its frames' boxes."""
-    mask = torch.zeros((1, 1, lat_t, lat_h, lat_w))
-    ys = (torch.arange(lat_h).float() + 0.5) * px_h / lat_h
-    xs = (torch.arange(lat_w).float() + 0.5) * px_w / lat_w
-    for t in range(lat_t):
-        f0, f1 = (0, 1) if t == 0 else (1 + 4 * (t - 1), min(frames, 1 + 4 * t))
-        for b in track[f0:f1]:
-            if b is None:
-                continue
-            cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
-            rx, ry = (b[2] - b[0]) * grow / 2, (b[3] - b[1]) * grow / 2 * 1.15  # a little taller: hair and chin
-            d = ((xs[None, :] - cx) / rx) ** 2 + ((ys[:, None] - cy) / ry) ** 2
-            soft = (1.0 - (d - 0.6) / 0.4).clamp(0, 1)  # solid core, feathered rim
-            mask[0, 0, t] = torch.maximum(mask[0, 0, t], soft)
-    return mask
-
-
-def _crop_boxes(track: list, w: int, h: int, grow: float) -> list:
-    """One square crop (x0, y0, side) per frame around the face, heavily smoothed so the redrawn close-up doesn't
-    shake, and kept inside the frame."""
-    known = [b for b in track if b is not None]
-    fill = []
-    last = known[0]
-    for b in track:
-        last = b if b is not None else last
-        fill.append(last)
-    cx = np.array([(b[0] + b[2]) / 2 for b in fill])
-    cy = np.array([(b[1] + b[3]) / 2 for b in fill])
-    sd = np.array([max(b[2] - b[0], b[3] - b[1]) * grow * 1.35 for b in fill])
-
-    def smooth(v, k=15):
-        pad = np.pad(v, (k // 2, k // 2), mode="edge")
-        return np.convolve(pad, np.ones(k) / k, mode="valid")
-
-    cx, cy, sd = smooth(cx), smooth(cy), smooth(sd)
-    out = []
-    for x, y, side in zip(cx, cy, sd):
-        side = float(min(side, w, h))
-        x0 = float(min(max(0.0, x - side / 2), w - side))
-        y0 = float(min(max(0.0, y - side / 2), h - side))
-        out.append((x0, y0, side))
-    return out
-
-
-def _crop_frames(frames: torch.Tensor, crop: list, size: int) -> torch.Tensor:
-    """IMAGE [N, H, W, 3] -> the per-frame crops resized to size x size."""
-    out = []
-    for k, (x0, y0, side) in enumerate(crop):
-        x0i, y0i, si = int(round(x0)), int(round(y0)), max(16, int(round(side)))
-        c = frames[k, y0i:y0i + si, x0i:x0i + si].movedim(-1, 0)[None]
-        out.append(torch.nn.functional.interpolate(c, size=(size, size), mode="bicubic", align_corners=False).clamp(0, 1)[0].movedim(0, -1))
-    return torch.stack(out)
-
-
-# Face Pass / Face Paste: not registered. Tests 2026-10-13 showed H3's reference is too weak to move the face's
-# identity in a partial redraw; kept here for a later try.
-class LCH3FacePass:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "project": ("STRING", {"default": "parka_test", "tooltip": "The LC_H3 project (output/LC_H3/<project>)."}),
-                "index": ("INT", {"default": 2, "min": 2, "max": 60, "tooltip": "The saved segment to fix. Segment 1 is the face everyone is compared to, so it is never redrawn."}),
-                "clip": ("CLIP", {"tooltip": "MiniMax H3 text encoder."}),
-                "vae": ("VAE", {"tooltip": "MiniMax H3 video VAE."}),
-                "audio_vae": ("VAE", {"tooltip": "MiniMax H3 audio VAE."}),
-                "mode": (["crop", "mask"], {"default": "crop", "tooltip": "crop: follow the face with a steady box, upscale it to crop_size and redraw only that (the face gets far more pixels). Needs LC H3 Face Paste after the sampler. mask: redraw the face inside the full frame (wire straight into LC H3 Segment Save)."}),
-                "crop_size": ("INT", {"default": 512, "min": 256, "max": 1024, "step": 32, "tooltip": "crop mode: the size the face crop is redrawn at."}),
-                "grow": ("FLOAT", {"default": 1.7, "min": 1.0, "max": 3.0, "step": 0.1, "tooltip": "How far around the face the redraw reaches. 1.7 takes in the hair line and the chin."}),
-                "memory_gap": ("FLOAT", {"default": 5.0, "min": 0.0, "max": 30.0, "step": 0.5}),
-            },
-        }
-
-    RETURN_TYPES = ("CONDITIONING", "LATENT", SEGMENT_TYPE, "STRING")
-    RETURN_NAMES = ("positive", "latent", "segment", "info")
-    FUNCTION = "build"
-    CATEGORY = "LC AV/H3 Long Video"
-    DESCRIPTION = ("Second pass for a saved segment: redraws only the main person's face (a soft mask that follows it) "
-                   "with segment 1's face as the reference. Wire into your sampler with a low denoise (about 0.4), then "
-                   "LC H3 Segment Save. Sound and everything outside the mask stay as they were.")
-
-    @classmethod
-    def IS_CHANGED(cls, project="", index=2, **kwargs):
-        p = _seg_path(project_dir(project), index, ".mp4")
-        return os.path.getmtime(p) if os.path.exists(p) else ""
-
-    def build(self, project, index, clip, vae, audio_vae, mode, crop_size, grow, memory_gap):
-        folder = project_dir(project)
-        meta = _load_json(_seg_path(folder, index, ".json"))
-        src = _seg_path(folder, index, ".mp4")
-        if not meta or not os.path.exists(src):
-            raise ValueError(f"[LC H3] Segment {index} of '{project}' isn't saved yet.")
-        w, h = meta["width"], meta["height"]
-        # keep the base version once, so a face pass can always be compared or undone
-        for suffix in (".mp4", ".json", "_part.mp4", "_tail.mp4", "_tail.wav"):
-            base = _seg_path(folder, index, "_base" + suffix)
-            if os.path.exists(_seg_path(folder, index, suffix)) and not os.path.exists(base):
-                shutil.copy2(_seg_path(folder, index, suffix), base)
-        frames = _read_mp4_frames(_seg_path(folder, index, "_base.mp4"), w, h)
-        n = frames.shape[0]
-        while n > 5 and n % 17 != 5:
-            n -= 1
-        frames = frames[:n]
-        frames_u8 = (frames * 255.0).round().to(torch.uint8).numpy()
-        track = _face_track(frames_u8)
-        covered = sum(1 for b in track if b is not None)
-        if not covered:
-            raise ValueError(f"[LC H3] No face found in segment {index}: nothing for the face pass to fix.")
-        crop = None
-        if mode == "crop":
-            crop = _crop_boxes(track, w, h, grow)
-            frames = _crop_frames(frames, crop, crop_size)
-            track = [None if bx is None else ((bx[0] - c[0]) * crop_size / c[2], (bx[1] - c[1]) * crop_size / c[2],
-                                              (bx[2] - c[0]) * crop_size / c[2], (bx[3] - c[1]) * crop_size / c[2])
-                     for bx, c in zip(track, crop)]
-            w = h = crop_size
-        video = vae.encode(frames)
-        audio = {"waveform": torch.from_numpy(_read_audio(_seg_path(folder, index, "_base.mp4"), 32000)).unsqueeze(0), "sample_rate": 32000}
-        a_lat, _ = _encode_ref_audio(audio_vae, audio)
-        vmask = _face_mask_latent(track, n, video.shape[2], video.shape[3], video.shape[4], h, w, 1.5 if crop else grow)
-        latent = {"samples": comfy.nested_tensor.NestedTensor((video, a_lat)),
-                  "noise_mask": comfy.nested_tensor.NestedTensor((vmask.expand(1, video.shape[1], -1, -1, -1).contiguous(),
-                                                                  torch.zeros_like(a_lat)))}
-
-        # conditioning: the segment's own prompt, plus segment 1's head clip as the face reference
-        prompt = meta.get("prompt", "")
-        ref_items, refs = [], []
-        head = _seg_path(folder, 1, "_memory_head.mp4")
-        if os.path.exists(head):
-            hv = _read_mp4_native(head)
-            m = hv.shape[0]
-            while m > 5 and m % 17 != 5:
-                m -= 1
-            hv = hv[:m]
-            ref_items.append({"type": "video", "data": hv[list(range(0, m, FPS // 2))], "timestamps": [k / 2.0 for k in range(len(range(0, m, FPS // 2)))]})
-            z = vae.encode(hv)
-            refs.append({"kind": "video", "latent_t": z.shape[2], "latent_h": hv.shape[1] // 16, "latent_w": hv.shape[2] // 16,
-                         "ref_audio_t": 0, "latent": z, "audio_latent": None, "lc_time_gap": memory_gap * TIME_PER_SECOND})
-            prompt = ("The main person looks exactly as in <Video 1> (a close-up of their face): same face, hair and clothing. "
-                      "The place, the pose and the framing come from the text, not from <Video 1>." + NL + NL
-                      + ("A close-up of the main person's face filling the frame; the expression, mouth and head movement follow "
-                         "the video." + NL + NL if crop else "") + prompt)
-        tokens = clip.tokenize(prompt, minimax_ref_items=ref_items) if ref_items else clip.tokenize(prompt)
-        cond = clip.encode_from_tokens_scheduled(tokens)
-        if refs:
-            cond = node_helpers.conditioning_set_values(cond, {"minimax_refs": refs})
-
-        segment = {k: meta[k] for k in ("project", "folder", "index", "count", "mode", "seed", "prompt", "width", "height",
-                                        "frames", "overlap_frames", "scene_start") if k in meta}
-        segment.update({"lead_frames": 0, "face_pass": mode, "from_tail_mtime": meta.get("from_tail_mtime"),
-                        "crop": crop, "crop_size": crop_size, "base": _seg_path(folder, index, "_base.mp4")})
-        info = (f"Face pass ({mode}) for segment {index}: face found in {covered} of {n} frames"
-                + (f", redrawn at {crop_size} x {crop_size}" if crop else f", mask grows {grow}x")
-                + (". Wire the sampler into LC H3 Face Paste." if crop else ""))
-        print(f"[LC H3] {info}")
-        return (cond, latent, segment, info)
-
-
-class LCH3FacePaste:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "segment": (SEGMENT_TYPE, {"tooltip": "From LC H3 Face Pass 🙂 (crop mode)."}),
-                "samples": ("LATENT", {"tooltip": "The sampled face crop from your sampler."}),
-                "vae": ("VAE", {"tooltip": "MiniMax H3 video VAE."}),
-                "crf": ("INT", {"default": 16, "min": 0, "max": 40}),
-            },
-        }
-
-    RETURN_TYPES = ("IMAGE", "STRING")
-    RETURN_NAMES = ("images", "info")
-    FUNCTION = "paste"
-    OUTPUT_NODE = True
-    CATEGORY = "LC AV/H3 Long Video"
-    DESCRIPTION = "Blends the redrawn face crop back into the segment (only the face, with a soft edge) and saves the segment."
-
-    def paste(self, segment, samples, vae, crf):
-        crop = segment.get("crop")
-        if not crop:
-            raise ValueError("[LC H3] Face Paste needs LC H3 Face Pass in crop mode.")
-        lat = samples["samples"]
-        faces = vae.decode(lat.unbind()[0] if getattr(lat, "is_nested", False) else lat)
-        if faces.ndim == 5:
-            faces = faces.reshape(-1, *faces.shape[-3:])
-        w, h = segment["width"], segment["height"]
-        base = _read_mp4_frames(segment["base"], w, h)
-        n = min(len(base), len(faces), len(crop))
-        size = faces.shape[1]
-        yy, xx = torch.meshgrid(torch.linspace(-1, 1, size), torch.linspace(-1, 1, size), indexing="ij")
-        # soft oval: solid over the face, fading out well before the crop's edge so no box shows
-        alpha = (1.0 - ((xx / 0.78) ** 2 + ((yy + 0.02) / 0.86) ** 2 - 0.55) / 0.45).clamp(0, 1)[None, None]
-        out = base.clone()
-        for k in range(n):
-            x0, y0, side = crop[k]
-            x0i, y0i, si = int(round(x0)), int(round(y0)), max(16, int(round(side)))
-            si = min(si, w - x0i, h - y0i)
-            f = torch.nn.functional.interpolate(faces[k].movedim(-1, 0)[None], size=(si, si), mode="bicubic", align_corners=False).clamp(0, 1)[0]
-            a = torch.nn.functional.interpolate(alpha, size=(si, si), mode="bilinear", align_corners=False)[0]
-            region = out[k, y0i:y0i + si, x0i:x0i + si].movedim(-1, 0)
-            out[k, y0i:y0i + si, x0i:x0i + si] = (region * (1 - a) + f * a).movedim(0, -1)
-        frames_u8 = (out[:n].clamp(0, 1) * 255.0).round().to(torch.uint8).numpy()
-        wave = _read_audio(segment["base"], 48000)
-        info = _write_segment({k: v for k, v in segment.items() if k not in ("crop", "base")} | {"face_pass": "crop"}, frames_u8,
-                              wave if wave.shape[1] else None, 48000, crf)
-        print(f"[LC H3] {info}")
-        return {"ui": {"text": [info]}, "result": (out[:n], info)}
-
-
-NODE_CLASS_MAPPINGS = {
-    "LCH3Segment": LCH3Segment,
-    "LCH3SegmentSave": LCH3SegmentSave,
-    "LCH3Assemble": LCH3Assemble,
-}
-
-NODE_DISPLAY_NAME_MAPPINGS = {
-    "LCH3Segment": "LC H3 Segment (BETA) 🎞️",
-    "LCH3SegmentSave": "LC H3 Segment Save (BETA) 💾",
-    "LCH3Assemble": "LC H3 Assemble (BETA) 🧩",
-}
+NODE_DISPLAY_NAME_MAPPINGS = {}

@@ -408,9 +408,59 @@ def _frame_order(n, pingpong, loop_count):
     return order * (max(0, int(loop_count or 0)) + 1)
 
 
-def _encode_ffmpeg(src, order, dest, fps, fmt_key, crf, pix_fmt, audio=None, comment="", audio_bitrate="192k"):
+def comfy_tags(prompt=None, extra_pnginfo=None):
+    """The ComfyUI prompt + workflow as video tags, the way VHS and other video savers write them: CivitAI reads these
+    from an uploaded video to find its models (it ignores the comment)."""
+    tags = {}
+    if prompt is not None:
+        tags["prompt"] = json.dumps(prompt, separators=(",", ":"), ensure_ascii=False)
+    for k, v in (extra_pnginfo or {}).items():
+        tags[str(k)] = json.dumps(v, separators=(",", ":"), ensure_ascii=False)
+    return tags
+
+
+def write_ffmetadata(path, tags):
+    """An ffmpeg metadata file: a workflow is far too long for a command line."""
+    esc = lambda s: "".join("\\" + c if c in "=;#\\\n" else c for c in str(s))
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(";FFMETADATA1\n")
+        for k, v in tags.items():
+            f.write(f"{esc(k)}={esc(v)}\n")
+
+
+def metadata_args(tags, tmpdir, index):
+    """Extra ffmpeg args that put `tags` on the file: the metadata file is input number `index`. mp4 / mov only keep
+    tags other than the standard few with use_metadata_tags."""
+    if not tags:
+        return [], []
+    path = os.path.join(tmpdir, "meta.txt")
+    write_ffmetadata(path, tags)
+    return ["-f", "ffmetadata", "-i", path], ["-map_metadata", str(index)]
+
+
+def _with_tag_flag(args):
+    return [a + "+use_metadata_tags" if a == "+faststart" else a for a in args]
+
+
+def _close_quietly(pipe):
+    """Close a pipe whose reader is gone: the unsent bytes in its buffer can't be flushed."""
+    try:
+        pipe.close()
+    except OSError:
+        pass
+
+
+def _remove_partial(path):
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except OSError as e:
+        print(f"[LC Save Video] could not remove unfinished {path}: {e}")
+
+
+def _encode_ffmpeg(src, order, dest, fps, fmt_key, crf, pix_fmt, audio=None, comment="", audio_bitrate="192k", tags=None):
     """Frames go to ffmpeg one at a time through a pipe (no raw dump on disk), with a progress bar; Cancel stops ffmpeg
-    and removes the unfinished file."""
+    and removes the unfinished file. `tags` (prompt, workflow) go on the file as metadata tags."""
     import comfy.model_management
     import comfy.utils
 
@@ -432,18 +482,20 @@ def _encode_ffmpeg(src, order, dest, fps, fmt_key, crf, pix_fmt, audio=None, com
         ]
         wav_path = None
         wave, sr = audio_parts(audio)
-        if wave is not None and sr > 0:
+        if wave is not None and sr > 0 and wave.shape[-1] > 0:  # empty audio: video only, not a failed mux
             wav_path = os.path.join(tmpdir, "a.wav")
             _write_wav(wav_path, wave, sr)
             cmd += ["-i", wav_path]
-        cmd += vcodec + ["-crf", str(int(crf))]
+        all_tags = dict(tags or {})
         if comment:
             clip = comment[:8000]
-            cmd += [
-                "-metadata", f"comment={clip}",
-                "-metadata", f"description={clip}",
-                "-metadata", "comment_lang=eng",
-            ]
+            all_tags.update({"comment": clip, "description": clip, "comment_lang": "eng"})
+        meta_in, meta_map = metadata_args(all_tags, tmpdir, 2 if wav_path else 1)
+        cmd += meta_in + ["-map", "0:v"] + (["-map", "1:a"] if wav_path else []) + meta_map
+        if pix_fmt.startswith("yuv420") and (w % 2 or h % 2):
+            # 4:2:0 needs an even size (x264 refuses 65x49): pad one edge pixel
+            cmd += ["-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2"]
+        cmd += _with_tag_flag(vcodec) + ["-crf", str(int(crf))]
         if wav_path:
             cmd += spec["acodec"] + ["-b:a", str(audio_bitrate), "-shortest"]
         cmd.append(dest)
@@ -457,17 +509,22 @@ def _encode_ffmpeg(src, order, dest, fps, fmt_key, crf, pix_fmt, audio=None, com
                     proc.stdin.write(_frame_u8(src, i).tobytes())
                     pbar.update(1)
                 proc.stdin.close()
-            except comfy.model_management.InterruptProcessingException:
+            except OSError:
+                # ffmpeg stopped early (a broken pipe; Windows can say EINVAL): its log says why
+                proc.wait()
+                _close_quietly(proc.stdin)
+            except BaseException:
+                # Cancel, or a bad frame: stop ffmpeg (it would wait on stdin forever) and drop the unfinished file
                 proc.kill()
                 proc.wait()
-                if os.path.exists(dest):
-                    os.remove(dest)
+                _close_quietly(proc.stdin)
+                _remove_partial(dest)
                 raise
-            except BrokenPipeError:
-                pass  # ffmpeg stopped early: its log says why
             code = proc.wait()
         if code != 0:
-            tail = open(log_path, "rb").read()[-1500:].decode("utf-8", "replace")
+            _remove_partial(dest)
+            with open(log_path, "rb") as lf:
+                tail = lf.read()[-1500:].decode("utf-8", "replace")
             raise RuntimeError(f"[LC Save Video] ffmpeg failed ({code}):\n{tail}")
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
@@ -637,6 +694,8 @@ class LCSaveVideo:
             src = src[None]
         elif isinstance(src, np.ndarray) and src.ndim == 3:
             src = src[None]
+        if len(src) == 0:
+            raise ValueError("LC Save Video: the frame batch is empty (0 frames).")
         order = _frame_order(len(src), pingpong, loop_count)
         first = _frame_u8(src, 0)
         n, (h, w) = len(order), first.shape[:2]
@@ -691,6 +750,7 @@ class LCSaveVideo:
         _encode_ffmpeg(
             src, order, dest, fps_f, fmt_key, crf, pix_fmt,
             audio=aud, comment=comment, audio_bitrate="192k",
+            tags=comfy_tags(prompt, extra_pnginfo) if save_metadata else None,
         )
 
         if save_metadata and civitai_still:

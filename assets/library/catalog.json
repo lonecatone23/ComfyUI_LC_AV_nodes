@@ -1,0 +1,1362 @@
+{
+ "f20s_long_black_straight": {
+  "category": "cast",
+  "sub": "female",
+  "card": "cast card",
+  "name": "Mei",
+  "who": "woman",
+  "text": "in her twenties, long straight black hair, East Asian, dark brown eyes",
+  "file": "cast/female/f20s_long_black_straight.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "f20s_auburn_wavy_freckles": {
+  "category": "cast",
+  "sub": "female",
+  "card": "cast card",
+  "name": "Ivy",
+  "who": "woman",
+  "text": "in her twenties, shoulder-length wavy auburn hair, light freckles, green eyes",
+  "file": "cast/female/f20s_auburn_wavy_freckles.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "f20s_box_braids": {
+  "category": "cast",
+  "sub": "female",
+  "card": "cast card",
+  "name": "Amara",
+  "who": "woman",
+  "text": "in her twenties, long black box braids, dark brown skin, warm brown eyes",
+  "file": "cast/female/f20s_box_braids.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "f20s_platinum_pixie": {
+  "category": "cast",
+  "sub": "female",
+  "card": "cast card",
+  "name": "Sasha",
+  "who": "woman",
+  "text": "in her twenties, short platinum blonde pixie cut, pale skin, grey-blue eyes",
+  "file": "cast/female/f20s_platinum_pixie.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "f20s_brown_ponytail": {
+  "category": "cast",
+  "sub": "female",
+  "card": "cast card",
+  "name": "Lucia",
+  "who": "woman",
+  "text": "in her twenties, long dark brown hair in a high ponytail, olive skin, hazel eyes",
+  "file": "cast/female/f20s_brown_ponytail.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "f30s_black_bob": {
+  "category": "cast",
+  "sub": "female",
+  "card": "cast card",
+  "name": "Anika",
+  "who": "woman",
+  "text": "in her thirties, short sleek black bob, brown eyes, small silver nose ring",
+  "file": "cast/female/f30s_black_bob.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "f30s_curly_red": {
+  "category": "cast",
+  "sub": "female",
+  "card": "cast card",
+  "name": "Fiona",
+  "who": "woman",
+  "text": "in her thirties, long curly copper-red hair, fair skin, light freckles, blue eyes",
+  "file": "cast/female/f30s_curly_red.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "f30s_afro": {
+  "category": "cast",
+  "sub": "female",
+  "card": "cast card",
+  "name": "Zola",
+  "who": "woman",
+  "text": "in her thirties, short natural afro, deep brown skin, dark eyes",
+  "file": "cast/female/f30s_afro.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "f30s_honey_blonde_long": {
+  "category": "cast",
+  "sub": "female",
+  "card": "cast card",
+  "name": "Nova",
+  "who": "woman",
+  "text": "in her thirties, long wavy honey-blonde hair, light tan, green eyes",
+  "file": "cast/female/f30s_honey_blonde_long.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "f30s_hijab": {
+  "category": "cast",
+  "sub": "female",
+  "card": "cast card",
+  "name": "Leila",
+  "who": "woman",
+  "text": "in her thirties, wearing a soft dove-grey hijab, Middle Eastern, dark brown eyes",
+  "file": "cast/female/f30s_hijab.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "f40s_silver_streak_bob": {
+  "category": "cast",
+  "sub": "female",
+  "card": "cast card",
+  "name": "Claire",
+  "who": "woman",
+  "text": "in her forties, chin-length dark brown bob with a silver streak, blue eyes, light laugh lines",
+  "file": "cast/female/f40s_silver_streak_bob.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "f40s_long_black_south_asian": {
+  "category": "cast",
+  "sub": "female",
+  "card": "cast card",
+  "name": "Priya",
+  "who": "woman",
+  "text": "in her forties, long thick black hair, South Asian, dark brown eyes",
+  "file": "cast/female/f40s_long_black_south_asian.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "f50s_grey_short": {
+  "category": "cast",
+  "sub": "female",
+  "card": "cast card",
+  "name": "Helen",
+  "who": "woman",
+  "text": "in her fifties, short layered grey hair, fair skin, kind blue eyes, fine wrinkles",
+  "file": "cast/female/f50s_grey_short.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "f60s_white_bun": {
+  "category": "cast",
+  "sub": "female",
+  "card": "cast card",
+  "name": "Rosa",
+  "who": "woman",
+  "text": "in her sixties, white hair in a low bun, Latina, brown eyes, soft wrinkles",
+  "file": "cast/female/f60s_white_bun.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "f70s_silver_curls": {
+  "category": "cast",
+  "sub": "female",
+  "card": "cast card",
+  "name": "Edith",
+  "who": "woman",
+  "text": "in her seventies, short silver curls, fair skin, pale blue eyes, deep wrinkles",
+  "file": "cast/female/f70s_silver_curls.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "m20s_short_black_fade": {
+  "category": "cast",
+  "sub": "male",
+  "card": "cast card",
+  "name": "Malik",
+  "who": "man",
+  "text": "in his twenties, short black hair with a fade, dark brown skin, brown eyes",
+  "file": "cast/male/m20s_short_black_fade.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "m20s_blonde_messy": {
+  "category": "cast",
+  "sub": "male",
+  "card": "cast card",
+  "name": "Finn",
+  "who": "man",
+  "text": "in his twenties, messy medium-length blonde hair, fair skin, blue eyes",
+  "file": "cast/male/m20s_blonde_messy.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "m20s_korean_curtain": {
+  "category": "cast",
+  "sub": "male",
+  "card": "cast card",
+  "name": "Jun",
+  "who": "man",
+  "text": "in his twenties, black hair in a curtain cut, Korean, dark brown eyes",
+  "file": "cast/male/m20s_korean_curtain.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "m20s_curly_brown": {
+  "category": "cast",
+  "sub": "male",
+  "card": "cast card",
+  "name": "Leo",
+  "who": "man",
+  "text": "in his twenties, short curly brown hair, olive skin, light stubble",
+  "file": "cast/male/m20s_curly_brown.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "m30s_beard_dark": {
+  "category": "cast",
+  "sub": "male",
+  "card": "cast card",
+  "name": "Marco",
+  "who": "man",
+  "text": "in his thirties, short dark brown hair, full dark beard, brown eyes",
+  "file": "cast/male/m30s_beard_dark.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "m30s_shaved_head": {
+  "category": "cast",
+  "sub": "male",
+  "card": "cast card",
+  "name": "Andre",
+  "who": "man",
+  "text": "in his thirties, shaved head, deep brown skin, neat short beard",
+  "file": "cast/male/m30s_shaved_head.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "m30s_ginger_beard": {
+  "category": "cast",
+  "sub": "male",
+  "card": "cast card",
+  "name": "Callum",
+  "who": "man",
+  "text": "in his thirties, short ginger hair, ginger beard, fair skin, green eyes",
+  "file": "cast/male/m30s_ginger_beard.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "m30s_long_hair_tied": {
+  "category": "cast",
+  "sub": "male",
+  "card": "cast card",
+  "name": "Diego",
+  "who": "man",
+  "text": "in his thirties, long black hair tied back, Latino, brown eyes, light stubble",
+  "file": "cast/male/m30s_long_hair_tied.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "m30s_indian_side_part": {
+  "category": "cast",
+  "sub": "male",
+  "card": "cast card",
+  "name": "Arjun",
+  "who": "man",
+  "text": "in his thirties, short black hair with a side part, South Asian, clean-shaven",
+  "file": "cast/male/m30s_indian_side_part.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "m40s_salt_pepper": {
+  "category": "cast",
+  "sub": "male",
+  "card": "cast card",
+  "name": "David",
+  "who": "man",
+  "text": "in his forties, short salt-and-pepper hair, light stubble, grey eyes",
+  "file": "cast/male/m40s_salt_pepper.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "m40s_glasses_bald": {
+  "category": "cast",
+  "sub": "male",
+  "card": "cast card",
+  "name": "Tom",
+  "who": "man",
+  "text": "in his forties, balding with short dark hair at the sides, round wire glasses, clean-shaven",
+  "file": "cast/male/m40s_glasses_bald.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "m50s_grey_beard": {
+  "category": "cast",
+  "sub": "male",
+  "card": "cast card",
+  "name": "Frank",
+  "who": "man",
+  "text": "in his fifties, short grey hair, trimmed grey beard, blue eyes, weathered skin",
+  "file": "cast/male/m50s_grey_beard.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "m50s_japanese_grey": {
+  "category": "cast",
+  "sub": "male",
+  "card": "cast card",
+  "name": "Kenji",
+  "who": "man",
+  "text": "in his fifties, short greying black hair, Japanese, clean-shaven, calm brown eyes",
+  "file": "cast/male/m50s_japanese_grey.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "m60s_white_hair": {
+  "category": "cast",
+  "sub": "male",
+  "card": "cast card",
+  "name": "Walter",
+  "who": "man",
+  "text": "in his sixties, thin white hair combed back, fair skin, deep wrinkles",
+  "file": "cast/male/m60s_white_hair.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "m70s_bald_white_beard": {
+  "category": "cast",
+  "sub": "male",
+  "card": "cast card",
+  "name": "Samuel",
+  "who": "man",
+  "text": "in his seventies, bald, short white beard, dark brown skin, warm brown eyes",
+  "file": "cast/male/m70s_bald_white_beard.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "f_spring_trench": {
+  "category": "outfits",
+  "sub": "female/spring",
+  "card": "outfit",
+  "name": "the beige trench",
+  "gender": "female",
+  "season": "spring",
+  "text": "a light sand-colored trench coat over a cream knit sweater, faded light-blue jeans, white canvas sneakers",
+  "file": "outfits/female/spring/f_spring_trench.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "f_spring_floral_dress": {
+  "category": "outfits",
+  "sub": "female/spring",
+  "card": "outfit",
+  "name": "the floral dress",
+  "gender": "female",
+  "season": "spring",
+  "text": "a pale peach floral-print midi dress with small sage-green leaves, a soft cream cardigan",
+  "file": "outfits/female/spring/f_spring_floral_dress.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "f_spring_denim_jacket": {
+  "category": "outfits",
+  "sub": "female/spring",
+  "card": "outfit",
+  "name": "the denim outfit",
+  "gender": "female",
+  "season": "spring",
+  "text": "a light-wash denim jacket over a plain white t-shirt, black skinny jeans",
+  "file": "outfits/female/spring/f_spring_denim_jacket.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "f_spring_lavender_blouse": {
+  "category": "outfits",
+  "sub": "female/spring",
+  "card": "outfit",
+  "name": "the lavender blouse",
+  "gender": "female",
+  "season": "spring",
+  "text": "a soft lavender silk blouse, high-waisted charcoal-grey trousers, nude ballet flats",
+  "file": "outfits/female/spring/f_spring_lavender_blouse.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "f_summer_sundress": {
+  "category": "outfits",
+  "sub": "female/summer",
+  "card": "outfit",
+  "name": "the yellow sundress",
+  "gender": "female",
+  "season": "summer",
+  "text": "a butter-yellow linen sundress with thin straps, tan leather sandals",
+  "file": "outfits/female/summer/f_summer_sundress.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "f_summer_white_linen": {
+  "category": "outfits",
+  "sub": "female/summer",
+  "card": "outfit",
+  "name": "the white linen set",
+  "gender": "female",
+  "season": "summer",
+  "text": "a crisp white linen shirt over a white tank top, light khaki linen shorts",
+  "file": "outfits/female/summer/f_summer_white_linen.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "f_summer_red_dress": {
+  "category": "outfits",
+  "sub": "female/summer",
+  "card": "outfit",
+  "name": "the red dress",
+  "gender": "female",
+  "season": "summer",
+  "text": "a deep red silk slip dress with thin straps, black strappy heels",
+  "file": "outfits/female/summer/f_summer_red_dress.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "f_summer_stripes": {
+  "category": "outfits",
+  "sub": "female/summer",
+  "card": "outfit",
+  "name": "the striped top",
+  "gender": "female",
+  "season": "summer",
+  "text": "a navy-and-white striped boat-neck top, high-waisted light-blue denim shorts",
+  "file": "outfits/female/summer/f_summer_stripes.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "f_autumn_camel_coat": {
+  "category": "outfits",
+  "sub": "female/autumn",
+  "card": "outfit",
+  "name": "the camel coat",
+  "gender": "female",
+  "season": "autumn",
+  "text": "a warm camel wool coat over a black turtleneck sweater, dark indigo jeans, brown leather ankle boots",
+  "file": "outfits/female/autumn/f_autumn_camel_coat.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "f_autumn_rust_sweater": {
+  "category": "outfits",
+  "sub": "female/autumn",
+  "card": "outfit",
+  "name": "the rust sweater",
+  "gender": "female",
+  "season": "autumn",
+  "text": "a chunky rust-orange knit sweater, a dark brown corduroy skirt, black tights",
+  "file": "outfits/female/autumn/f_autumn_rust_sweater.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "f_autumn_plaid_shirt": {
+  "category": "outfits",
+  "sub": "female/autumn",
+  "card": "outfit",
+  "name": "the plaid shirt",
+  "gender": "female",
+  "season": "autumn",
+  "text": "a red-and-black plaid flannel shirt over a grey t-shirt, black jeans",
+  "file": "outfits/female/autumn/f_autumn_plaid_shirt.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "f_autumn_olive_jacket": {
+  "category": "outfits",
+  "sub": "female/autumn",
+  "card": "outfit",
+  "name": "the olive jacket",
+  "gender": "female",
+  "season": "autumn",
+  "text": "a faded olive utility jacket over a cream t-shirt, dark blue jeans",
+  "file": "outfits/female/autumn/f_autumn_olive_jacket.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "f_winter_parka": {
+  "category": "outfits",
+  "sub": "female/winter",
+  "card": "outfit",
+  "name": "the parka",
+  "gender": "female",
+  "season": "winter",
+  "text": "a forest-green parka with a big fur-lined hood over a cream wool sweater, black jeans",
+  "file": "outfits/female/winter/f_winter_parka.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "f_winter_red_coat": {
+  "category": "outfits",
+  "sub": "female/winter",
+  "card": "outfit",
+  "name": "the red coat",
+  "gender": "female",
+  "season": "winter",
+  "text": "a bright red wool coat, a cream knit scarf, black leggings, black winter boots",
+  "file": "outfits/female/winter/f_winter_red_coat.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "f_winter_puffer": {
+  "category": "outfits",
+  "sub": "female/winter",
+  "card": "outfit",
+  "name": "the white puffer",
+  "gender": "female",
+  "season": "winter",
+  "text": "a white puffer jacket over a heather-grey hoodie, dark grey joggers",
+  "file": "outfits/female/winter/f_winter_puffer.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "f_winter_velvet": {
+  "category": "outfits",
+  "sub": "female/winter",
+  "card": "outfit",
+  "name": "the velvet dress",
+  "gender": "female",
+  "season": "winter",
+  "text": "a deep emerald-green velvet long-sleeve dress, black opaque tights",
+  "file": "outfits/female/winter/f_winter_velvet.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_spring_chore_jacket": {
+  "category": "outfits",
+  "sub": "male/spring",
+  "card": "outfit",
+  "name": "the chore jacket",
+  "gender": "male",
+  "season": "spring",
+  "text": "a navy-blue cotton chore jacket over a white crew-neck t-shirt, light grey chinos",
+  "file": "outfits/male/spring/m_spring_chore_jacket.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_spring_oxford": {
+  "category": "outfits",
+  "sub": "male/spring",
+  "card": "outfit",
+  "name": "the oxford shirt",
+  "gender": "male",
+  "season": "spring",
+  "text": "a pale blue oxford button-down shirt, beige chinos, brown leather belt",
+  "file": "outfits/male/spring/m_spring_oxford.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_spring_bomber": {
+  "category": "outfits",
+  "sub": "male/spring",
+  "card": "outfit",
+  "name": "the green bomber",
+  "gender": "male",
+  "season": "spring",
+  "text": "a sage-green bomber jacket over a black t-shirt, dark indigo jeans, white sneakers",
+  "file": "outfits/male/spring/m_spring_bomber.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_spring_cardigan": {
+  "category": "outfits",
+  "sub": "male/spring",
+  "card": "outfit",
+  "name": "the grey cardigan",
+  "gender": "male",
+  "season": "spring",
+  "text": "a charcoal-grey knit cardigan over a white henley shirt, dark navy trousers",
+  "file": "outfits/male/spring/m_spring_cardigan.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_summer_linen_shirt": {
+  "category": "outfits",
+  "sub": "male/summer",
+  "card": "outfit",
+  "name": "the linen shirt",
+  "gender": "male",
+  "season": "summer",
+  "text": "a light blue linen short-sleeve shirt, sand-colored chino shorts, tan loafers",
+  "file": "outfits/male/summer/m_summer_linen_shirt.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_summer_polo": {
+  "category": "outfits",
+  "sub": "male/summer",
+  "card": "outfit",
+  "name": "the white polo",
+  "gender": "male",
+  "season": "summer",
+  "text": "a crisp white polo shirt, navy-blue chino shorts",
+  "file": "outfits/male/summer/m_summer_polo.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_summer_hawaiian": {
+  "category": "outfits",
+  "sub": "male/summer",
+  "card": "outfit",
+  "name": "the hawaiian shirt",
+  "gender": "male",
+  "season": "summer",
+  "text": "a teal-and-cream tropical leaf print short-sleeve shirt over a white tank top, khaki shorts",
+  "file": "outfits/male/summer/m_summer_hawaiian.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_summer_tee": {
+  "category": "outfits",
+  "sub": "male/summer",
+  "card": "outfit",
+  "name": "the black tee",
+  "gender": "male",
+  "season": "summer",
+  "text": "a plain black t-shirt, faded light-blue jeans",
+  "file": "outfits/male/summer/m_summer_tee.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_autumn_leather": {
+  "category": "outfits",
+  "sub": "male/autumn",
+  "card": "outfit",
+  "name": "the leather jacket",
+  "gender": "male",
+  "season": "autumn",
+  "text": "a dark brown leather jacket over a cream wool sweater, black jeans, brown boots",
+  "file": "outfits/male/autumn/m_autumn_leather.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_autumn_flannel": {
+  "category": "outfits",
+  "sub": "male/autumn",
+  "card": "outfit",
+  "name": "the flannel",
+  "gender": "male",
+  "season": "autumn",
+  "text": "a green-and-navy plaid flannel shirt over a grey t-shirt, dark blue jeans",
+  "file": "outfits/male/autumn/m_autumn_flannel.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_autumn_tweed": {
+  "category": "outfits",
+  "sub": "male/autumn",
+  "card": "outfit",
+  "name": "the tweed blazer",
+  "gender": "male",
+  "season": "autumn",
+  "text": "a brown herringbone tweed blazer over a burgundy knit sweater, dark grey trousers",
+  "file": "outfits/male/autumn/m_autumn_tweed.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_autumn_hoodie": {
+  "category": "outfits",
+  "sub": "male/autumn",
+  "card": "outfit",
+  "name": "the rust hoodie",
+  "gender": "male",
+  "season": "autumn",
+  "text": "a rust-orange hoodie under an olive field jacket, black jeans",
+  "file": "outfits/male/autumn/m_autumn_hoodie.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_winter_peacoat": {
+  "category": "outfits",
+  "sub": "male/winter",
+  "card": "outfit",
+  "name": "the peacoat",
+  "gender": "male",
+  "season": "winter",
+  "text": "a navy-blue wool peacoat over a charcoal turtleneck, grey wool trousers, a burgundy scarf",
+  "file": "outfits/male/winter/m_winter_peacoat.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_winter_puffer": {
+  "category": "outfits",
+  "sub": "male/winter",
+  "card": "outfit",
+  "name": "the black puffer",
+  "gender": "male",
+  "season": "winter",
+  "text": "a black puffer jacket over a heather-grey hoodie, dark indigo jeans",
+  "file": "outfits/male/winter/m_winter_puffer.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_winter_suit": {
+  "category": "outfits",
+  "sub": "male/winter",
+  "card": "outfit",
+  "name": "the charcoal suit",
+  "gender": "male",
+  "season": "winter",
+  "text": "a charcoal-grey wool suit, a white dress shirt, a deep navy tie",
+  "file": "outfits/male/winter/m_winter_suit.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "m_winter_fisherman": {
+  "category": "outfits",
+  "sub": "male/winter",
+  "card": "outfit",
+  "name": "the fisherman sweater",
+  "gender": "male",
+  "season": "winter",
+  "text": "a cream cable-knit fisherman sweater, dark brown corduroy trousers",
+  "file": "outfits/male/winter/m_winter_fisherman.png",
+  "size": [
+   896,
+   1152
+  ]
+ },
+ "yellow_umbrella": {
+  "category": "props",
+  "sub": "everyday",
+  "card": "prop",
+  "name": "the yellow umbrella",
+  "theme": "everyday",
+  "text": "a bright mustard-yellow umbrella with a curved black wooden handle",
+  "file": "props/everyday/yellow_umbrella.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "leather_notebook": {
+  "category": "props",
+  "sub": "everyday",
+  "card": "prop",
+  "name": "the leather notebook",
+  "theme": "everyday",
+  "text": "a worn brown leather notebook with a red ribbon bookmark",
+  "file": "props/everyday/leather_notebook.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "coffee_cup": {
+  "category": "props",
+  "sub": "everyday",
+  "card": "prop",
+  "name": "the coffee cup",
+  "theme": "everyday",
+  "text": "a white ceramic coffee cup on a saucer, full of black coffee",
+  "file": "props/everyday/coffee_cup.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "smartphone": {
+  "category": "props",
+  "sub": "everyday",
+  "card": "prop",
+  "name": "the phone",
+  "theme": "everyday",
+  "text": "a black smartphone with a cracked screen",
+  "file": "props/everyday/smartphone.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "keys": {
+  "category": "props",
+  "sub": "everyday",
+  "card": "prop",
+  "name": "the keys",
+  "theme": "everyday",
+  "text": "a ring of three brass keys with a small red leather tag",
+  "file": "props/everyday/keys.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "vintage_camera": {
+  "category": "props",
+  "sub": "everyday",
+  "card": "prop",
+  "name": "the camera",
+  "theme": "everyday",
+  "text": "a vintage silver-and-black film camera with a brown leather strap",
+  "file": "props/everyday/vintage_camera.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "suitcase": {
+  "category": "props",
+  "sub": "everyday",
+  "card": "prop",
+  "name": "the suitcase",
+  "theme": "everyday",
+  "text": "a hard-shell teal suitcase with a black handle and four wheels",
+  "file": "props/everyday/suitcase.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "letter": {
+  "category": "props",
+  "sub": "everyday",
+  "card": "prop",
+  "name": "the letter",
+  "theme": "everyday",
+  "text": "a sealed cream envelope with a red wax seal",
+  "file": "props/everyday/letter.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "red_book": {
+  "category": "props",
+  "sub": "everyday",
+  "card": "prop",
+  "name": "the red book",
+  "theme": "everyday",
+  "text": "a thick hardcover book with a faded red cloth cover",
+  "file": "props/everyday/red_book.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "wine_glass": {
+  "category": "props",
+  "sub": "everyday",
+  "card": "prop",
+  "name": "the wine glass",
+  "theme": "everyday",
+  "text": "a stemmed wine glass half full of red wine",
+  "file": "props/everyday/wine_glass.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "guitar": {
+  "category": "props",
+  "sub": "everyday",
+  "card": "prop",
+  "name": "the guitar",
+  "theme": "everyday",
+  "text": "a honey-colored acoustic guitar with a black pickguard",
+  "file": "props/everyday/guitar.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "bouquet_roses": {
+  "category": "props",
+  "sub": "everyday",
+  "card": "prop",
+  "name": "the roses",
+  "theme": "everyday",
+  "text": "a bouquet of deep red roses wrapped in brown paper",
+  "file": "props/everyday/bouquet_roses.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "watering_can": {
+  "category": "props",
+  "sub": "spring",
+  "card": "prop",
+  "name": "the watering can",
+  "theme": "spring",
+  "text": "a pale green metal watering can",
+  "file": "props/spring/watering_can.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "kite": {
+  "category": "props",
+  "sub": "spring",
+  "card": "prop",
+  "name": "the kite",
+  "theme": "spring",
+  "text": "a diamond-shaped kite in bright red and yellow with a long tail",
+  "file": "props/spring/kite.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "sunglasses": {
+  "category": "props",
+  "sub": "summer",
+  "card": "prop",
+  "name": "the sunglasses",
+  "theme": "summer",
+  "text": "black round sunglasses with gold metal frames",
+  "file": "props/summer/sunglasses.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "beach_ball": {
+  "category": "props",
+  "sub": "summer",
+  "card": "prop",
+  "name": "the beach ball",
+  "theme": "summer",
+  "text": "an inflatable beach ball with blue, yellow, red and white panels",
+  "file": "props/summer/beach_ball.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "straw_hat": {
+  "category": "props",
+  "sub": "summer",
+  "card": "prop",
+  "name": "the straw hat",
+  "theme": "summer",
+  "text": "a wide-brim natural straw sun hat with a black band",
+  "file": "props/summer/straw_hat.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "picnic_basket": {
+  "category": "props",
+  "sub": "summer",
+  "card": "prop",
+  "name": "the picnic basket",
+  "theme": "summer",
+  "text": "a wicker picnic basket with a red-and-white gingham cloth",
+  "file": "props/summer/picnic_basket.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "pumpkin": {
+  "category": "props",
+  "sub": "autumn",
+  "card": "prop",
+  "name": "the pumpkin",
+  "theme": "autumn",
+  "text": "a round orange pumpkin with a curly green stem",
+  "file": "props/autumn/pumpkin.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "lantern": {
+  "category": "props",
+  "sub": "autumn",
+  "card": "prop",
+  "name": "the lantern",
+  "theme": "autumn",
+  "text": "an old brass oil lantern with a glass chimney",
+  "file": "props/autumn/lantern.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "thermos": {
+  "category": "props",
+  "sub": "autumn",
+  "card": "prop",
+  "name": "the thermos",
+  "theme": "autumn",
+  "text": "a dark green steel thermos flask with a silver cup lid",
+  "file": "props/autumn/thermos.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "gift_box": {
+  "category": "props",
+  "sub": "winter",
+  "card": "prop",
+  "name": "the gift",
+  "theme": "winter",
+  "text": "a small gift box wrapped in deep red paper with a gold ribbon bow",
+  "file": "props/winter/gift_box.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "wool_scarf": {
+  "category": "props",
+  "sub": "winter",
+  "card": "prop",
+  "name": "the scarf",
+  "theme": "winter",
+  "text": "a long cream cable-knit wool scarf",
+  "file": "props/winter/wool_scarf.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "hot_cocoa": {
+  "category": "props",
+  "sub": "winter",
+  "card": "prop",
+  "name": "the hot cocoa",
+  "theme": "winter",
+  "text": "a red ceramic mug of hot cocoa topped with whipped cream",
+  "file": "props/winter/hot_cocoa.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "cafe_french": {
+  "category": "360",
+  "sub": "interior",
+  "card": "360 panorama",
+  "name": "the cafe",
+  "season": "any",
+  "text": "a small French cafe with a marble counter on the left, big arched windows on the right, bentwood chairs, warm lamps",
+  "file": "360/interior/cafe_french.png",
+  "size": [
+   2048,
+   1024
+  ]
+ },
+ "living_room_fireplace": {
+  "category": "360",
+  "sub": "interior",
+  "card": "360 panorama",
+  "name": "the living room",
+  "season": "winter",
+  "text": "a cozy living room with a stone fireplace, a soft grey sofa, a wool rug, a decorated winter tree in the corner, warm lamp light",
+  "file": "360/interior/living_room_fireplace.png",
+  "size": [
+   2048,
+   1024
+  ]
+ },
+ "modern_office": {
+  "category": "360",
+  "sub": "interior",
+  "card": "360 panorama",
+  "name": "the office",
+  "season": "any",
+  "text": "a bright open-plan office with white desks, black chairs, big windows and green plants",
+  "file": "360/interior/modern_office.png",
+  "size": [
+   2048,
+   1024
+  ]
+ },
+ "diner_retro": {
+  "category": "360",
+  "sub": "interior",
+  "card": "360 panorama",
+  "name": "the diner",
+  "season": "any",
+  "text": "a 1950s American diner with red vinyl booths, a long chrome counter, checkered black-and-white floor, neon signs",
+  "file": "360/interior/diner_retro.png",
+  "size": [
+   2048,
+   1024
+  ]
+ },
+ "library_reading_room": {
+  "category": "360",
+  "sub": "interior",
+  "card": "360 panorama",
+  "name": "the library",
+  "season": "any",
+  "text": "a grand old library reading room with tall dark wood bookshelves, long tables and green banker's lamps",
+  "file": "360/interior/library_reading_room.png",
+  "size": [
+   2048,
+   1024
+  ]
+ },
+ "apartment_kitchen": {
+  "category": "360",
+  "sub": "interior",
+  "card": "360 panorama",
+  "name": "the kitchen",
+  "season": "any",
+  "text": "a modern apartment kitchen with white cabinets, a wooden island, pendant lights and a window over the sink",
+  "file": "360/interior/apartment_kitchen.png",
+  "size": [
+   2048,
+   1024
+  ]
+ },
+ "ski_lodge": {
+  "category": "360",
+  "sub": "interior",
+  "card": "360 panorama",
+  "name": "the ski lodge",
+  "season": "winter",
+  "text": "a wooden ski lodge lounge with a big stone fireplace, leather armchairs and snowy mountains through the windows",
+  "file": "360/interior/ski_lodge.png",
+  "size": [
+   2048,
+   1024
+  ]
+ },
+ "hotel_lobby": {
+  "category": "360",
+  "sub": "interior",
+  "card": "360 panorama",
+  "name": "the hotel lobby",
+  "season": "any",
+  "text": "an elegant hotel lobby with a marble floor, a reception desk, velvet armchairs and a crystal chandelier",
+  "file": "360/interior/hotel_lobby.png",
+  "size": [
+   2048,
+   1024
+  ]
+ },
+ "snowy_village_street": {
+  "category": "360",
+  "sub": "exterior",
+  "card": "360 panorama",
+  "name": "the snowy street",
+  "season": "winter",
+  "text": "a quiet snowy village street with old stone houses, warm lit windows and fresh snow on the cobblestones",
+  "file": "360/exterior/snowy_village_street.png",
+  "size": [
+   2048,
+   1024
+  ]
+ },
+ "autumn_park": {
+  "category": "360",
+  "sub": "exterior",
+  "card": "360 panorama",
+  "name": "the park",
+  "season": "autumn",
+  "text": "a city park path in autumn with orange and red trees, fallen leaves, wooden benches and old lamp posts",
+  "file": "360/exterior/autumn_park.png",
+  "size": [
+   2048,
+   1024
+  ]
+ },
+ "beach_boardwalk": {
+  "category": "360",
+  "sub": "exterior",
+  "card": "360 panorama",
+  "name": "the beach",
+  "season": "summer",
+  "text": "a sunny beach boardwalk with wooden planks, white sand, blue sea and striped umbrellas",
+  "file": "360/exterior/beach_boardwalk.png",
+  "size": [
+   2048,
+   1024
+  ]
+ },
+ "garden_courtyard": {
+  "category": "360",
+  "sub": "exterior",
+  "card": "360 panorama",
+  "name": "the garden",
+  "season": "spring",
+  "text": "a spring garden courtyard with blooming cherry trees, a stone fountain, flower beds and gravel paths",
+  "file": "360/exterior/garden_courtyard.png",
+  "size": [
+   2048,
+   1024
+  ]
+ },
+ "rooftop_dusk": {
+  "category": "360",
+  "sub": "exterior",
+  "card": "360 panorama",
+  "name": "the rooftop",
+  "season": "any",
+  "text": "a city rooftop terrace at dusk with string lights, potted plants, wooden benches and skyscrapers around",
+  "file": "360/exterior/rooftop_dusk.png",
+  "size": [
+   2048,
+   1024
+  ]
+ },
+ "forest_clearing": {
+  "category": "360",
+  "sub": "exterior",
+  "card": "360 panorama",
+  "name": "the forest clearing",
+  "season": "summer",
+  "text": "a green forest clearing in summer with tall pine trees, ferns, wildflowers and soft sunbeams",
+  "file": "360/exterior/forest_clearing.png",
+  "size": [
+   2048,
+   1024
+  ]
+ },
+ "farmers_market": {
+  "category": "360",
+  "sub": "exterior",
+  "card": "360 panorama",
+  "name": "the market",
+  "season": "autumn",
+  "text": "an outdoor autumn farmers market with wooden stalls, pumpkins, apples and colorful awnings on a town square",
+  "file": "360/exterior/farmers_market.png",
+  "size": [
+   2048,
+   1024
+  ],
+  "note": "a few distant passers-by"
+ },
+ "rainy_street_night": {
+  "category": "360",
+  "sub": "exterior",
+  "card": "360 panorama",
+  "name": "the rainy street",
+  "season": "any",
+  "text": "a city street at night in the rain with wet reflective pavement, glowing shop signs and parked cars",
+  "file": "360/exterior/rainy_street_night.png",
+  "size": [
+   2048,
+   1024
+  ],
+  "note": "a few distant passers-by"
+ }
+}

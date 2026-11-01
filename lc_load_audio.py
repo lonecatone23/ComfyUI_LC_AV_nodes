@@ -1,7 +1,7 @@
 """
 LC Load Audio
 -------------
-Load a file from Comfy input/output/temp (or an absolute path) into AUDIO.
+Load a file from Comfy input/output/temp into AUDIO.
 Duration output is seconds as FLOAT.
 """
 
@@ -51,18 +51,24 @@ def _list_audio():
     return sorted(out) or [""]
 
 
+def _inside(path: str, bases) -> bool:
+    """True when path sits in one of the base folders (no ../ or absolute path out of them).
+    abspath, not realpath: a symlinked folder inside input/ still counts."""
+    real = os.path.abspath(path)
+    for base in bases:
+        root = os.path.abspath(base)
+        try:
+            if os.path.commonpath([real, root]) == root:
+                return True
+        except ValueError:  # another drive
+            continue
+    return False
+
+
 def _resolve(name: str) -> str:
     name = (name or "").strip().replace("\\", "/")
     if not name:
         raise ValueError("LC Load Audio: pick a file.")
-    if os.path.isfile(name):
-        return name
-    if hasattr(folder_paths, "exists_annotated_filepath"):
-        try:
-            if folder_paths.exists_annotated_filepath(name):
-                return folder_paths.get_annotated_filepath(name)
-        except Exception:
-            pass
     bases = []
     for fn in (
         folder_paths.get_input_directory,
@@ -73,10 +79,28 @@ def _resolve(name: str) -> str:
             bases.append(fn())
         except Exception:
             pass
+    if hasattr(folder_paths, "exists_annotated_filepath"):
+        try:
+            if folder_paths.exists_annotated_filepath(name):
+                path = folder_paths.get_annotated_filepath(name)
+                if _inside(path, bases):
+                    return path
+        except Exception:
+            pass
+    # the combo also lists models/audio files
+    try:
+        if "audio" in getattr(folder_paths, "folder_names_and_paths", {}):
+            path = folder_paths.get_full_path("audio", name)
+            if path and os.path.isfile(path):
+                return path
+    except Exception:
+        pass
+    if os.path.isabs(name) and os.path.isfile(name):  # a full path typed or linked in: worked before, keep it
+        return name
     leaf = name.split("/")[-1]
     for base in bases:
         for cand in (os.path.join(base, name), os.path.join(base, leaf)):
-            if os.path.isfile(cand):
+            if os.path.isfile(cand) and _inside(cand, bases):
                 return cand
     raise FileNotFoundError(f"LC Load Audio: not found: {name}")
 

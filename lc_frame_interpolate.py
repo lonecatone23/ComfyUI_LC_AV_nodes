@@ -57,12 +57,12 @@ def _load(name):
     path = _find(name)
     if path is None:
         path = os.path.join(_dirs()[0], name)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        print(f"[LC_AV] Frame Interpolate: downloading {name} to {path} (one time)")
-        torch.hub.download_url_to_file(URL + name, path)
+        from .lc_first_download import download
+
+        download(URL + name, path, f"RIFE {name}", "21 MB")
     from .vendor.rife.rife_arch import IFNet
     net = IFNet(arch_ver=VERSIONS[name])
-    sd = torch.load(path, map_location="cpu", weights_only=False)
+    sd = torch.load(path, map_location="cpu", weights_only=True)
     # some checkpoints still carry their training-only parts (the distillation teacher, the time encoder)
     sd = {k.replace("module.", "", 1): v for k, v in sd.items() if not k.startswith(("teacher.", "caltime."))}
     net.load_state_dict(sd)
@@ -128,6 +128,10 @@ class LCFrameInterpolate:
 
     def run(self, images, source_fps, target_fps, model, scene_cut, audio=None, batch_size=4):
         n, h, w, c = images.shape
+        if n == 0:
+            raise ValueError("[LC_AV] Frame Interpolate: the frame batch is empty (0 frames).")
+        if audio is not None and (not float(audio.get("sample_rate") or 0) > 0 or audio["waveform"].shape[-1] == 0):
+            audio = None  # no sample rate or no samples: time it by the frames (not a divide by zero / 1-frame clip)
         if audio is not None:
             dur = audio["waveform"].shape[-1] / float(audio["sample_rate"])
         else:

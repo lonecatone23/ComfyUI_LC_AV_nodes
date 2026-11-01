@@ -1,0 +1,723 @@
+{
+  "LCAvPipeOut": {
+    "description": "从 AV pipe 中解包视频、音频和设置。",
+    "inputs": {
+      "pipe": {
+        "tooltip": "LC123 LC_PIPE 或 LC MiniMax H3 Pipe / V2。覆盖 prompts/seed/steps/size。不输出。"
+      },
+      "av_pipe": {
+        "tooltip": "要解包的 LC_AV_PIPE。"
+      }
+    }
+  },
+  "LCAvPipeEdit": {
+    "description": "将你的视频、音频及其设置打包到一根线里，或只修改已有线上你接入的部分。也可接入 LC pipe 或 H3 pipe。",
+    "inputs": {
+      "pipe": {
+        "tooltip": "LC123 LC_PIPE 或 LC MiniMax H3 Pipe / V2。只复制 prompts/seed/steps/size。绝不写回。"
+      },
+      "av_pipe": {
+        "tooltip": "要原地编辑的现有 LC_AV_PIPE。未接入 = 由接口（in）打包。"
+      },
+      "video": {
+        "tooltip": "视频"
+      },
+      "audio": {
+        "tooltip": "Audio"
+      },
+      "frame_rate": {
+        "tooltip": "frame_rate"
+      },
+      "duration": {
+        "tooltip": "duration"
+      },
+      "sample_rate": {
+        "tooltip": "sample_rate"
+      },
+      "width": {
+        "tooltip": "Width"
+      },
+      "height": {
+        "tooltip": "高度"
+      },
+      "frame_count": {
+        "tooltip": "frame_count"
+      },
+      "positive_prompt": {
+        "tooltip": "正面提示词"
+      },
+      "negative_prompt": {
+        "tooltip": "负面提示词"
+      },
+      "seed": {
+        "tooltip": "Seed"
+      },
+      "total_steps": {
+        "tooltip": "total_steps"
+      },
+      "sampler_name": {
+        "tooltip": "sampler_name"
+      },
+      "models": {
+        "tooltip": "模型"
+      }
+    }
+  },
+  "LCPipeToAvPipe": {
+    "description": "把 LC pipe 或 H3 pipe 转成 AV pipe。只带过共有的设置(不含模型、图像或 latent)。",
+    "inputs": {
+      "pipe": {
+        "tooltip": "LC123 LC_PIPE 或 LC MiniMax H3 Pipe / V2。复制 prompts、seed、steps、sampler、size。"
+      }
+    }
+  },
+  "LCCreateVideo": {
+    "description": "从图像 batch 创建 LC_AV_PIPE。不会编码文件。要编码请接 LC Save Video。",
+    "inputs": {
+      "images": {
+        "tooltip": "帧 batch [B,H,W,C]。顺序即播放顺序。"
+      },
+      "frame_rate": {
+        "tooltip": "播放速率。duration = frame_count / frame_rate。"
+      },
+      "audio": {
+        "tooltip": "可选的配乐。存放在 LC_AV_PIPE 上；Save Video 在可能时会混入。"
+      },
+      "pipe": {
+        "tooltip": "LC_AV_PIPE、LC_PIPE，或 LC MiniMax H3 Pipe / V2。非 AV 的 pipe 只提供 prompts/seed/steps/size。"
+      }
+    }
+  },
+  "LCSaveVideo": {
+    "description": "以类似 Video Combine 的选项保存视频（frame rate、loop、format、pingpong、crf、pix_fmt、audio）。不含 AnimateDiff、VAE、latent、gif 或 webp。",
+    "inputs": {
+      "frame_rate": {
+        "tooltip": "播放 fps。0 = 使用 AV pipe 的 fps 或 24。不是 AnimateDiff 的默认值。"
+      },
+      "loop_count": {
+        "tooltip": "首次播放之后额外完整播放的次数（0 = 只播放一次）。"
+      },
+      "filename_prefix": {
+        "tooltip": "Comfy output 下的文件名主干。允许使用 子文件夹/名称。"
+      },
+      "format": {
+        "tooltip": "仅限 VHS 风格的 video/*。不支持 gif/webp，也不支持 VAE/latent。"
+      },
+      "pix_fmt": {
+        "tooltip": "VHS 使用 h265 的 yuv420p10le。yuv420p 是兼容性好的默认值。"
+      },
+      "crf": {
+        "tooltip": "含义与 VHS Video Combine 的 crf 相同。"
+      },
+      "save_metadata": {
+        "tooltip": "附带的 JSON + mp4 注释/描述 + Civitai 静态 PNG（parameters + civitaiResources）。"
+      },
+      "civitai_still": {
+        "tooltip": "写出带 A1111 parameters / civitaiResources 的首帧 PNG。CivitAI 不读取 mp4 的 comment。"
+      },
+      "pingpong": {
+        "tooltip": "追加倒序帧（跳过端点），以获得干净的循环。"
+      },
+      "save_output": {
+        "tooltip": "True = Comfy output 文件夹。False = temp 文件夹。"
+      },
+      "prune_outputs": {
+        "tooltip": "绝不写入中间/辅助帧 PNG 或预览 GIF。只保存视频文件（以及可选的附属 json）。原始编码文件留在临时目录里，ffmpeg 运行后即删除。"
+      },
+      "images": {
+        "tooltip": "帧 batch。av_pipe 没有视频时使用。"
+      },
+      "audio": {
+        "tooltip": "可选的配乐。覆盖 av_pipe 的音频。"
+      },
+      "av_pipe": {
+        "tooltip": "带 video/audio/fps 的 LC_AV_PIPE。"
+      },
+      "metadata": {
+        "tooltip": "LC123 Save Metadata 或 LC Save Video Metadata (LC_SAVE_META)。"
+      }
+    }
+  },
+  "LCSaveVideoMetadata": {
+    "description": "与 LC123 Save Metadata 相同的元数据字典（类型 LC_SAVE_META）。接到 LC Save Image 或 LC Save Video。Pipe 接受 LC_PIPE、LC MiniMax H3 Pipe / V2 或 LC_AV_PIPE (av_pipe)。",
+    "inputs": {
+      "pipe": {
+        "tooltip": "LC123 LC_PIPE 或 MiniMax H3 Pipe / V2。仅 prompt/seed/steps/尺寸。"
+      },
+      "av_pipe": {
+        "tooltip": "LC_AV_PIPE。控件会覆盖两个 pipe。"
+      },
+      "target": {
+        "tooltip": "auto = 存在 fps/duration 时包含视频附加信息。同一个元数据字典可用于 LC Save Image 和 LC Save Video。"
+      },
+      "positive": {
+        "tooltip": "覆盖 pipe 的正面提示词。"
+      },
+      "negative": {
+        "tooltip": "覆盖 pipe 的负面提示词。"
+      },
+      "seed_value": {
+        "tooltip": "Seed。-1 = 有 pipe seed 时使用 pipe seed。普通 INT，没有 control-after-generate。"
+      },
+      "steps": {
+        "tooltip": "0 = 使用 pipe 的 steps。"
+      },
+      "sampler": {
+        "tooltip": "空 = 使用 pipe 的 sampler_name。"
+      },
+      "scheduler": {
+        "tooltip": "空 = 使用 pipe 的 scheduler。"
+      },
+      "cfg": {
+        "tooltip": "0 = 使用 pipe 的 cfg_1。"
+      },
+      "width": {
+        "tooltip": "0 = 使用 pipe 的宽度。"
+      },
+      "height": {
+        "tooltip": "0 = 使用 pipe 的高度。"
+      },
+      "denoise": {
+        "tooltip": "0 = 使用 pipe 的 denoise。"
+      },
+      "models": {
+        "tooltip": "模型名称。一个字段,逗号分隔。不是第二个 widget。"
+      },
+      "civitai_air": {
+        "tooltip": "精确的 CivitAI AIR URN 或模型 URL，可选。不要自行编造 version/file id。填写后可在 CivitAI 上关联你的工作流/模型。代价：CivitAI 会把图片标记为“站内生成”。留空则图片会被视为外部生成器所生成。"
+      },
+      "extra_params": {
+        "tooltip": "追加到参数行末尾。"
+      }
+    }
+  },
+  "LCLoadVideo": {
+    "description": "原样加载视频文件:每一帧保持自己的尺寸,保留声音和帧率。不缩放、不跳帧、不裁剪。通过 ffmpeg 流式读取并带进度条,可以取消。",
+    "inputs": {
+      "path": {
+        "tooltip": "视频文件：完整路径，或 ComfyUI output 或 input 文件夹内的路径。把 LC H3 Make 的 video 接到这里。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "每一帧，保持文件自身的尺寸。"
+      },
+      "1": {
+        "tooltip": "声音（文件没有音频时，为与视频等长的静音）。"
+      },
+      "2": {
+        "tooltip": "文件的帧率。"
+      },
+      "3": {
+        "tooltip": "读取了多少帧。"
+      }
+    }
+  },
+  "LCPreviewVideo": {
+    "description": "在节点上播放视频：可以是文件，或带声音的一批帧。不会保存到你的 output 文件夹（帧会编码到临时文件）。",
+    "inputs": {
+      "fps": {
+        "tooltip": "一批帧的帧率。文件按其自身帧率播放。"
+      },
+      "images": {
+        "tooltip": "要播放的一批帧。"
+      },
+      "audio": {
+        "tooltip": "与画面一起播放的声音。"
+      },
+      "path": {
+        "tooltip": "或者要播放的视频文件（例如 LC H3 Make 的 video）。"
+      }
+    }
+  },
+  "LCFinalFrame": {
+    "description": "IMAGE 批次的最后一帧。约定与 FinalFrameSelector 相同。",
+    "inputs": {
+      "images": {
+        "tooltip": "帧批次。返回最后一帧。"
+      }
+    }
+  },
+  "LCLoadAudio": {
+    "description": "从 Comfy input/ 加载音频。start_time 和 end_time 用于裁剪文件（end_time 0 = 到文件末尾）。输出 duration 是裁剪后的长度，单位秒（FLOAT）。preview / pause 只播放该裁剪段；首次预览后可拖动时间轴手柄。",
+    "inputs": {
+      "audio": {
+        "tooltip": "Comfy input/ 中的文件（也会检查 output/ 和 temp/）。使用 Load audio 按钮上传。Combo 列出音频和常见视频容器。"
+      },
+      "start_time": {
+        "tooltip": "剪辑的起点，单位为秒。预览和 AUDIO 输出都从这里开始。预览一次后再拖动左侧时间线手柄，以便得知文件长度。"
+      },
+      "end_time": {
+        "tooltip": "剪辑的结束时间（秒）。0 = 播放到文件末尾。预览在此停止；输出 duration 为结束减去开始。拖动右侧时间轴手柄。"
+      }
+    }
+  },
+  "LCAudioDuration": {
+    "description": "来自 AUDIO 的时长。与 Audio Duration 对应：seconds_int / seconds_float 和 minutes_int / minutes_float。",
+    "inputs": {
+      "audio": {
+        "tooltip": "Comfy AUDIO {waveform, sample_rate}。"
+      }
+    }
+  },
+  "LCAudioCrop": {
+    "description": "把 AUDIO 从 start_time 裁剪到 end_time（MM:SS），格式与 VRGDG_AudioCrop 相同。",
+    "inputs": {
+      "start_time": {
+        "tooltip": "MM:SS（或 H:MM:SS）。保留区域的起点。"
+      },
+      "end_time": {
+        "tooltip": "MM:SS（或 H:MM:SS）。保留区域的结束点。"
+      }
+    }
+  },
+  "LCAudioChannel": {
+    "description": "把立体声拆成 L/R。单声道会复制到两个输出。",
+    "inputs": {
+      "audio": {
+        "tooltip": "输入 AUDIO。"
+      }
+    }
+  },
+  "LCAudioSeparate": {
+    "description": "Hybrid Demucs 四轨分离：Bass、Drums、Other、Vocals。布局与常见的 AudioSeparation 节点相同。需要 torchaudio (HDEMUCS_HIGH_MUSDB_PLUS)。不需要 Numba/SoX。分块长度/重叠在 VRAM 与接缝之间权衡。",
+    "inputs": {
+      "audio": {
+        "tooltip": "完整混音。拆分为四个 Hybrid Demucs 分轨：Bass、Drums、Other、Vocals。单声道会先复制为立体声。需要 torchaudio；不需要 Numba/SoX。如果只想要 L/R，请用 LC Audio Channel。"
+      },
+      "chunk_fade_shape": {
+        "tooltip": "重叠 chunk 之间的 crossfade 形状。Linear 最稳妥。half_sine 更平滑。logarithmic / exponential 改变下一个 chunk 在接缝处接管的快慢。"
+      },
+      "chunk_length": {
+        "tooltip": "每次发送给 Demucs 的秒数。越长 = 接缝越少，VRAM 占用越多。16 GB 显卡上 8–12 s 是不错的默认值；若 OOM 则降到 4–6。"
+      },
+      "chunk_overlap": {
+        "tooltip": "每个分块与下一块重叠的比例(0.1 = 10%)。越高越能掩盖拼接处的爆音;0 最快,但接缝处可能有爆音。"
+      }
+    }
+  },
+  "LCAudioEqualizer3Band": {
+    "description": "3 段 EQ：low shelf、peaking mid、high shelf。0 dB 的频段会被跳过。",
+    "inputs": {
+      "audio": {
+        "tooltip": "对 Comfy AUDIO 做 EQ。立体声逐声道处理。0 dB 的频段会被跳过，以免给信号染色。"
+      },
+      "low_gain_dB": {
+        "tooltip": "低频搁架增益，单位 dB。正值提升 low_freq 以下的低音；负值削减。0 跳过此频段。"
+      },
+      "low_freq": {
+        "tooltip": "低架拐点,单位 Hz(典型 60–150)。低于此频率的部分按 low_gain_dB 提升或衰减。"
+      },
+      "mid_gain_dB": {
+        "tooltip": "mid_freq 附近的峰值中频增益,单位 dB。小幅衰减可抑制闷浊感;0 = 跳过此频段。"
+      },
+      "mid_freq": {
+        "tooltip": "中频峰值的中心频率，单位 Hz（人声主体约 800–1500，清晰度约 2–4 kHz）。"
+      },
+      "mid_q": {
+        "tooltip": "中频峰值的宽度。0.7 较宽；Q 越高，凹槽/提升越窄。仅在 mid_gain_dB 不为 0 时使用。"
+      },
+      "high_gain_dB": {
+        "tooltip": "高频搁架增益，单位 dB。正值在 high_freq 以上增加空气感；负值压低嘶嘶声。0 = 跳过此频段。"
+      },
+      "high_freq": {
+        "tooltip": "高架拐点,单位 Hz(典型 4–8 kHz)。高于此频率的部分跟随 high_gain_dB。"
+      }
+    }
+  },
+  "LCAudioVolume": {
+    "description": "AUDIO 的音量滑块。增益后软限幅。",
+    "inputs": {
+      "volume": {
+        "tooltip": "线性增益。0 = 静音，1 = 不变，2 = +6 dB。"
+      }
+    }
+  },
+  "LCVaeDecode": {
+    "description": "布尔封装：full = nodes.VAEDecode，tiled = nodes.VAEDecodeTiled。",
+    "inputs": {
+      "tiled": {
+        "tooltip": "Off = 核心 VAE Decode。On = 核心 VAE Decode (Tiled)。"
+      }
+    }
+  },
+  "LCGetLatentSize": {
+    "description": "像素宽度和高度（Empty Latent / Resize / Save 使用的值）。batch 和 frames 用于视频 latent。",
+    "inputs": {
+      "vae": {
+        "tooltip": "如果接入,像素尺寸使用此 VAE 的空间压缩比。"
+      },
+      "compression": {
+        "tooltip": "未连接 VAE 时使用。SD/SDXL/Flux/H3 通常为 8。"
+      }
+    }
+  },
+  "LCH3Upscale": {
+    "description": "每次运行从保存的 latent 放大一个片段（MiniMax H3 latent upscaler + 对分块做一次轻量 H3 pass），输出为 seg_00N_up.mp4。请在剪辑定稿后再执行。最后一个完成后，会把它们拼接成 <project>_full_upscaled.mp4。",
+    "inputs": {
+      "plan": {
+        "tooltip": "来自 LC H3 Story（它的 plan 输出）。"
+      },
+      "model": {
+        "tooltip": "与渲染时相同的 H3 模型（和 turbo LoRA）。"
+      },
+      "clip": {
+        "tooltip": "MiniMax H3 文本编码器。"
+      },
+      "vae": {
+        "tooltip": "MiniMax H3 视频 VAE。"
+      },
+      "index": {
+        "tooltip": "要放大哪个 segment。0 = 下一个尚未放大的。把运行次数设为 segment 数量，然后就可以走开了。"
+      },
+      "upscale_by": {
+        "tooltip": "2x：960 x 544 变成 1920 x 1088。"
+      },
+      "steps": {
+        "tooltip": "latent upscaler 之后轻量 H3 pass 的步数。1 是测试效果最好的。"
+      },
+      "denoise": {
+        "tooltip": "光照这一遍重绘的程度。0.2 会增加真实细节并保持人脸；更高就开始改变人脸。"
+      },
+      "brightness_match": {
+        "tooltip": "让每个分块和每一帧保持原始亮度，放大时就不会闪烁或变暗。"
+      },
+      "upscale_model": {
+        "tooltip": "MiniMax H3 latent upscaler，位于 models/latent_upscale_models。LC Model Optimizer Video 可以下载它。"
+      }
+    }
+  },
+  "LCH3UltimateUpscale": {
+    "description": "把 MMH3 Ultimate Upscale 集成到一个节点，用于普通的 MiniMax H3 工作流：一切都来自 LC H3 pipe。先用 MiniMax H3 潜空间放大器，再对分块做一次轻量的 H3 处理。默认测试值为 2x、1 步、denoise 0.2。",
+    "inputs": {
+      "pipe": {
+        "tooltip": "LC MiniMax H3 pipe (V2):模型、prompt、参考图、sampler、seed。"
+      },
+      "latent": {
+        "tooltip": "来自主采样器的完成的 H3 latent。"
+      },
+      "ref2va": {
+        "tooltip": "片段由哪个模型渲染。把你的 REF2VA / FL2VA 开关接到这里。"
+      },
+      "upscale_by": {
+        "tooltip": "2 = 宽高各为两倍（取整到 32）。"
+      },
+      "steps": {
+        "tooltip": "轻量 H3 处理的步数。1 测试效果最好。"
+      },
+      "denoise": {
+        "tooltip": "光照 pass 重绘的幅度。0.2 增加细节并保留人脸；更高会改变人脸。"
+      },
+      "tile_size": {
+        "tooltip": "轻量 pass 的分块宽高。越小 = 占用 VRAM 越少，但越慢。"
+      },
+      "sampler": {
+        "tooltip": "from pipe = 你的主渲染所用的采样器。"
+      },
+      "brightness_match": {
+        "tooltip": "让每个分块和每一帧保持原始亮度（不闪烁）。"
+      },
+      "upscale_model": {
+        "tooltip": "MiniMax H3 latent 放大器 (models/latent_upscale_models)。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "放大后的 H3 latent：像普通的那样解码即可。"
+      },
+      "1": {
+        "tooltip": "放大后的宽度。"
+      },
+      "2": {
+        "tooltip": "放大后的高度。"
+      }
+    }
+  },
+  "LCH3AudioSync": {
+    "description": "让 MiniMax H3 视频按你的音轨表演,而不是配上模型自己编的声音。放在 latent 和 sampler 之间。你的录音进入声音部分并保持不动,模型只需决定与之匹配的画面,包括口型。片段长度由 latent 决定;音轨较短时用静音填充或循环。H3 的训练时长约 15 秒。",
+    "inputs": {
+      "latent": {
+        "tooltip": "来自 H3 节点的画面与声音 latent（Empty MiniMax H3 AV Latent、Image to Video、Reference to Video...）。"
+      },
+      "audio_vae": {
+        "tooltip": "H3 的音频 VAE，与 H3 节点使用的相同。"
+      },
+      "audio": {
+        "tooltip": "视频要表演的录音：一首歌、一句对白，什么都可以。"
+      },
+      "start_seconds": {
+        "tooltip": "剪辑从音轨的哪个位置开始。使用多少由剪辑自身的长度决定。"
+      },
+      "when_short": {
+        "tooltip": "音轨比片段短时：用静音填满剩余部分，或循环音轨。"
+      },
+      "positive": {
+        "tooltip": "H3 的正面 conditioning。请从这里接线：音轨也会作为干净的引导传给 H3，使嘴部从第一步起就跟随台词（单靠锁定在早期噪声太大）。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "声音部分已锁入你音轨的 latent。接入采样器。"
+      },
+      "1": {
+        "tooltip": "你的音轨被裁剪到与片段完全等长，供保存节点使用，让画面和声音同时结束。"
+      },
+      "2": {
+        "tooltip": "片段和音轨的长度，以及音轨是否已填满。"
+      },
+      "3": {
+        "tooltip": "加入了你的音轨作为引导的 positive conditioning（仅在接入 positive 时有效）。"
+      }
+    }
+  },
+  "LCFrameInterpolate": {
+    "description": "用 RIFE 4.26 实现平滑运动：任意目标 fps（不只是 2x）、场景切换保持原样而不是变形，并让长度与音频匹配，使画面和声音同时结束。",
+    "inputs": {
+      "images": {
+        "tooltip": "剪辑的帧。"
+      },
+      "source_fps": {
+        "tooltip": "片段当前的帧率（H3 和大多数视频模型：24）。"
+      },
+      "target_fps": {
+        "tooltip": "你想要的帧率。任意数值：48 和 60 很流畅，30 与手机视频一致。"
+      },
+      "model": {
+        "tooltip": "rife426.pth（RIFE 4.26）最适合 AI 视频，缺失时会下载一次（21 MB）。crossfade 混合相邻帧，不用模型：速度快，但运动处偏软。"
+      },
+      "scene_cut": {
+        "tooltip": "两帧相差多大才算一次切镜(保持,不做变形过渡)。0.12 能捕获硬切,同时不误判快速运动。0 = 关闭。"
+      },
+      "audio": {
+        "tooltip": "片段的声音。输出长度与音频完全一致，因此画面和声音同时结束。"
+      },
+      "batch_size": {
+        "tooltip": "每次 GPU 运算生成的新帧数。越高越快，也越占 VRAM。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "平滑后的片段。"
+      },
+      "1": {
+        "tooltip": "新的帧率，供保存节点使用。"
+      },
+      "2": {
+        "tooltip": "做了什么。"
+      }
+    }
+  },
+  "LCH3Story": {
+    "description": "整部影片都在一个节点上：演员、地点和镜头。每个镜头生成的文本就是 H3 收到的内容，不会被改写。在 output/LC_H3/<project>/ 中保存 story.json 和 plan.json。",
+    "inputs": {
+      "story": {
+        "tooltip": "演员、地点和镜头的 JSON。在节点上填写即可。"
+      },
+      "max_shot_seconds": {
+        "tooltip": "这台机器一次能渲染的最长镜头。更长的镜头会分段制作，每段都接着上一段继续。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "供 LC H3 Make 使用：每个镜头一个片段。"
+      },
+      "1": {
+        "tooltip": "演员和地点图片，用于 LC H3 Make 的 refs。"
+      },
+      "2": {
+        "tooltip": "项目文件夹名称。"
+      },
+      "3": {
+        "tooltip": "需要修正的地方。一切正常时为空。"
+      }
+    }
+  },
+  "LCH3Make": {
+    "description": "制作 LC H3 Story 的镜头：构建下一个镜头、采样并保存（各个版本、下一个镜头接续的尾部、拼接好的影片）。make: all remaining 会依次制作所有尚未制作的镜头。",
+    "inputs": {
+      "plan": {
+        "tooltip": "来自 LC H3 Story 🎬。"
+      },
+      "pipe": {
+        "tooltip": "LC MiniMax H3 Pipe V2，包含 H3 模型 (fl2va_model)、其文本编码器、视频和音频 VAE、width / height、steps、sampler、scheduler 和 seed。"
+      },
+      "make": {
+        "tooltip": "all remaining：一次 Run 依次制作所有尚未保存的片段，不管有多少（队列里始终只有一个运行在等待，所以 Stop 会立即结束；再次 Run 即可继续）。next segment：一次 Run 制作一个片段。redo：重新制作编号为 index 的片段。"
+      },
+      "index": {
+        "tooltip": "仅在 make 为 redo 时使用：要重新制作的片段。"
+      },
+      "crf": {
+        "tooltip": "mp4 质量。越低 = 越好、文件越大。16 接近无损。"
+      },
+      "refs": {
+        "tooltip": "来自 LC H3 Story 🎬：演员和地点图片。"
+      },
+      "redo_after": {
+        "tooltip": "当 index 重做一个已保存的片段时。旧版本始终保留在项目的 takes 文件夹中。this + the CONTINUE ones after it：紧接着它继续的片段无法再衔接，因此也会被放到一边；把 index 设回 0 并加入队列即可重新制作它们。它之后的 CUT 会保留。"
+      },
+      "refs_on": {
+        "tooltip": "何时发送参考图。cuts only：只在 CUT 片段发送，因此每个 CONTINUE 都直接接着之前的帧继续（衔接最平滑）。cuts + re-anchors：CUT 片段，以及丢失了人脸的 CONTINUE（测试中，在普通 CONTINUE 上加参考图会把开头从接续的帧拉开）。cuts + places on continues：CUT 片段获得全部参考；CONTINUE 只获得地点、布局和道具图片（谁站在哪、门往哪边开），从不发送人脸，人脸接着之前的帧继续。不是特写的 CONTINUE 还会获得该地点的房间（你的房间图片，或该地点第一个远景片段），这样镜头拉远时能找到同一个房间。every segment：始终发送。"
+      },
+      "hold_scene": {
+        "tooltip": "让房间在切换之间保持一致：之后每个多于一人的镜头都会以第一个远景镜头的一帧作为布局参考（谁坐在哪、桌子、窗户）。单人特写不会。你自己的布局图片会取代它。"
+      },
+      "memory": {
+        "tooltip": "保持演员一致。clip：片段 1 中约 1 秒（画面和声音）作为视频参考输入，使脸、发型、服装和声音保持一致；用于故事中写明的 CUT，也会在任何开头没有清晰人脸的 CONTINUE（或人脸发生漂移的片段之后）上作为轻微引导。on：来自片段 1 的一张静态肖像（或 memory_image）。off：仅使用风格文本。"
+      },
+      "memory_gap": {
+        "tooltip": "H3 在 memory 与切换开始之间看到的空白秒数。没有间隔时，H3 会把 memory 当作切换前的一刻，并以它的姿势开场。测试中 5 s 效果不错。0 = 原版 H3。"
+      },
+      "color_match": {
+        "tooltip": "把接续帧的颜色拉向本场景的开头（最后一个 CUT），以对抗颜色漂移。0 = 关闭。当 Make 的信息提示某个场景发生漂移时开启（0.2 到 0.4）。"
+      },
+      "carry_on_line": {
+        "tooltip": "CONTINUE 片段：添加一行，告诉 H3 开头是上一刻的直接延续。"
+      },
+      "prompt_format": {
+        "tooltip": "sections：H3 训练时使用的布局（description / soundscape / non_diegetic_music: none，对白写成 <d>[English] ... </d>，以及 memory 的参考块）。plain：风格 + 动作文本。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "目前为止的影片：所有已制作的镜头拼接在一起。"
+      },
+      "1": {
+        "tooltip": "这个镜头的声音。"
+      },
+      "2": {
+        "tooltip": "制作并保存了什么、人脸匹配度，以及每处衔接有多平滑。"
+      }
+    }
+  },
+  "LCH3StoryCardPrompt": {
+    "description": "把 Story 的演员、服装、地点或道具卡片转换成图像提示词和空 latent，适用于任何图像模型。用 LC H3 Save to Story 保存图片，它就会出现在卡片上。",
+    "inputs": {
+      "project_name": {
+        "tooltip": "来自 LC H3 Story 🎬（这样故事会在读取前先保存）。"
+      },
+      "vae": {
+        "tooltip": "图像模型的 VAE：空 latent 会按它来生成。"
+      },
+      "kind": {
+        "tooltip": "cast card：根据外貌生成的正面头像，纯灰背景（服装来自 outfit 卡片）。outfit：穿在隐形人台上的服装，纯灰背景。place：空房间。360 panorama：房间的一整圈全景（2:1），用于 🌐 槽位。prop：单独的物件，纯灰背景。"
+      },
+      "name": {
+        "tooltip": "演员、服装、地点或道具卡片。留空 = 第一张。"
+      },
+      "width": {
+        "tooltip": "0 = 该类型需要的尺寸（cast card 和 prop 为 1024 x 1024，outfit 为 896 x 1152，place 为 1344 x 768，360 为 2048 x 1024）。"
+      },
+      "height": {
+        "tooltip": "0 = 该类型需要的尺寸。"
+      },
+      "style": {
+        "tooltip": "可选。添加到提示词中的词（电影质感、时代、艺术风格）。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "与图片尺寸相同的空 latent。"
+      },
+      "1": {
+        "tooltip": "图像提示词。可以在中途随意修改。"
+      },
+      "2": {
+        "tooltip": "图片对应哪张卡片：接到 LC H3 Save to Story。"
+      }
+    }
+  },
+  "LCH3SaveToStory": {
+    "description": "把图片直接放到 Story 卡片上：演员图片、服装、房间图片、360 全景、道具，或镜头的开始 / 结束帧。演员、服装和道具图片会被抠出并放到纯灰背景上。Story 节点会立即显示。旧图片会保留；新图片绝不会覆盖它们。",
+    "inputs": {
+      "images": {
+        "tooltip": "图片（一批中的第一张）。"
+      },
+      "kind": {
+        "tooltip": "放入哪个槽位。from card：Card Prompt 正在生成的内容。cast card、outfit 和 prop 图片会被抠出并放到纯灰背景上。shot start / end：镜头的 🖼 开始帧或 🏁 结束帧。"
+      },
+      "name": {
+        "tooltip": "留空 = Card Prompt 的卡片。填写还没有卡片的演员、服装、地点或道具名称会新建一张卡片。对于 shot start / end：镜头编号。"
+      },
+      "project": {
+        "tooltip": "留空 = Card Prompt 的项目。"
+      },
+      "card": {
+        "tooltip": "来自 LC H3 Story Card Prompt 或 LC H3 Shot Card。"
+      }
+    }
+  },
+  "LCH3ShotCard": {
+    "description": "适用于任何图像模型的分镜任务：一个镜头的开始帧或结束帧的提示词、站位框、背景和演员图片。用 LC H3 Save to Story 保存图片，它就会放进该镜头的槽位；shot 留空时，每次运行会取下一个空槽位。",
+    "inputs": {
+      "project_name": {
+        "tooltip": "来自 LC H3 Story 🎬（这样故事会在读取前先保存）。"
+      },
+      "vae": {
+        "tooltip": "图像模型的 VAE：空 latent 会按它来生成。"
+      },
+      "shot": {
+        "tooltip": "留空 = 下一个仍缺少这一帧的镜头（再次运行处理下一个）。数字 = 该镜头。"
+      },
+      "slot": {
+        "tooltip": "start：镜头的第一张图片（用于切换）。end：镜头最终落定的画面。"
+      },
+      "width": {
+        "tooltip": "与视频一样为 16:9。框会随之缩放。"
+      },
+      "base_seed": {
+        "tooltip": "输出时加上镜头编号，让每个镜头都有自己的 seed。"
+      },
+      "style": {
+        "tooltip": "可选。逐字添加到每一帧的 Story 外观描述中。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "与画面尺寸相同的空 latent。"
+      },
+      "1": {
+        "tooltip": "完整提示词：场景、其中的人物及其外貌、站立位置。用于没有框的模型。"
+      },
+      "2": {
+        "tooltip": "仅场景（没有人物）：LC MOSS Layout Prompt 的基础提示词，人物由它的框来承载。"
+      },
+      "3": {
+        "tooltip": "用于 LC MOSS Layout Prompt / LC Flux 3 Layout Prompt 的 📐 框。"
+      },
+      "4": {
+        "tooltip": "用文字描述的框（\"Nova is on the left of the frame.\"）。"
+      },
+      "5": {
+        "tooltip": "镜头的 360 视图或房间图片（结束帧则为其开始帧），调整为画面尺寸。没有则为黑色。"
+      },
+      "6": {
+        "tooltip": "这一帧中人物的图片（1024 x 1024），用于参考 / 人脸节点。"
+      },
+      "7": {
+        "tooltip": "宽度。"
+      },
+      "8": {
+        "tooltip": "高度。"
+      },
+      "9": {
+        "tooltip": "seed + 镜头编号。"
+      },
+      "10": {
+        "tooltip": "属于哪个槽位：接到 LC H3 Save to Story。"
+      },
+      "11": {
+        "tooltip": "当这个镜头基于同一地点更早的远景画面（背景）时为 True：把它送入框编辑（LC MOSS Box Edit），只改变框内内容。False：根据提示词重新渲染。"
+      },
+      "12": {
+        "tooltip": "演员图片并排排列，从左到右按他们在画面中的站位：用于编辑步骤的人脸参考（Krea 2 Identity Edit 的第 2 个参考）。画面中没有人有图片时为空，编辑会保留画面自身的人脸。"
+      },
+      "13": {
+        "tooltip": "特写或中景时为 True：它的编辑放在空背景（beside）上，而不是布局画面上，否则布局中的人物会作为第二个副本再次出现。"
+      },
+      "14": {
+        "tooltip": "Identity Edit 步骤的提示词：完整提示词，加上来自演员表的人脸和按原文描述的服装。"
+      }
+    }
+  }
+}

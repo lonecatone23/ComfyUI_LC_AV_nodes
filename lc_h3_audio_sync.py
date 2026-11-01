@@ -66,6 +66,7 @@ class LCH3AudioSync:
         "The latent with your track locked into its sound half. Wire it into the sampler.",
         "Your track cut to exactly the clip's length, for the save node, so picture and sound end together.",
         "Clip and track lengths, and whether the track was filled.",
+        "The positive conditioning with your track added as a guide (only when positive is wired in).",
     )
     FUNCTION = "sync"
     CATEGORY = "LC AV/H3 Long Video"
@@ -89,8 +90,13 @@ class LCH3AudioSync:
         frames = _frames(video.shape[2])
         clip_s = frames / FPS
 
-        waveform = audio["waveform"][:1]  # H3 runs batch 1
+        waveform = audio["waveform"]
+        if waveform.dim() == 2:  # [C, L] from a node that drops the batch
+            waveform = waveform.unsqueeze(0)
+        waveform = waveform[:1].float()  # H3 runs batch 1
         sr = int(audio["sample_rate"])
+        if sr <= 0:
+            raise ValueError("[LC H3 Audio Sync] The audio has no sample rate. Check the node that made it.")
         vae_sr = int(getattr(audio_vae, "audio_sample_rate", 32000))
         if sr != vae_sr:
             waveform = comfy.audio.resample(waveform, sr, vae_sr)

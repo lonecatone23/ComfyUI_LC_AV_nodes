@@ -1,0 +1,723 @@
+{
+  "LCAvPipeOut": {
+    "description": "AV pipe から、動画、音声、設定を展開します。",
+    "inputs": {
+      "pipe": {
+        "tooltip": "LC123 の LC_PIPE または LC MiniMax H3 Pipe / V2。プロンプト/seed/steps/サイズを上書きします。出力はしません。"
+      },
+      "av_pipe": {
+        "tooltip": "展開する LC_AV_PIPE。"
+      }
+    }
+  },
+  "LCAvPipeEdit": {
+    "description": "動画、オーディオ、その設定を1本のワイヤーにまとめます。既存のパイプに対しては、接続したものだけを変更します。LC pipe や H3 pipe も入力に使えます。",
+    "inputs": {
+      "pipe": {
+        "tooltip": "LC123 の LC_PIPE、または LC MiniMax H3 Pipe / V2。プロンプト/seed/steps/size のみをコピーします。書き戻されることはありません。"
+      },
+      "av_pipe": {
+        "tooltip": "インラインで編集する既存の LC_AV_PIPE。未接続 = ソケット (in) からまとめる。"
+      },
+      "video": {
+        "tooltip": "動画"
+      },
+      "audio": {
+        "tooltip": "Audio"
+      },
+      "frame_rate": {
+        "tooltip": "frame_rate"
+      },
+      "duration": {
+        "tooltip": "duration"
+      },
+      "sample_rate": {
+        "tooltip": "sample_rate"
+      },
+      "width": {
+        "tooltip": "Width"
+      },
+      "height": {
+        "tooltip": "Height"
+      },
+      "frame_count": {
+        "tooltip": "frame_count"
+      },
+      "positive_prompt": {
+        "tooltip": "ポジティブプロンプト"
+      },
+      "negative_prompt": {
+        "tooltip": "ネガティブプロンプト"
+      },
+      "seed": {
+        "tooltip": "Seed"
+      },
+      "total_steps": {
+        "tooltip": "total_steps"
+      },
+      "sampler_name": {
+        "tooltip": "sampler_name"
+      },
+      "models": {
+        "tooltip": "モデル"
+      }
+    }
+  },
+  "LCPipeToAvPipe": {
+    "description": "LC pipe または H3 pipe を AV pipe に変換します。共通の設定だけが引き継がれます (モデル、画像、latent は含まれません)。",
+    "inputs": {
+      "pipe": {
+        "tooltip": "LC123 の LC_PIPE または LC MiniMax H3 Pipe / V2。プロンプト、seed、steps、サンプラー、サイズをコピーします。"
+      }
+    }
+  },
+  "LCCreateVideo": {
+    "description": "画像バッチから LC_AV_PIPE を作ります。ファイルはエンコードしません。それには LC Save Video をつないでください。",
+    "inputs": {
+      "images": {
+        "tooltip": "フレームバッチ [B,H,W,C]。順序は再生順です。"
+      },
+      "frame_rate": {
+        "tooltip": "再生レートです。duration = frame_count / frame_rate。"
+      },
+      "audio": {
+        "tooltip": "任意のサウンドトラックです。LC_AV_PIPE に保存され、可能なら Save Video が mux します。"
+      },
+      "pipe": {
+        "tooltip": "LC_AV_PIPE、LC_PIPE、または LC MiniMax H3 Pipe / V2。AV 以外のパイプが提供するのは、プロンプト/seed/steps/サイズのみです。"
+      }
+    }
+  },
+  "LCSaveVideo": {
+    "description": "Video Combine 風のオプション(フレームレート、ループ、フォーマット、pingpong、crf、pix_fmt、オーディオ)で動画を保存します。AnimateDiff、VAE、latent、gif、webp は非対応です。",
+    "inputs": {
+      "frame_rate": {
+        "tooltip": "再生 fps。0 = AV pipe の fps または 24 を使用。AnimateDiff のデフォルトではありません。"
+      },
+      "loop_count": {
+        "tooltip": "最初の再生後に追加で再生する回数（0 = 1回だけ再生）。"
+      },
+      "filename_prefix": {
+        "tooltip": "Comfy の output 以下の語幹です。サブフォルダー/名前も使えます。"
+      },
+      "format": {
+        "tooltip": "VHS スタイルの video/* のみ。gif/webp、VAE/latent は不可。"
+      },
+      "pix_fmt": {
+        "tooltip": "VHS は h265 で yuv420p10le を使います。yuv420p は互換性の高いデフォルトです。"
+      },
+      "crf": {
+        "tooltip": "VHS Video Combine の crf と同じ意味です。"
+      },
+      "save_metadata": {
+        "tooltip": "サイドカーJSON + mp4 のコメント/説明 + Civitai 用の静止画 PNG（parameters + civitaiResources）。"
+      },
+      "civitai_still": {
+        "tooltip": "最初のフレームを A1111 parameters / civitaiResources 付きの PNG で書き出します。Civitai は mp4 のコメントを読みません。"
+      },
+      "pingpong": {
+        "tooltip": "きれいなループのために、逆再生したフレームを追加します（両端はスキップ）。"
+      },
+      "save_output": {
+        "tooltip": "True = Comfy output フォルダー。False = temp フォルダー。"
+      },
+      "prune_outputs": {
+        "tooltip": "中間/補助フレームの PNG やプレビュー GIF は一切書き出しません。保存されるのは動画ファイル(と任意のサイドカー json)のみです。生のエンコードファイルは一時フォルダーに置かれ、ffmpeg の後で削除されます。"
+      },
+      "images": {
+        "tooltip": "フレームバッチ。av_pipe に動画がない場合に使用。"
+      },
+      "audio": {
+        "tooltip": "任意のサウンドトラック。av_pipe の音声を上書きします。"
+      },
+      "av_pipe": {
+        "tooltip": "video/audio/fps を持つ LC_AV_PIPE。"
+      },
+      "metadata": {
+        "tooltip": "LC123 Save Metadata または LC Save Video Metadata（LC_SAVE_META）。"
+      }
+    }
+  },
+  "LCSaveVideoMetadata": {
+    "description": "LC123 Save Metadata（タイプ LC_SAVE_META）と同じメタデータ辞書です。LC Save Image または LC Save Video に接続します。パイプは LC_PIPE、LC MiniMax H3 Pipe / V2、または LC_AV_PIPE（av_pipe）を受け付けます。",
+    "inputs": {
+      "pipe": {
+        "tooltip": "LC123 LC_PIPE または MiniMax H3 Pipe / V2。プロンプト / seed / steps / サイズのみ。"
+      },
+      "av_pipe": {
+        "tooltip": "LC_AV_PIPE。ウィジェットが両方の pipe を上書きします。"
+      },
+      "target": {
+        "tooltip": "auto = fps/duration がある場合に動画の追加情報を含めます。同じメタデータ辞書が LC Save Image と LC Save Video で使えます。"
+      },
+      "positive": {
+        "tooltip": "パイプのポジティブプロンプトを上書きします。"
+      },
+      "negative": {
+        "tooltip": "パイプのネガティブプロンプトを上書きします。"
+      },
+      "seed_value": {
+        "tooltip": "Seed。-1 = パイプの seed があればそれを使用。通常の INT で、control-after-generate はありません。"
+      },
+      "steps": {
+        "tooltip": "0 = パイプの steps を使用。"
+      },
+      "sampler": {
+        "tooltip": "空 = pipe の sampler_name を使用。"
+      },
+      "scheduler": {
+        "tooltip": "空 = pipe の scheduler を使用。"
+      },
+      "cfg": {
+        "tooltip": "0 = pipe の cfg_1 を使います。"
+      },
+      "width": {
+        "tooltip": "0 = パイプの width を使用。"
+      },
+      "height": {
+        "tooltip": "0 = pipe の height を使用。"
+      },
+      "denoise": {
+        "tooltip": "0 = pipe の denoise を使用。"
+      },
+      "models": {
+        "tooltip": "モデル名。1つのフィールドにカンマ区切りで。2つ目のウィジェットではありません。"
+      },
+      "civitai_air": {
+        "tooltip": "正確な Civitai の AIR URN の貼り付け、またはモデルの URL。任意です。バージョン/ファイルの ID をでっち上げないでください。入力すると、ワークフロー/モデルを Civitai にリンクできます。トレードオフ:Civitai がその画像を「made on-site」と表示します。空のままにすると、外部ジェネレーターの画像として扱われます。"
+      },
+      "extra_params": {
+        "tooltip": "パラメーター行の末尾に追加されます。"
+      }
+    }
+  },
+  "LCLoadVideo": {
+    "description": "動画ファイルをそのまま読み込みます。全フレームを元のサイズで、音声とフレームレートも含めて。リサイズ、フレームスキップ、トリミングはありません。ffmpeg 経由でストリーミングし、進捗バーを表示します。Cancel も使えます。",
+    "inputs": {
+      "path": {
+        "tooltip": "動画ファイル: フルパス、または ComfyUI の output または input フォルダー内のパス。LC H3 Make の video をここにつなぎます。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "すべてのフレーム。ファイル自身のサイズのまま。"
+      },
+      "1": {
+        "tooltip": "サウンド (ファイルに音声がない場合は動画と同じ長さの無音)。"
+      },
+      "2": {
+        "tooltip": "ファイルのフレームレートです。"
+      },
+      "3": {
+        "tooltip": "読み込まれたフレーム数。"
+      }
+    }
+  },
+  "LCPreviewVideo": {
+    "description": "ノード上で動画を再生します：ファイル、または音声付きのフレームのバッチ。output フォルダには何も保存されません（フレームは一時ファイルにエンコードされます）。",
+    "inputs": {
+      "fps": {
+        "tooltip": "フレームのバッチ用のフレームレート。ファイルは自身のレートで再生されます。"
+      },
+      "images": {
+        "tooltip": "再生するフレームのバッチです。"
+      },
+      "audio": {
+        "tooltip": "フレームと一緒に再生する音声です。"
+      },
+      "path": {
+        "tooltip": "または再生する動画ファイル (例: LC H3 Make の video)。"
+      }
+    }
+  },
+  "LCFinalFrame": {
+    "description": "IMAGE バッチの最後のフレームです。FinalFrameSelector と同じ仕様です。",
+    "inputs": {
+      "images": {
+        "tooltip": "フレームのバッチ。最後のフレームが返されます。"
+      }
+    }
+  },
+  "LCLoadAudio": {
+    "description": "Comfy の input/ からオーディオを読み込みます。start_time と end_time でファイルをトリミングします（end_time 0 = ファイル末尾まで）。出力の長さはカットの長さ（秒、FLOAT）です。preview / pause はそのカット部分だけを再生します。最初のプレビュー後に、タイムラインのハンドルをドラッグできます。",
+    "inputs": {
+      "audio": {
+        "tooltip": "Comfy の input/ にあるファイル（output/ と temp/ も確認します）。Load audio ボタンでアップロードします。Combo にはオーディオと一般的な動画コンテナが一覧表示されます。"
+      },
+      "start_time": {
+        "tooltip": "カットの開始位置(秒)。プレビューと AUDIO 出力は、どちらもここから始まります。ファイルの長さを把握するため、一度プレビューしてから左のタイムラインハンドルをドラッグしてください。"
+      },
+      "end_time": {
+        "tooltip": "カットの終了位置（秒）。0 = ファイルの末尾まで再生。プレビューはここで止まります。出力の長さは end 引く start です。タイムラインの右ハンドルをドラッグします。"
+      }
+    }
+  },
+  "LCAudioDuration": {
+    "description": "AUDIO からの長さ。Audio Duration と一致します: seconds_int / seconds_float と minutes_int / minutes_float。",
+    "inputs": {
+      "audio": {
+        "tooltip": "Comfy AUDIO {waveform, sample_rate}。"
+      }
+    }
+  },
+  "LCAudioCrop": {
+    "description": "AUDIO を start_time から end_time (MM:SS) まででクロップします。VRGDG_AudioCrop と同じ形式です。",
+    "inputs": {
+      "start_time": {
+        "tooltip": "MM:SS (または H:MM:SS)。残す範囲の開始位置。"
+      },
+      "end_time": {
+        "tooltip": "MM:SS(または H:MM:SS)。残す範囲の終わり。"
+      }
+    }
+  },
+  "LCAudioChannel": {
+    "description": "ステレオを L/R に分割します。モノラルは両方の出力に複製されます。",
+    "inputs": {
+      "audio": {
+        "tooltip": "入力 AUDIO。"
+      }
+    }
+  },
+  "LCAudioSeparate": {
+    "description": "Hybrid Demucs による4ステム分離：Bass、Drums、Other、Vocals。一般的な AudioSeparation ノードと同じレイアウトです。torchaudio（HDEMUCS_HIGH_MUSDB_PLUS）が必要です。Numba/SoX は不要です。チャンク長/オーバーラップで VRAM とつなぎ目のトレードオフを調整します。",
+    "inputs": {
+      "audio": {
+        "tooltip": "フルミックスを、Hybrid Demucs の4つのステム(Bass、Drums、Other、Vocals)に分けます。モノラルは先にステレオに複製されます。torchaudio が必要で、Numba/SoX は不要です。L/R だけが必要なら LC Audio Channel を使ってください。"
+      },
+      "chunk_fade_shape": {
+        "tooltip": "重なり合うチャンク間のクロスフェードの形状。Linear が最も安全。half_sine はよりなめらか。logarithmic / exponential は、つなぎ目で次のチャンクに切り替わる速さを変えます。"
+      },
+      "chunk_length": {
+        "tooltip": "Demucs に一度に送る秒数です。長いほどつなぎ目が減りますが、VRAM を多く使います。16 GB なら 8〜12 s が良い既定値で、OOM になる場合は 4〜6 に下げてください。"
+      },
+      "chunk_overlap": {
+        "tooltip": "各チャンクが次のチャンクと重なる割合です (0.1 = 10%)。高いほどつなぎ目のクリックノイズが目立たなくなります。0 は最速ですが、つなぎ目でクリックが入ることがあります。"
+      }
+    }
+  },
+  "LCAudioEqualizer3Band": {
+    "description": "3バンド EQ: ローシェルフ、ピーキングミッド、ハイシェルフ。0 dB のバンドはスキップされます。",
+    "inputs": {
+      "audio": {
+        "tooltip": "Comfy の AUDIO に EQ をかけます。ステレオはチャンネルごとに処理されます。0 dB のバンドは、信号に色が付かないようスキップされます。"
+      },
+      "low_gain_dB": {
+        "tooltip": "ローシェルフのゲイン(dB)。正の値は low_freq 以下の低音を持ち上げ、負の値は下げます。0 でこのバンドをスキップします。"
+      },
+      "low_freq": {
+        "tooltip": "ローシェルフの境界周波数 (Hz、一般的には 60〜150)。これより下は low_gain_dB でブーストまたはカットされます。"
+      },
+      "mid_gain_dB": {
+        "tooltip": "mid_freq 付近のピーキングミッドのゲイン (dB)。こもりを抑えるには小さくカットします。0 でこの帯域をスキップします。"
+      },
+      "mid_freq": {
+        "tooltip": "中域のピークの中心（Hz）（声の厚み ~800–1500、プレゼンス ~2–4 kHz）。"
+      },
+      "mid_q": {
+        "tooltip": "中域のピークの幅。0.7 は広く、Q が高いほど狭いノッチ/ブーストになります。mid_gain_dB が 0 でない場合にのみ使われます。"
+      },
+      "high_gain_dB": {
+        "tooltip": "ハイシェルフのゲイン (dB)。プラスで high_freq より上に空気感を足し、マイナスでヒスノイズを鈍らせます。0 でこの帯域をスキップ。"
+      },
+      "high_freq": {
+        "tooltip": "ハイシェルフの境界周波数 (Hz、一般的には 4〜8 kHz)。これより上は high_gain_dB に従います。"
+      }
+    }
+  },
+  "LCAudioVolume": {
+    "description": "AUDIO のボリュームスライダー。ゲイン後にソフトクリップします。",
+    "inputs": {
+      "volume": {
+        "tooltip": "リニアゲイン。0 = ミュート、1 = 変更なし、2 = +6 dB。"
+      }
+    }
+  },
+  "LCVaeDecode": {
+    "description": "ブール値のラッパー:full = nodes.VAEDecode、tiled = nodes.VAEDecodeTiled。",
+    "inputs": {
+      "tiled": {
+        "tooltip": "Off = コアの VAE Decode。On = コアの VAE Decode (Tiled)。"
+      }
+    }
+  },
+  "LCGetLatentSize": {
+    "description": "ピクセル単位の幅と高さ（Empty Latent / Resize / Save が使うもの）。動画 latent 用の batch と frames。",
+    "inputs": {
+      "vae": {
+        "tooltip": "つなぐと、ピクセルサイズにこの VAE の空間圧縮率が使われます。"
+      },
+      "compression": {
+        "tooltip": "VAE が接続されていないときに使われます。SD/SDXL/Flux/H3 は通常 8 です。"
+      }
+    }
+  },
+  "LCH3Upscale": {
+    "description": "保存済みの latent から、実行ごとに1セグメントをアップスケールし(MiniMax H3 latent アップスケーラー + タイル全体への軽い H3 パス)、seg_00N_up.mp4 にします。カットが確定してから実行してください。最後のセグメントが終わると、それらを <project>_full_upscaled.mp4 に結合します。",
+    "inputs": {
+      "plan": {
+        "tooltip": "LC H3 Story から(その plan 出力)。"
+      },
+      "model": {
+        "tooltip": "レンダリングに使ったのと同じ H3 モデル（と turbo LoRA）。"
+      },
+      "clip": {
+        "tooltip": "MiniMax H3 のテキストエンコーダー。"
+      },
+      "vae": {
+        "tooltip": "MiniMax H3 の動画 VAE。"
+      },
+      "index": {
+        "tooltip": "アップスケールするセグメント。0 = アップスケールされていない次のセグメント。実行回数をセグメント数に設定すれば、あとは放っておけます。"
+      },
+      "upscale_by": {
+        "tooltip": "2x: 960 x 544 は 1920 x 1088 になります。"
+      },
+      "steps": {
+        "tooltip": "latent アップスケーラーの後に行う軽い H3 パスのステップ数です。1 が最良でした。"
+      },
+      "denoise": {
+        "tooltip": "ライトパスがどれだけ描き直すか。0.2 では本物のディテールが加わり、顔は保たれます。それより高いと顔が変わり始めます。"
+      },
+      "brightness_match": {
+        "tooltip": "すべてのタイルとフレームを元の明るさに保つので、アップスケールでちらついたり暗くなったりしません。"
+      },
+      "upscale_model": {
+        "tooltip": "models/latent_upscale_models 内の MiniMax H3 latent アップスケーラーです。LC Model Optimizer Video でダウンロードできます。"
+      }
+    }
+  },
+  "LCH3UltimateUpscale": {
+    "description": "通常の MiniMax H3 ワークフロー向けの、MMH3 Ultimate Upscale を1ノードにまとめたものです。すべて LC H3 pipe から取得します。MiniMax H3 の latent アップスケーラーのあと、タイル全体に軽い H3 パスを1回かけます。2x、1ステップ、denoise 0.2 がテスト済みのデフォルトです。",
+    "inputs": {
+      "pipe": {
+        "tooltip": "LC MiniMax H3 pipe (V2): モデル、プロンプト、参照、サンプラー、シード。"
+      },
+      "latent": {
+        "tooltip": "メインサンプラーからの、完成した H3 latent です。"
+      },
+      "ref2va": {
+        "tooltip": "クリップをどのモデルでレンダリングしたか。REF2VA / FL2VA のスイッチをここにつなぎます。"
+      },
+      "upscale_by": {
+        "tooltip": "2 = 幅と高さが2倍（32の倍数に丸め）。"
+      },
+      "steps": {
+        "tooltip": "軽い H3 パスのステップ数。1 が最良でした。"
+      },
+      "denoise": {
+        "tooltip": "ライトパスがどれだけ描き直すか。0.2 はディテールを加えつつ顔を保ち、高いと顔も変わります。"
+      },
+      "tile_size": {
+        "tooltip": "軽いパス用のタイルの幅と高さです。小さいほど VRAM が少なく、遅くなります。"
+      },
+      "sampler": {
+        "tooltip": "from pipe = メインのレンダリングで使ったサンプラー。"
+      },
+      "brightness_match": {
+        "tooltip": "すべてのタイルとフレームを元の明るさに保ちます(ちらつきなし)。"
+      },
+      "upscale_model": {
+        "tooltip": "MiniMax H3 latent アップスケーラー (models/latent_upscale_models)。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "アップスケールされた H3 の latent：通常のものと同じようにデコードします。"
+      },
+      "1": {
+        "tooltip": "アップスケール後の width。"
+      },
+      "2": {
+        "tooltip": "アップスケール後の height。"
+      }
+    }
+  },
+  "LCH3AudioSync": {
+    "description": "MiniMax H3 の動画に、モデルが作り出す音ではなくあなたのトラックを演奏させます。latent とサンプラーの間に入れてください。録音は音声側に固定して入れられるため、モデルは口元を含め、それに合う映像だけを決めます。クリップの長さは latent で決まり、トラックが短い場合は無音で埋めるかループします。H3 は約15秒で学習されています。",
+    "inputs": {
+      "latent": {
+        "tooltip": "H3 ノード(Empty MiniMax H3 AV Latent、Image to Video、Reference to Video など)からの、映像と音の latent です。"
+      },
+      "audio_vae": {
+        "tooltip": "H3 のオーディオ VAE。H3 ノードが使うものと同じです。"
+      },
+      "audio": {
+        "tooltip": "動画に演じさせる録音：歌、セリフ、何でも可。"
+      },
+      "start_seconds": {
+        "tooltip": "トラックのどこからクリップを開始するかです。使われる量は、クリップ自体の長さで決まります。"
+      },
+      "when_short": {
+        "tooltip": "トラックがクリップより短い場合：残りを無音で埋めるか、トラックをループさせます。"
+      },
+      "positive": {
+        "tooltip": "H3 のポジティブ conditioning。ここを経由して接続してください：トラックはクリーンなガイドとして H3 にも渡されるので、口が最初のステップから言葉に追従します（ロックだけでは序盤はノイズが多すぎます）。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "トラックを音声側にロックした latent です。サンプラーに接続してください。"
+      },
+      "1": {
+        "tooltip": "トラックをクリップの長さにぴったり合わせて切ります。保存ノード用で、映像と音が同時に終わります。"
+      },
+      "2": {
+        "tooltip": "クリップとトラックの長さ、およびトラックが埋められたかどうか。"
+      },
+      "3": {
+        "tooltip": "トラックをガイドとして加えた positive conditioning (positive がつながれている場合のみ)。"
+      }
+    }
+  },
+  "LCFrameInterpolate": {
+    "description": "RIFE 4.26 でなめらかな動きにします: 任意の目標 fps (2倍だけでなく)、シーンカットはモーフィングせず保持、長さを音声に合わせて映像と音が同時に終わります。",
+    "inputs": {
+      "images": {
+        "tooltip": "クリップのフレーム。"
+      },
+      "source_fps": {
+        "tooltip": "クリップの現在のフレームレート(H3 とほとんどの動画モデルは 24)。"
+      },
+      "target_fps": {
+        "tooltip": "希望のフレームレート。任意の数値：48 と 60 は滑らか、30 はスマートフォンの動画に合います。"
+      },
+      "model": {
+        "tooltip": "rife426.pth(RIFE 4.26)は AI 動画に最適で、なければ一度だけダウンロードされます(21 MB)。crossfade は隣接フレームをブレンドします。モデル不要で高速ですが、動きはぼやけます。"
+      },
+      "scene_cut": {
+        "tooltip": "2つのフレームがどれだけ違えばカットとみなすか (モーフィングせず保持)。0.12 はハードカットを捉え、速い動きはそのままにします。0 = オフ。"
+      },
+      "audio": {
+        "tooltip": "クリップの音声。出力はオーディオとまったく同じ長さになるため、映像と音声が同時に終わります。"
+      },
+      "batch_size": {
+        "tooltip": "GPU 1パスで作られる新しいフレーム数。高いほど速く、VRAM を多く使います。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "なめらかにしたクリップ。"
+      },
+      "1": {
+        "tooltip": "保存ノード用の新しいフレームレート。"
+      },
+      "2": {
+        "tooltip": "行った処理。"
+      }
+    }
+  },
+  "LCH3Story": {
+    "description": "映画全体を1つのノードで：キャスト、場所、ショット。各ショットが作るテキストがそのまま H3 に渡され、書き換えられることはありません。output/LC_H3/<project>/ に story.json と plan.json を保存します。",
+    "inputs": {
+      "story": {
+        "tooltip": "キャスト、場所、ショットの JSON。ノード上で記入します。"
+      },
+      "max_shot_seconds": {
+        "tooltip": "このマシンが一度にレンダリングできる最長のショットです。それより長いショットは分割して作られ、各パートが前のパートから続きます。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "LC H3 Make 用：ショットごとに1セグメント。"
+      },
+      "1": {
+        "tooltip": "キャストと場所の画像。LC H3 Make の refs 用です。"
+      },
+      "2": {
+        "tooltip": "プロジェクトフォルダー名。"
+      },
+      "3": {
+        "tooltip": "直すべき点。問題がなければ空です。"
+      }
+    }
+  },
+  "LCH3Make": {
+    "description": "LC H3 Story のショットを作ります：次のショットを組み立て、サンプリングして保存します（テイク、次のショットの始まりになる末尾、結合したムービー）。make: all remaining で、まだ作っていないショットをすべて続けて作ります。",
+    "inputs": {
+      "plan": {
+        "tooltip": "LC H3 Story 🎬 から。"
+      },
+      "pipe": {
+        "tooltip": "LC MiniMax H3 Pipe V2。H3 モデル (fl2va_model)、そのテキストエンコーダー、動画と音声の VAE、width / height、steps、sampler、scheduler、seed を含みます。"
+      },
+      "make": {
+        "tooltip": "all remaining：1回の Run で、まだ保存されていないセグメントを、いくつあっても順番にすべて作ります（キューで待つ実行は常に1つだけなので、Stop でその場で終わります。もう一度 Run すれば続きから作ります）。next segment：1回の Run で1セグメント。redo：index 番のセグメントを作り直します。"
+      },
+      "index": {
+        "tooltip": "make が redo のときだけ使用：作り直すセグメント。"
+      },
+      "crf": {
+        "tooltip": "mp4 の品質。低いほど高品質でサイズが大きくなります。16 はほぼロスレスです。"
+      },
+      "refs": {
+        "tooltip": "LC H3 Story 🎬 から：キャストと場所の画像。"
+      },
+      "redo_after": {
+        "tooltip": "index で保存済みのセグメントを作り直すとき。古いテイクは常にプロジェクトの takes フォルダーに残ります。this + the CONTINUE ones after it：このセグメントから直接続くセグメントはつながらなくなるため、それらも脇に置かれます。index を 0 に戻してキューに入れると作り直せます。後ろの CUT はそのまま残ります。"
+      },
+      "refs_on": {
+        "tooltip": "参照をいつ送るか。cuts only：CUT セグメントのみ。すべての CONTINUE は直前のフレームからそのまま続きます（つなぎが最もなめらか）。cuts + re-anchors：CUT セグメントと、顔を失った CONTINUE（テストでは、普通の CONTINUE に参照を付けると、冒頭が引き継いだフレームから離れてしまいました）。cuts + places on continues：CUT セグメントにはすべてを送り、CONTINUE には場所、レイアウト、小道具の画像だけを送ります（誰がどこに立つか、ドアがどちらに開くか）。顔は送らず、直前のフレームから引き継ぎます。クローズアップではない CONTINUE には場所の部屋（あなたの部屋の画像、またはその場所の最初のワイドなセグメント）も送るので、カメラが引いても同じ部屋になります。every segment：常に送ります。"
+      },
+      "hold_scene": {
+        "tooltip": "カットをまたいで部屋を同じに保ちます：2人以上が映る以降のショットにはすべて、最初のワイドショットの1フレームがレイアウト参照として入ります（誰がどこに座るか、テーブル、窓）。1人のクローズアップには入りません。自分のレイアウト画像があれば、そちらが代わりに使われます。"
+      },
+      "memory": {
+        "tooltip": "キャストを同じに保ちます。clip：セグメント 1 の約 1 秒（映像と音声）を動画参照として入れ、顔、髪、服、声を同じに保ちます。ストーリーに書かれた CUT で使われ、はっきりした顔がないまま始まる CONTINUE（または顔がずれたセグメントの後）では軽い後押しとして使われます。on：セグメント 1 の静止ポートレート（または memory_image）。off：スタイルのテキストのみ。"
+      },
+      "memory_gap": {
+        "tooltip": "memory とカットの開始の間に H3 が見る空白の秒数。間がないと、H3 は memory をカット直前の瞬間とみなし、そのポーズから始めてしまいます。テストでは 5 s がうまくいきました。0 = 標準の H3。"
+      },
+      "color_match": {
+        "tooltip": "引き継いだフレームの色を、このシーンの始まり（最後の CUT）に寄せて色のずれを抑えます。0 = オフ。Make の info がシーンのずれを知らせたらオンにしてください（0.2 から 0.4）。"
+      },
+      "carry_on_line": {
+        "tooltip": "CONTINUE セグメント：冒頭が直前の瞬間のそのままの続きだと H3 に伝える1行を加えます。"
+      },
+      "prompt_format": {
+        "tooltip": "sections：H3 が学習したレイアウト（description / soundscape / non_diegetic_music: none、セリフは <d>[English] ... </d>、memory 用の参照ブロック）。plain：スタイル + アクションのテキスト。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "ここまでのムービー：作ったショットをすべて結合したもの。"
+      },
+      "1": {
+        "tooltip": "このショットの音声。"
+      },
+      "2": {
+        "tooltip": "何を作って保存したか、顔の一致度、各つなぎのなめらかさ。"
+      }
+    }
+  },
+  "LCH3StoryCardPrompt": {
+    "description": "Story のキャスト、衣装、場所、小道具のカードを、どの画像モデルでも使える画像プロンプトと空の latent に変えます。LC H3 Save to Story で画像を保存すると、カードに入ります。",
+    "inputs": {
+      "project_name": {
+        "tooltip": "LC H3 Story 🎬 から（読み込む前にストーリーが保存されるように）。"
+      },
+      "vae": {
+        "tooltip": "画像モデルの VAE：空の latent をこれに合わせて作ります。"
+      },
+      "kind": {
+        "tooltip": "cast card：見た目から作る正面向きの顔写真、無地のグレー背景（服は outfit カードから）。outfit：見えないマネキンに着せた服、無地のグレー背景。place：空の部屋。360 panorama：部屋をぐるりと一周（2:1）、🌐 スロット用。prop：物だけ、無地のグレー背景。"
+      },
+      "name": {
+        "tooltip": "キャスト、衣装、場所、小道具のカード。空欄 = 最初のもの。"
+      },
+      "width": {
+        "tooltip": "0 = この kind に合ったサイズ（cast card と prop は 1024 x 1024、outfit は 896 x 1152、place は 1344 x 768、360 は 2048 x 1024）。"
+      },
+      "height": {
+        "tooltip": "0 = この kind に合ったサイズ。"
+      },
+      "style": {
+        "tooltip": "任意。プロンプトに加える言葉（フィルムの雰囲気、時代、画風）。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "画像サイズの空の latent。"
+      },
+      "1": {
+        "tooltip": "画像プロンプト。途中で自由に編集できます。"
+      },
+      "2": {
+        "tooltip": "画像がどのカード用か：LC H3 Save to Story につなぎます。"
+      }
+    }
+  },
+  "LCH3SaveToStory": {
+    "description": "画像を Story のカードに直接入れます：キャスト画像、衣装、部屋の画像、360 パノラマ、小道具、またはショットの開始 / 終了フレーム。キャスト、衣装、小道具の画像は切り抜かれて無地のグレー背景に置かれます。Story ノードにすぐ表示されます。古い画像は残り、新しい画像で上書きされることはありません。",
+    "inputs": {
+      "images": {
+        "tooltip": "画像（バッチの最初の1枚）。"
+      },
+      "kind": {
+        "tooltip": "どのスロットに入れるか。from card：Card Prompt が作っていたもの。cast card、outfit、prop の画像は切り抜かれて無地のグレー背景に置かれます。shot start / end：ショットの 🖼 開始フレームまたは 🏁 終了フレーム。"
+      },
+      "name": {
+        "tooltip": "空欄 = Card Prompt のカード。まだカードのないキャスト、衣装、場所、小道具の名前を入れると新しいカードが作られます。shot start / end の場合：ショット番号。"
+      },
+      "project": {
+        "tooltip": "空欄 = Card Prompt のプロジェクト。"
+      },
+      "card": {
+        "tooltip": "LC H3 Story Card Prompt または LC H3 Shot Card から。"
+      }
+    }
+  },
+  "LCH3ShotCard": {
+    "description": "どの画像モデルでも使える絵コンテ用ジョブ：1ショットの開始または終了フレームのプロンプト、配置ボックス、背景、キャスト画像。LC H3 Save to Story で画像を保存するとショットのスロットに入ります。shot を空欄にすると、実行ごとに次の空きスロットを使います。",
+    "inputs": {
+      "project_name": {
+        "tooltip": "LC H3 Story 🎬 から（読み込む前にストーリーが保存されるように）。"
+      },
+      "vae": {
+        "tooltip": "画像モデルの VAE：空の latent をこれに合わせて作ります。"
+      },
+      "shot": {
+        "tooltip": "空欄 = このフレームがまだない次のショット（もう一度実行すると次へ）。数字 = そのショット。"
+      },
+      "slot": {
+        "tooltip": "start：ショットの最初の画像（カット用）。end：ショットが最後にたどり着く画像。"
+      },
+      "width": {
+        "tooltip": "動画と同じ 16:9。ボックスはこれに合わせて拡大縮小されます。"
+      },
+      "base_seed": {
+        "tooltip": "ショット番号を足して出力されるので、ショットごとに別の seed になります。"
+      },
+      "style": {
+        "tooltip": "任意。すべてのフレームで、Story のルックにそのまま追加されます。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "フレームサイズの空の latent。"
+      },
+      "1": {
+        "tooltip": "プロンプト全体：シーン、そこにいる人物とその見た目、立ち位置。ボックスのないモデル用。"
+      },
+      "2": {
+        "tooltip": "シーンのみ（人物なし）：LC MOSS Layout Prompt のベースプロンプト。人物はそのボックスが担います。"
+      },
+      "3": {
+        "tooltip": "LC MOSS Layout Prompt / LC Flux 3 Layout Prompt 用の 📐 ボックス。"
+      },
+      "4": {
+        "tooltip": "ボックスを言葉にしたもの（\"Nova is on the left of the frame.\"）。"
+      },
+      "5": {
+        "tooltip": "ショットの 360 ビューまたは部屋の画像（終了フレームの場合はその開始フレーム）をフレームサイズに合わせたもの。なければ黒。"
+      },
+      "6": {
+        "tooltip": "このフレームに映る人物の画像（1024 x 1024）。参照 / 顔ノード用。"
+      },
+      "7": {
+        "tooltip": "幅。"
+      },
+      "8": {
+        "tooltip": "高さ。"
+      },
+      "9": {
+        "tooltip": "seed + ショット番号。"
+      },
+      "10": {
+        "tooltip": "どのスロットか：LC H3 Save to Story につなぎます。"
+      },
+      "11": {
+        "tooltip": "このショットが同じ場所の以前のワイドフレーム（背景）をもとにしている場合は True：ボックス編集（LC MOSS Box Edit）に通して、ボックスだけを変えます。False：プロンプトから新しくレンダリングします。"
+      },
+      "12": {
+        "tooltip": "キャスト画像を、フレーム内の立ち位置どおり左から右に並べたもの：編集パス用の顔参照（Krea 2 Identity Edit の2番目の参照）。フレーム内の誰にも画像がない場合は空になり、編集はフレーム自身の顔を保ちます。"
+      },
+      "13": {
+        "tooltip": "クローズアップまたはミディアムショットの場合は True：編集はレイアウトフレームではなく空の背景（beside）に行います。そうしないとレイアウト内の人物が2人目のコピーとして現れます。"
+      },
+      "14": {
+        "tooltip": "Identity Edit パス用のプロンプト：プロンプト全体に、キャストシートの顔と、書かれたとおりの服を加えたもの。"
+      }
+    }
+  }
+}

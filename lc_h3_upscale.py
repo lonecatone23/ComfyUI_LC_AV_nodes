@@ -1,8 +1,8 @@
 """
 LC H3 Upscale: upscales the segments of an H3 long-video project after you are happy with the cut. One run = one
-segment: it takes that segment's saved latent (LC H3 Segment Save keeps it), runs it through the MiniMax H3 latent
-upscaler and one light H3 pass over tiles, and writes seg_00N_up.mp4 next to the normal one. LC H3 Assemble with
-version "upscaled" then joins the upscaled set.
+segment: it takes that segment's saved latent (LC H3 Make keeps it), runs it through the MiniMax H3 latent
+upscaler and one light H3 pass over tiles, and writes seg_00N_up.mp4 next to the normal one. Once every segment
+has one, it joins the upscaled set into <project>_full_upscaled.mp4.
 
 Render and fix the movie at the normal size first (fast), then upscale once. Skipping it changes nothing.
 
@@ -24,7 +24,7 @@ import folder_paths
 from comfy_extras.nodes_custom_sampler import Noise_RandomNoise
 from comfy_extras.nodes_minimax_h3 import MiniMaxH3ImageToVideo
 
-from .lc_h3_segment import FPS, PLAN_TYPE, _encode, _is_done, _read_audio, _seg_path, project_dir
+from .lc_h3_segment import FPS, PLAN_TYPE, LCH3Assemble, _encode, _is_done, _read_audio, _seg_path, project_dir
 from .vendor.mmh3_upscale.nodes import MMH3LatentUpscaleWithModelParams, MMH3SpatialSplitParams, MMH3UltimateUpscale
 
 SCALES = {"2x": 2.0, "1.5x": 1.5}
@@ -38,6 +38,17 @@ def _models():
         names = []
     names = [n for n in names if "minimax" in n.lower() or "h3" in n.lower()] or names
     return names or [DEFAULT_MODEL]
+
+
+def _join(plan):
+    """Joins the upscaled segments into <project>_full_upscaled.mp4, the way LC H3 Make joins the normal ones."""
+    try:
+        path = LCH3Assemble().assemble(plan, 8, 15, 16, version="upscaled")["result"][0]
+    except comfy.model_management.InterruptProcessingException:
+        raise
+    except Exception as exc:  # the upscaled segments are saved; only the join failed
+        return f"Joining them failed: {exc}"
+    return f"Joined: {path}"
 
 
 def _out(node_output):
@@ -67,7 +78,7 @@ class LCH3Upscale:
         models = _models()
         return {
             "required": {
-                "plan": (PLAN_TYPE, {"tooltip": "From LC Vision Director 🎬 (a saved plan loads instantly)."}),
+                "plan": (PLAN_TYPE, {"tooltip": "From LC H3 Story (its plan output)."}),
                 "model": ("MODEL", {"tooltip": "The same H3 model (and turbo LoRA) you rendered with."}),
                 "clip": ("CLIP", {"tooltip": "MiniMax H3 text encoder."}),
                 "vae": ("VAE", {"tooltip": "MiniMax H3 video VAE."}),
@@ -88,7 +99,8 @@ class LCH3Upscale:
     OUTPUT_NODE = True
     CATEGORY = "LC AV/H3 Long Video"
     DESCRIPTION = ("Upscales one segment per run from its saved latent (MiniMax H3 latent upscaler + a light H3 pass over "
-                   "tiles) into seg_00N_up.mp4. Do it once the cut is final; LC H3 Assemble with version 'upscaled' joins them.")
+                   "tiles) into seg_00N_up.mp4. Do it once the cut is final. After the last one it joins them into "
+                   "<project>_full_upscaled.mp4.")
 
     @classmethod
     def IS_CHANGED(cls, **kwargs):
@@ -100,7 +112,7 @@ class LCH3Upscale:
         i = _next(folder, len(shots), index)
         if i is None:
             done = sum(1 for k in range(1, len(shots) + 1) if os.path.exists(_seg_path(folder, k, "_up.mp4")))
-            msg = (f"Every saved segment is upscaled ({done} of {len(shots)}). Run LC H3 Assemble with version 'upscaled'."
+            msg = (f"Every saved segment is upscaled ({done} of {len(shots)}). " + _join(plan)
                    if done else "No segment has a saved latent yet. Segments saved before this update need rendering again.")
             print(f"[LC H3] {msg}")
             return {"ui": {"text": [msg]}, "result": (torch.zeros(1, 64, 64, 3), msg)}
@@ -135,12 +147,16 @@ class LCH3Upscale:
         frames = (images[lead:].clamp(0, 1) * 255.0).round().to(torch.uint8).cpu().numpy()
         # the same frames as the normal segment, so Assemble's overlaps and the sound line up
         n = frames.shape[0]
+        if n == 0:
+            raise ValueError(f"[LC H3] Segment {i}: the upscale decoded {images.shape[0]} frames but {lead} are lead-in, nothing is left to save.")
         aud = _read_audio(_seg_path(folder, i, ".mp4"))
         audio = {"waveform": torch.from_numpy(np.ascontiguousarray(aud[:, :int(round(n * 48000 / FPS))])).unsqueeze(0), "sample_rate": 48000}
-        _encode(frames, _seg_path(folder, i, "_up.mp4"), 16, audio=audio)
+        _encode(frames, _seg_path(folder, i, "_up.mp4"), 16, audio=audio if aud.shape[-1] else None)  # a segment without sound: picture only
         meta["up"] = {"width": int(frames.shape[2]), "height": int(frames.shape[1]), "scale": upscale_by, "denoise": denoise, "steps": steps}
-        with open(_seg_path(folder, i, ".json"), "w", encoding="utf-8") as f:
+        meta_path = _seg_path(folder, i, ".json")
+        with open(meta_path + ".tmp", "w", encoding="utf-8") as f:  # tmp + replace: a crash mid-write can't leave half a json
             json.dump(meta, f, indent=1, ensure_ascii=False)
+        os.replace(meta_path + ".tmp", meta_path)
         saved = [k for k in range(1, len(shots) + 1) if _is_done(folder, k)]
         left = [k for k in saved if not os.path.exists(_seg_path(folder, k, "_up.mp4"))]
         info = f"Upscaled segment {i} of {len(shots)} to {frames.shape[2]} x {frames.shape[1]}. "
@@ -149,7 +165,7 @@ class LCH3Upscale:
         elif len(saved) < len(shots):
             info += f"All {len(saved)} saved segments are upscaled; render the other {len(shots) - len(saved)} first, then upscale them too."
         else:
-            info += "All done: run LC H3 Assemble with version 'upscaled'."
+            info += "All done. " + _join(plan)
         print(f"[LC H3] {info}")
         preview = torch.from_numpy(frames[n // 2].astype(np.float32) / 255.0)[None]
         return {"ui": {"text": [info]}, "result": (preview, info)}

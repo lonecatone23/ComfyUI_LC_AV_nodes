@@ -15,6 +15,11 @@ def _biquad(wave, b0, b1, b2, a0, a1, a2):
     """Direct-form I per channel. wave [C, T]."""
     b0, b1, b2 = b0 / a0, b1 / a0, b2 / a0
     a1, a2 = a1 / a0, a2 / a0
+    try:  # same filter, in C: the Python loop below takes minutes on a full song
+        from scipy.signal import lfilter
+        return lfilter([b0, b1, b2], [1.0, a1, a2], wave, axis=-1).astype(np.float32)
+    except ImportError:
+        pass
     out = np.zeros_like(wave)
     for c in range(wave.shape[0]):
         x1 = x2 = y1 = y2 = 0.0
@@ -177,6 +182,9 @@ class LCAudioEqualizer3Band:
         if wave.ndim == 1:
             wave = wave[None, :]
         out = wave.astype(np.float32, copy=True)
+        # a corner past half the sample rate makes the filter blow up (e.g. a 5 kHz+ shelf on 8-16 kHz speech)
+        nyq = 0.45 * sr
+        low_freq, mid_freq, high_freq = min(low_freq, nyq), min(mid_freq, nyq), min(high_freq, nyq)
         if low_gain_dB:
             out = _low_shelf(out, sr, float(low_freq), float(low_gain_dB))
         if mid_gain_dB:
