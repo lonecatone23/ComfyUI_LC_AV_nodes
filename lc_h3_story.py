@@ -1156,9 +1156,45 @@ class LCH3Story:
         return {"ui": {"text": [warn or "✅ Ready."], "lc_saved": [res["saved"]]}, "result": (res["plan"], refs, res["plan"]["project"], warn)}
 
 
+def project_sizes(project: str) -> dict:
+    """The size the project was first made at, and the size of each made shot (from its seg_NNN.json)."""
+    folder = project_dir(project)
+    takes = os.path.join(folder, "takes")
+    made = []
+    if os.path.isdir(takes):
+        for name in sorted(os.listdir(takes)):
+            m = re.fullmatch(r"seg_(\d{3})\.json", name)
+            if not m:
+                continue
+            path = os.path.join(takes, name)
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    j = json.load(f)
+                made.append({"index": int(m.group(1)), "width": int(j["width"]), "height": int(j["height"]), "mtime": os.path.getmtime(path)})
+            except (OSError, ValueError, KeyError, TypeError):  # a shot still being written
+                continue
+    first = None
+    try:
+        with open(os.path.join(folder, "size.json"), "r", encoding="utf-8") as f:
+            j = json.load(f)
+        first = {"width": int(j["width"]), "height": int(j["height"])}
+    except (OSError, ValueError, KeyError, TypeError):
+        if made:  # an older project: the oldest shot on disk is the best guess
+            old = min(made, key=lambda s: s["mtime"])
+            first = {"width": old["width"], "height": old["height"], "guess": True}
+    return {"first": first, "shots": [{k: v for k, v in s.items() if k != "mtime"} for s in made]}
+
+
 try:
     from aiohttp import web
     from server import PromptServer
+
+    @PromptServer.instance.routes.get("/lc_h3/story/size")
+    async def _size_route(request):
+        try:
+            return web.json_response(project_sizes(request.query.get("project", "")))
+        except Exception as exc:
+            return web.json_response({"error": str(exc), "first": None, "shots": []}, status=400)
 
     @PromptServer.instance.routes.get("/lc_h3/story/load")
     async def _load_route(request):

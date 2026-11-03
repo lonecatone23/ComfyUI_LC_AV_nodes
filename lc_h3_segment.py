@@ -117,6 +117,19 @@ def work_dir(folder: str) -> str:
     return takes
 
 
+def note_first_size(folder: str, width: int, height: int):
+    """The size a project was first made at, kept in <project>/size.json so a later resize or a reloaded
+    workflow can't lose it. Written once; the Story panel shows it."""
+    path = os.path.join(folder, "size.json")
+    if os.path.exists(path) or not os.path.isdir(folder):
+        return
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"width": int(width), "height": int(height)}, f)
+    except OSError:  # a read-only folder: the panel falls back to the oldest segment
+        pass
+
+
 def _seg_path(folder: str, index: int, suffix: str) -> str:
     return os.path.join(work_dir(folder), f"seg_{index:03d}{suffix}")
 
@@ -1529,6 +1542,7 @@ class LCH3Segment:
         if refs_out:
             cond = node_helpers.conditioning_set_values(cond, {"minimax_refs": refs_out})
 
+        note_first_size(folder, width, height)
         segment = {"project": plan["project"], "folder": folder, "index": i, "count": len(shots), "mode": "CONTINUE" if cont else "CUT",
                    "seed": int(seed), "prompt": prompt, "width": width, "height": height, "frames": frame_count,
                    "overlap_frames": ovl_frames, "memory": "clip" if mem_clip is not None else (mem is not None), "reanchor": reanchor, "scene_start": _scene_start(plan, i, folder), "lead_frames": 0, "redo_after": redo_after.startswith("this +"),

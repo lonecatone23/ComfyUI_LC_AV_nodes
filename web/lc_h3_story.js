@@ -1227,6 +1227,52 @@ function saveProjectAs(node, anchor) {
   input.addEventListener("keydown", (e) => e.key === "Enter" && go());
 }
 
+/** 1248 x 864 -> "13:9"; the usual shapes keep their names (1024 x 576 -> "16:9"). */
+function ratioName(w, h) {
+  const common = [[16, 9], [9, 16], [4, 3], [3, 4], [3, 2], [2, 3], [1, 1], [21, 9], [5, 4], [4, 5]];
+  const hit = common.find(([a, b]) => Math.abs(w / h - a / b) < 0.01);
+  if (hit) return `${hit[0]}:${hit[1]}`;
+  const g = (a, b) => (b ? g(b, a % b) : a);
+  const k = g(w, h);
+  return `${w / k}:${h / k}`;
+}
+
+/** The size line under the project name: the size the project was first made at, and a warning when made shots differ
+ * (a resize that went wrong shows up here). It reads the project folder, so a reloaded workflow can't lose it. */
+function paintSize(node) {
+  const el = node.__lcst?.wrap.querySelector("[data-size]");
+  if (!el) return;
+  const info = node.__lcstSize;
+  const project = getData(node).project;
+  const paint = () => {
+    const i = node.__lcstSize;
+    if (!i || i.project !== project || !i.first) {
+      el.textContent = "";
+      return;
+    }
+    const f = i.first;
+    const odd = i.shots.filter((s) => s.width !== f.width || s.height !== f.height);
+    let text = `📐 ${f.width} × ${f.height} · ${ratioName(f.width, f.height)}${f.guess ? " (from the oldest shot)" : ""}`;
+    let tip = "The size this project was first made at. Set LC H3 Segment's width and height to this and every shot stays the same shape.";
+    if (odd.length) {
+      const groups = new Map();
+      odd.forEach((s) => groups.set(`${s.width} × ${s.height} · ${ratioName(s.width, s.height)}`, [...(groups.get(`${s.width} × ${s.height} · ${ratioName(s.width, s.height)}`) || []), s.index]));
+      text += ` ⚠ differs: ${[...groups].map(([k, v]) => `shot${v.length > 1 ? "s" : ""} ${v.join(", ")} ${k}`).join("; ")}`;
+      tip += " Shots made at another size break the anchors and distort the join: redo them at the size above.";
+    }
+    el.textContent = text;
+    el.title = tip;
+    el.style.color = odd.length ? "#ffcf7a" : "#9fd3ff";
+  };
+  if (info && info.project === project) paint();
+  if (!project || (info && info.project === project && Date.now() - info.t < 3000)) return;
+  node.__lcstSize = { ...(info && info.project === project ? info : {}), project, t: Date.now(), shots: info?.project === project ? info.shots : [] };
+  api.fetchApi(`/lc_h3/story/size?project=${encodeURIComponent(project)}&t=${Date.now()}`).then((r) => r.json()).then((j) => {
+    node.__lcstSize = { project, t: Date.now(), first: j.first || null, shots: j.shots || [] };
+    paint();
+  }).catch(() => {});
+}
+
 async function openProject(node, name) {
   try {
     const j = await api.fetchApi(`/lc_h3/story/load?project=${encodeURIComponent(name)}&t=${Date.now()}`).then((r) => r.json());
@@ -1275,6 +1321,7 @@ function render(node) {
       <button class="lcst-b" data-saveas title="Save a variant under a new name: the made shots come along, the original stays as it is">💾 Save as</button>
       <span class="lcst-status" data-status></span>
     </div>
+    <div class="lcst-row"><span class="lcst-tip" data-size style="flex:1"></span></div>
     <div class="lcst-row">
       <button class="lcst-b pri" data-write title="Type a short pitch: the model fills in the look, cast, places and shots once. After that it is all plain text you edit." >✨ Write the story</button>
       <select data-model style="flex:1" title="The model ✨ writes with (any text model under models/LLM). It loads for the one answer and unloads after."></select>
@@ -1461,7 +1508,10 @@ function render(node) {
     const field = kind === "w" ? "outfit_picture" : "picture"; // w: the cast card's 👗 outfit
     wireSlot(node, el, async (pic, lib) => {
       item[field] = kind === "p" ? pic : await onGrey(node, pic); // cast, outfits and props go on plain grey
-      if (kind === "w") return save(true);
+      if (kind === "w") {
+        if (lib && !String(item.outfit_notes || "").trim()) item.outfit_notes = lib.text || ""; // the library card text
+        return save(true);
+      }
       if (lib) { // a library pick fills what the card doesn't say yet
         if (!String(item.name || "").trim()) item.name = lib.name || "";
         if (kind === "c" && !String(item.look || "").trim()) item.look = lib.text || "";
@@ -1469,7 +1519,7 @@ function render(node) {
         if (kind !== "c" && !String(item.description || "").trim()) item.description = lib.text || "";
       }
       save(true);
-    }, { c: "cast", o: "outfits", r: "props" }[kind] || "");
+    }, { c: "cast", w: "outfits", o: "outfits", r: "props" }[kind] || "");
     el.querySelector("[data-clr]")?.addEventListener("click", (e) => {
       e.stopPropagation();
       item[field] = null;
@@ -1714,6 +1764,7 @@ function render(node) {
   paintPreview(node);
   paintBoard(node);
   paintJoins(node);
+  paintSize(node);
   fit(node);
 }
 
