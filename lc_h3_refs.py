@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 
 import numpy as np
@@ -145,6 +146,23 @@ def _note(t):
     return f" {t[0].upper() + t[1:]}." if t else ""
 
 
+_BELOW_FRAME = re.compile(r"\b(skirts?|jeans|trousers|pants|shorts|leggings|stockings|tights|socks|shoes?|boots?|heels?|"
+                          r"sneakers?|trainers|sandals?|loafers?|pumps|stilettos?|flats|knee[- ]high)\b", re.I)
+
+
+def frame_look(text, tight=True):
+    """A look for a close-up or medium shot: the clothes that can't be in frame (skirt, jeans, boots, heels ...) left
+    out. Named in a tight shot, they pulled the camera back until they fit, or a start frame drew them on extra people
+    in the background (Coffee Date: Anika's "black pleated skirt with high heel boots")."""
+    text = str(text or "")
+    if not tight or not _BELOW_FRAME.search(text):
+        return text
+    parts = [p.strip() for p in re.split(r",|\band\b|\bwith\b|\.\s", text)]
+    keep = [p for p in parts if p and not _BELOW_FRAME.search(p)]
+    out = ", ".join(keep).strip(" ,.")
+    return re.sub(r"\bwearing\s*$", "", out).strip(" ,")
+
+
 def _cap(s):
     s = str(s or "").strip()
     return s[0].upper() + s[1:] if s else s
@@ -168,9 +186,10 @@ def sentences(refs):
         look = [pt(p) for p in r.get("face", []) + r.get("full body", [])]
         if look:
             what = "the same face, hair and clothes" if r.get("full body") else "the same face and hair"
-            out.append(f"{_cap(name)} is the person shown in {_join(look)}: {what}, exactly as shown, but not the background.")
+            rest = "not the clothes or the background" if r.get("outfit") and not r.get("full body") else "not the background"
+            out.append(f"{_cap(name)} is the person shown in {_join(look)}: {what}, exactly as shown, but {rest}.")
         for p in r.get("outfit", []):
-            out.append(f"{_cap(name)} wears the {p['note'].strip() or 'outfit'} shown in {pt(p)}; nothing else from {pt(p)} is used.")
+            out.append(f"{_cap(name)} wears {_outfit_words(name, p.get('note'))} shown in {pt(p)}; nothing else from {pt(p)} is used.")
         for a in r.get("voice", []):
             out.append(f"{_cap(name)}'s voice sounds like {at(a)}: the same timbre and delivery, not its words.")
         for a in r.get("line", []):
@@ -190,13 +209,46 @@ def sentences(refs):
         elif p["role"] == "composition":
             out.append(f"{tag} is a composition reference: its framing, subject placement and camera height are echoed; its own content is not reproduced.{note}")
         elif p["role"] == "layout":
+            clothes = any(q["role"] == "outfit" for q in refs.get("pictures", []))
             out.append(f"{tag} is a scene-and-blocking reference, not a first frame: keep who is where in the room, where the "
-                       f"furniture, doors and counter are and which way the doors open; not the poses, faces or framing.{note}")
+                       f"furniture, doors and counter are and which way the doors open; not the poses, faces"
+                       f"{', clothes' if clothes else ''} or framing.{note}")
     return " ".join(out)
 
 
-def retention(refs, subject_of):
-    """H3's trained retention_analysis lines. subject_of: {person name: "<Subject k>"}."""
+_CLOTHING = re.compile(r"\b(sweaters?|jumpers?|blouses?|shirts?|t-shirts?|tees?|tops?|jackets?|coats?|parkas?|hoodies?|dress(es)?|"
+                       r"skirts?|suits?|blazers?|vests?|cardigans?|jeans|trousers|pants|shorts|uniforms?|scarf|scarves|hats?|caps?|"
+                       r"gowns?|robes?|aprons?|overalls|tank|leggings|stockings|tights|socks|shoes?|boots?|heels?|sneakers?|"
+                       r"trainers|sandals?|loafers?|pumps|stilettos?|wearing|dressed|outfit|clothes|clothing)\b", re.I)
+
+
+def strip_clothes(text):
+    """A look with every clothing clause taken out: the outfit picture shows the clothes, and words beat pictures
+    (2026-11-02: "red leather jacket" in the words won over a white-sweater picture)."""
+    text = str(text or "")
+    if not _CLOTHING.search(text):
+        return text
+    parts = [p.strip() for p in re.split(r",|\band\b|\bwith\b|\.\s", text)]
+    return ", ".join(p for p in parts if p and not _CLOTHING.search(p)).strip(" ,.")
+
+
+def _outfit_words(name, note):
+    """ "Anika's outfit 1" / "Anika's red dress": the person's own, never "the the red dress"."""
+    what = re.sub(r"^(the|a|an)\s+", "", str(note or "").strip(), flags=re.I).rstrip(".") or "outfit"
+    return f"{_cap(name)}'s {what}" if name else f"the {what}"
+
+
+def _is_are(words):
+    """ "gym clothes are", "jeans and a tee are", "red dress is", "outfit 2 is": two things joined by "and", or a last
+    word ending in one s (not ss), is plural."""
+    ws = re.findall(r"[a-z]+", str(words).lower())
+    last = ws[-1] if ws else ""
+    return "are" if "and" in ws or (last.endswith("s") and not last.endswith("ss") and len(last) > 2) else "is"
+
+
+def retention(refs, subject_of, tight=False):
+    """H3's trained retention_analysis lines. subject_of: {person name: "<Subject k>"}. tight: a close-up or medium
+    shot, so the notes leave out the clothes that can't be in frame."""
     pt = lambda p: f"<Picture {p['n']}>"  # noqa: E731
     at = lambda a: f"<Audio {a['n']}>"  # noqa: E731
     lines = []
@@ -205,11 +257,16 @@ def retention(refs, subject_of):
         look = r.get("face", []) + r.get("full body", [])
         if look:
             what = "face, hair and clothing" if r.get("full body") else "face and hair"
-            note = "; ".join(p["note"].strip() for p in look if p.get("note", "").strip())
+            note = "; ".join(frame_look(p["note"].strip(), tight) for p in look if p.get("note", "").strip())
+            # an outfit picture rides along: the headshot gives the face and hair only. "Only the person" took its clothes
+            # too, and its white sweater beat outfit 2's red dress (2026-11-02: a white top cut like the dress)
+            only = "the face and hair come" if r.get("outfit") and not r.get("full body") else "the person comes"
+            rest = "not the clothes or the background" if r.get("outfit") and not r.get("full body") else "not the background"
             lines.append(f"{subj} ({', '.join(pt(p) for p in look)}): fully_preserved - the {what} of {subj} are retained"
-                         + (f" ({note})" if note else "") + f". Only the person comes from {_join([pt(p) for p in look])}; not the background.")
+                         + (f" ({note})" if note else "") + f". Only {only} from {_join([pt(p) for p in look])}; {rest}.")
         for p in r.get("outfit", []):
-            lines.append(f"{pt(p)}: attribute_transfer - the {p['note'].strip() or 'outfit'} is worn by {subj}; nothing else from this picture is used.")
+            ow = _outfit_words(name, p.get("note"))
+            lines.append(f"{pt(p)}: attribute_transfer - {ow} {_is_are(ow)} worn by {subj}; nothing else from this picture is used.")
         for a in r.get("voice", []):
             lines.append(f"{at(a)}: reference - the voice of {subj}, guiding timbre and delivery without copying its words.")
         for a in r.get("line", []):
@@ -228,9 +285,13 @@ def retention(refs, subject_of):
         elif p["role"] == "composition":
             lines.append(f"{pt(p)}: weak_reference - only its framing, subject placement and camera height are echoed.")
         elif p["role"] == "layout":
+            # outfit pictures in this shot: the clothes come from them, not from the earlier shot this frame is from
+            # (2026-11-02: Anika kept the layout frame's sweater instead of her outfit 2)
+            clothes = any(q["role"] == "outfit" for q in refs.get("pictures", []))
             lines.append(f"{pt(p)}: weak_reference - a scene-and-blocking reference, not a first frame: only the layout of the "
                          "scene is kept: who is where in the room, which side of the table each person is on, the furniture, the "
-                         "window, the doors and which way they open. Not the poses, the faces or the framing.")
+                         "window, the doors and which way they open. Not the poses, the faces"
+                         + (", the clothes" if clothes else "") + " or the framing.")
     return lines
 
 

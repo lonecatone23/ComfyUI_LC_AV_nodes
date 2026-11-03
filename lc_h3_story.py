@@ -23,7 +23,7 @@ import time
 
 import folder_paths
 
-from .lc_h3_refs import REFS_TYPE, build as _build_refs, inside_comfy
+from .lc_h3_refs import REFS_TYPE, build as _build_refs, frame_look, inside_comfy, strip_clothes
 from .lc_h3_segment import FPS, PLAN_TYPE, _is_done, _seg_path, project_dir, work_dir
 
 NODE_ID = "LCH3Story"
@@ -307,7 +307,14 @@ def _framing(shot: dict, names: list) -> tuple:
 def _auto_beats(shot: dict, span: float, names: list) -> list:
     """(time, text) beats from the plain fields: the action spread over the time before the line, the line, then
     what happens after it."""
-    action = [s for s in re.split(r"(?<=[.!?])\s+", str(shot.get("action") or "").strip()) if s.strip()]
+    action = []
+    for s in re.split(r"(?<=[.!?])\s+", str(shot.get("action") or "").strip()):
+        if not s.strip():
+            continue
+        if action and s[:1].islower():  # "Anika, still seated. leans forward": one beat, or "leans forward" had no one doing it
+            action[-1] = action[-1].rstrip(".!? ") + ", " + s
+        else:
+            action.append(s)
     line = _clean_line(shot.get("line"))
     after = str(shot.get("after") or "").strip()
     speaker = str(shot.get("speaker") or "").strip() or (names[0] if len(names) == 1 else "")
@@ -520,7 +527,8 @@ def _sig(story: dict, seg: dict, shot: dict, place: dict | None) -> str:
     for c in story.get("cast", []):
         nm = str(c.get("name") or "").strip()
         if nm and re.search(rf"\b{re.escape(nm)}\b", text, re.I):
-            bits.append(f"{nm}:{_pic_file(c.get('picture'))}:{_pic_file(c.get('voice'))}")
+            crop = (c.get("picture") or {}).get("crop")
+            bits.append(f"{nm}:{_pic_file(c.get('picture'))}:{_pic_file(c.get('voice'))}" + (f":crop{crop}" if crop else ""))
     v = _shot_view(shot, place)
     if v:
         bits.append(f"view:{_pic_file(place.get('panorama'))}:{v['yaw']}:{v['pitch']}:{v['fov']}")
@@ -584,8 +592,47 @@ def _take_meta(folder: str, k: int) -> dict:
 
 
 # ------------------------------------------------------------------ the whole story -> plan + refs
+def _one_person(shot: dict, names: list) -> dict:
+    """A tight shot left on "everyone" whose text names one person is on that person: the seated words, her own
+    pictures and the background all hang on the subject (Coffee Date shot 3: Anika's close-up on "everyone" lost
+    "seated at the table" and stood up, the Nova cut set to Nova never did)."""
+    if (shot.get("framing") or "wide shot") not in TIGHT or shot.get("subject") in names:
+        return shot
+    text = " ".join(str(shot.get(k) or "") for k in ("action", "speaker", "after"))
+    here = [n for n in names if re.search(rf"\b{re.escape(n)}\b", text, re.I)]
+    return {**shot, "subject": here[0]} if len(here) == 1 else shot
+
+
+def wardrobe(story: dict) -> dict:
+    """{person: [outfit]}: the cast card's own 👗 outfit picture is outfit 1, then the person's outfit cards in order.
+    An outfit is {"id" (its reference), "label", "picture", "card", "notes"}. With a picture, the label is all H3 reads
+    about it. A name that contradicts the picture wins ("the red dress" over a white-sweater picture); one that agrees
+    held it 8 of 8, where "outfit 2" held 4 of 8 against the headshot's own clothes (2026-11-02)."""
+    out = {}
+    for c in story.get("cast", []) or []:
+        nm = str(c.get("name") or "").strip()
+        if not nm:
+            continue
+        items = out.setdefault(nm, [])
+        if _pic_file(c.get("outfit_picture")):
+            items.append({"id": f"{c.get('id')}_dress", "label": "outfit 1", "picture": c["outfit_picture"], "card": None, "notes": ""})
+    for o in story.get("outfits", []) or []:
+        if not isinstance(o, dict) or not str(o.get("name") or "").strip():
+            continue
+        who = str(o.get("who") or "").strip()
+        if who not in out:
+            continue
+        items = out[who]
+        name = re.sub(r"^(the|a|an)\s+", "", str(o.get("name")).strip(), flags=re.I).rstrip(".")
+        items.append({"id": f"{o.get('id')}_outfit", "label": f"the {name}" if name else f"outfit {len(items) + 1}",
+                      "picture": o.get("picture") if _pic_file(o.get("picture")) else None, "card": o,
+                      "notes": _one_clause(o.get("description") or o.get("name"))})
+    return out
+
+
 def build_plan(story: dict, max_s: float = 20.0) -> tuple:
     """story -> (plan for LC H3 Segment, per-shot preview list, warnings)."""
+    story = {**story, "shots": [_one_person(s, _names(story)) if isinstance(s, dict) else s for s in story.get("shots") or []]}
     story = _with_auto_views(story)
     max_s = max(5.0, float(max_s))  # the node's minimum: a part shorter than the overlap never moves on (endless loop)
     names = _names(story)
@@ -599,34 +646,56 @@ def build_plan(story: dict, max_s: float = 20.0) -> tuple:
     # wore it (Coffee Date)
     look_of = {c["name"]: _one_clause(c.get("look")) for c in cast}
 
-    def style_for(worn: dict) -> str:
-        """The cast line; a person in an outfit gets "wearing <outfit>" after their look."""
+    def style_for(worn: dict, tight: bool = False) -> str:
+        """The cast line; a person in an outfit gets "wearing <outfit>" after their look. tight: a close-up or medium
+        shot, so the clothes that can't be in frame are left out."""
         bits = []
         for c in cast:
             nm = c["name"].strip()
-            extra = [look_of[c["name"]]] if look_of[c["name"]] else []
             o = worn.get(nm)
-            if o:
-                extra.append("wearing " + _one_clause(o.get("description") or o.get("name")))
+            if o and o["picture"]:
+                # the outfit picture shows the clothes: no clothing words (they beat the picture and pull close-ups wide)
+                look = strip_clothes(look_of[c["name"]])
+                extra = ([look] if look else []) + ["wearing " + o["label"]]
+            else:
+                look = frame_look(look_of[c["name"]], tight)
+                extra = [look] if look else []
+                if o:  # an outfit card with no picture: its words are all there is
+                    worn_look = frame_look(o["notes"], tight)
+                    if worn_look:
+                        extra.append("wearing " + worn_look)
             bits.append(f"{nm}: a {c.get('who') or 'person'}" + (", " + ", ".join(extra) if extra else ""))
         if str(story.get("look") or "").strip():
             bits.append("Visual style: " + str(story["look"]).strip().rstrip("."))
         return "; ".join(bits) + ("." if bits else "")
 
-    style = style_for({})
     outfits = [o for o in story.get("outfits", []) or [] if isinstance(o, dict) and str(o.get("name") or "").strip()]
     for o in outfits:
         if str(o.get("who") or "").strip() not in names:
             warnings.append(f"👗 Pick who wears \"{o['name']}\".")
-    from .lc_h3_segment import _CLOTHES
-
-    dressed = {str(o.get("who") or "").strip() for o in outfits}
+    robe = wardrobe(story)
+    pictured = {nm for nm, items in robe.items() if any(o["picture"] for o in items)}
     for c in cast:
-        if c["name"].strip() not in dressed and not _CLOTHES.search(str(c.get("look") or "")):
+        nm = c["name"].strip()
+        clothes_said = strip_clothes(str(c.get("look") or "")) != str(c.get("look") or "")
+        if nm in pictured and clothes_said:
+            warnings.append(f"👗 {nm}'s look names clothes: they are left out, the outfit picture shows them. Keep the look to face and hair.")
+        elif nm not in pictured and clothes_said:
+            warnings.append(f"💡 {nm}: put the clothes in a 👗 outfit picture on the cast card. Clothing words beat the picture "
+                            "and pull close-ups wide.")
+        elif nm not in pictured and not robe.get(nm):
             # headshot cards carry no clothes: with no outfit either, H3 and Krea dressed her differently every shot (test)
-            warnings.append(f"👗 {c['name'].strip()} has no outfit card and no clothes in the look: the clothes will change "
-                            "from shot to shot. Add an outfit card (or the clothes to the look).")
-    worn = {}  # person -> the outfit they are in now (from the shot that named it on)
+            warnings.append(f"👗 {nm} has no outfit picture: the clothes will change from shot to shot. Add a 👗 outfit picture "
+                            "on the cast card.")
+    for o in story.get("outfits", []) or []:
+        # a simple name ("gym clothes"): a list of pieces is read as words, and shoes and pants pull close-ups wide
+        on = str((o or {}).get("name") or "").strip()
+        if on and len(re.split(r",|\band\b|\bwith\b", on)) > 2:
+            warnings.append(f"👗 Outfit \"{on}\": give it a simple name (gym clothes, red cocktail dress). The pieces go in "
+                            "its description, which only makes the picture.")
+    # person -> the outfit they are in now: the cast card's own outfit from the start, then the shot that picks or names one
+    worn = {nm: items[0] for nm, items in robe.items() if items and items[0]["card"] is None}
+    style = style_for(dict(worn))
     # Segment finds the cast and their sex in the story text ("Nova, a woman ...")
     cast_story = " ".join(f"{c['name'].strip()}, a {c.get('who') or 'person'} {look_of[c['name']]}".strip() + "." for c in cast)
 
@@ -638,6 +707,22 @@ def build_plan(story: dict, max_s: float = 20.0) -> tuple:
     if not shots:
         warnings.append("🛑 Add at least one shot.")
     first_seg = {}  # setup (place, framing, subject) -> the first segment that opened on it with a cut
+    seen = {}  # segment -> what its frames show: {"shot", "place", "wide", "people", "props", "worn"}
+    prop_names = [str(r.get("name") or "").strip() for r in story.get("props", []) or [] if str(r.get("name") or "").strip()]
+
+    def _mismatch(old, now, people=True):
+        """What an earlier segment's frame shows that this shot doesn't: other clothes, people, props."""
+        out = []
+        for nm in sorted(old["people"] & now["people"]):
+            a, b = old["worn"].get(nm), now["worn"].get(nm)
+            if a and b and a["id"] != b["id"]:
+                out.append(f"{nm} in {a['label']}")
+        if people:
+            out += [f"{nm} (not in this shot)" for nm in sorted(old["people"] - now["people"])]
+            out += [f"no {nm}" for nm in sorted(now["people"] - old["people"])]
+            out += [f"the {p} (not in this shot)" for p in sorted(old["props"] - now["props"])]
+        return out
+
     for i, shot in enumerate(shots, start=1):
         sw = []
         roll = i > 1 and shot.get("join") == "roll" and _same_camera(shots[i - 2], shot)
@@ -645,10 +730,17 @@ def build_plan(story: dict, max_s: float = 20.0) -> tuple:
         place = _place(story, where)
         where_now = where
         said = " ".join(str(shot.get(k) or "") for k in ("action", "after"))
-        for o in outfits:  # a shot that names an outfit puts its person in it, from here on
-            if str(o.get("who") or "").strip() in names and re.search(rf"\b{re.escape(o['name'].strip())}\b", said, re.I):
-                worn[o["who"].strip()] = o
-        shot_style = style_for(worn)
+        for nm, items in robe.items():  # a shot that names an outfit (its card name, or "Anika ... outfit 1") puts it on, from here on
+            for o in items:
+                named = o["card"] and re.search(rf"\b{re.escape(o['card']['name'].strip())}\b", said, re.I)
+                labelled = re.search(rf"\b{re.escape(o['label'])}\b", said, re.I) and re.search(rf"\b{re.escape(nm)}\b", said, re.I)
+                if named or labelled:
+                    worn[nm] = o
+        for nm, oid in (shot.get("outfit") or {}).items():  # the shot card's 👗 dropdown
+            o = next((o for o in robe.get(nm, []) if o["id"] == oid), None)
+            if o:
+                worn[nm] = o
+        shot_style = style_for(worn, (shot.get("framing") or "wide shot") in TIGHT)
         line = _clean_line(shot.get("line"))
         if line and not (shot.get("speaker") or len(names) == 1):
             sw.append("🛑 Pick who says the line.")
@@ -692,17 +784,26 @@ def build_plan(story: dict, max_s: float = 20.0) -> tuple:
                    "shot_id": shot.get("id") or f"s{i}", "shot": i, "part": k + 1, "parts": len(parts),
                    # a place whose picture is already a close view (cut from a 360 panorama) goes to tight shots too
                    "room": (shot.get("framing") or "wide shot") not in TIGHT or bool((place or {}).get("close_view"))}
+            if (shot.get("framing") or "wide shot") in TIGHT:
+                seg["tight"] = True  # Segment leaves the clothes out of frame out of the picture notes too
             if (shot.get("framing") or "wide shot") in TIGHT and shot.get("subject") in names:
                 seg["subject"] = shot["subject"]  # Segment sends this one person's pictures only (others named stay words)
             if _shot_view(shot, place):  # the shot's own angle out of the place's 360 panorama replaces the room picture
                 seg["view_name"] = _view_name(place, shot)
             seg["sig"] = _sig(story, seg, shot, place)
-            if outfits:  # only the outfits worn now go to this shot (none = their look)
-                seg["outfits"] = [f"{o.get('id')}_outfit" for o in worn.values()]
-                seg["sig"] += "".join(f"|outfit:{_pic_file(o.get('picture'))}" for o in worn.values())
+            if any(robe.values()):  # only the outfits worn now go to this shot (none = their look)
+                seg["outfits"] = [o["id"] for o in worn.values() if o["picture"]]
+                seg["sig"] += "".join(f"|outfit:{_pic_file(o['picture'])}:{(o['picture'] or {}).get('crop')}" for o in worn.values() if o["picture"])
             if shot_style != style:
                 seg["style"] = shot_style
             setup = (str(place.get("name")) if place else "", shot.get("framing") or "wide shot", shot.get("subject") or "everyone")
+            subj = shot.get("subject") or "everyone"
+            who = set(names) if subj not in names else {subj}
+            if subj in names and (shot.get("framing") or "wide shot") not in TIGHT:
+                who |= {n for n in names if re.search(rf"\b{re.escape(n)}\b", said, re.I)}
+            now = {"shot": i, "place": setup[0], "wide": (shot.get("framing") or "wide shot") not in TIGHT, "people": who,
+                   "props": {p for p in prop_names if re.search(rf"\b{re.escape(p)}\b", said, re.I)},
+                   "worn": {nm: o for nm, o in worn.items() if nm in who}}
             if k == 0 and _pic_file(shot.get("start")):
                 if cont:
                     sw.append("⚠️ A keep-rolling shot starts from the shot before: its start frame is not used. Make it a cut to use it.")
@@ -713,10 +814,22 @@ def build_plan(story: dict, max_s: float = 20.0) -> tuple:
                 # It changes with that shot: remade when its anchor is remade
                 seg["return_to"] = first_seg[setup]
                 seg["sig"] += "|return:" + plan_shots[first_seg[setup] - 1]["sig"]
+                diff = _mismatch(seen[first_seg[setup]], now)
+                if diff:
+                    sw.append(f"⚠️ Mismatched reference: this shot opens on shot {seen[first_seg[setup]]['shot']}'s first frame, "
+                              f"which shows {', '.join(diff)}. H3 copies that frame. Pin a start frame, or change the camera.")
+            elif k == 0 and not cont and now["wide"]:
+                # a wide cut keeps the room from the place's first wide shot (its frame shows who wore what there)
+                room = next((s for s in seen.values() if s["place"] == now["place"] and s["wide"]), None)
+                diff = _mismatch(room, now, people=False) if room and room["shot"] != i else []
+                if diff:
+                    sw.append(f"⚠️ Mismatched reference: the room comes from shot {room['shot']}, which shows {', '.join(diff)}. "
+                              "The clothes can carry over. Pin a start frame, or give this scene its own place card.")
             if k == len(parts) - 1 and _pic_file(shot.get("end")):  # the shot lands on its end frame (storyboard)
                 seg["end_frame"] = _pic_file(shot.get("end"))
             if k == 0 and not cont:
                 first_seg.setdefault(setup, seg["index"])
+            seen[seg["index"]] = now
             plan_shots.append(seg)
             segs.append({"index": seg["index"], "mode": seg["mode"], "seconds": round(frames / FPS, 2), "text": text})
         previews.append({"shot": i, "seconds": sec, "segments": segs, "warnings": list(dict.fromkeys(sw))})
@@ -732,14 +845,21 @@ def build_plan(story: dict, max_s: float = 20.0) -> tuple:
 def build_refs(story: dict):
     """The cast and place cards as the Reference Assembler's items, built the same way it builds them."""
     items = []
+    robe = wardrobe(story)
     for c in story.get("cast", []):
         nm = str(c.get("name") or "").strip()
         if not nm:
             continue
+        pictured = any(o["picture"] for o in robe.get(nm, []))
         f = _pic_file(c.get("picture"))
         if f:
+            look = str(c.get("look") or "")
             items.append({"id": f"{c.get('id')}_face", "kind": "image", "file": f, "role": "face", "name": nm,
-                          "note": str(c.get("look") or ""), "crop": (c.get("picture") or {}).get("crop")})
+                          "note": strip_clothes(look) if pictured else look, "crop": (c.get("picture") or {}).get("crop")})
+        wf = _pic_file(c.get("outfit_picture"))
+        if wf:  # the cast card's own outfit: outfit 1
+            items.append({"id": f"{c.get('id')}_dress", "kind": "image", "file": wf, "role": "outfit", "name": nm,
+                          "note": "outfit 1", "crop": (c.get("outfit_picture") or {}).get("crop")})
         v = _pic_file(c.get("voice"))
         if v:
             items.append({"id": f"{c.get('id')}_voice", "kind": "audio", "file": v, "role": "voice", "name": nm,
@@ -749,7 +869,7 @@ def build_refs(story: dict):
         f = _pic_file(p.get("picture"))
         if f:
             items.append({"id": f"{p.get('id')}_room", "kind": "image", "file": f, "role": "view" if p.get("close_view") else "setting", "name": nm,
-                          "note": str(p.get("description") or "")})
+                          "note": str(p.get("description") or ""), "crop": (p.get("picture") or {}).get("crop")})
         for k, a in enumerate(p.get("anchors") or []):
             af = _pic_file(a)
             if af:
@@ -760,14 +880,15 @@ def build_refs(story: dict):
         f = _pic_file(o.get("picture"))
         who = str(o.get("who") or "").strip()
         if f and who in names:
+            label = next((x["label"] for x in robe.get(who, []) if x["card"] is o), "outfit")
             items.append({"id": f"{o.get('id')}_outfit", "kind": "image", "file": f, "role": "outfit", "name": who,
-                          "note": _one_clause(o.get("description") or o.get("name"))})
+                          "note": label, "crop": (o.get("picture") or {}).get("crop")})
     for r in story.get("props", []) or []:  # a shot gets a prop's picture when its text names the prop
         nm = str(r.get("name") or "").strip()
         f = _pic_file(r.get("picture"))
         if nm and f:
             items.append({"id": f"{r.get('id')}_prop", "kind": "image", "file": f, "role": "prop", "name": nm,
-                          "note": str(r.get("description") or "")})
+                          "note": str(r.get("description") or ""), "crop": (r.get("picture") or {}).get("crop")})
     for shot, place, v, f in cut_views(story):
         items.append({"id": f"{shot.get('id')}_view", "kind": "image", "file": f, "role": "view",
                       "name": _view_name(place, shot), "note": v["behind"] or str(place.get("description") or "")})
@@ -1052,6 +1173,34 @@ try:
             body = await request.json()
             res = save_project(_parse(body.get("story")), float(body.get("max_shot_seconds") or 20.0))
             return web.json_response({"project": res["plan"]["project"], "moved": res["moved"], "warnings": res["warnings"], "saved": res["saved"]})
+        except Exception as exc:
+            return web.json_response({"error": str(exc)}, status=400)
+
+    @PromptServer.instance.routes.post("/lc_h3/story/save_as")
+    async def _save_as_route(request):
+        """A variant: the whole project folder (made shots, takes, views) copied under a new name, then the story
+        saved there. The original is left as it was."""
+        try:
+            import asyncio
+
+            body = await request.json()
+            story = _parse(body.get("story"))
+            name = str(body.get("name") or "").strip()
+            if not name:
+                raise ValueError("Give the copy a name.")
+            src, dst = project_dir(story.get("project", "")), project_dir(name)
+            if os.path.normcase(os.path.abspath(src)) == os.path.normcase(os.path.abspath(dst)):
+                raise ValueError("That is this project's own name: pick a new one.")
+            if os.path.exists(dst):
+                raise ValueError(f'"{os.path.basename(dst)}" already exists: pick another name.')
+            if os.path.isdir(src):
+                await asyncio.get_running_loop().run_in_executor(None, shutil.copytree, src, dst)
+                movie = os.path.join(dst, f"{os.path.basename(src)}.mp4")  # the finished movie is named after its folder
+                if os.path.exists(movie):
+                    os.replace(movie, os.path.join(dst, f"{os.path.basename(dst)}.mp4"))
+            story["project"] = name
+            res = save_project(story, float(body.get("max_shot_seconds") or 20.0))
+            return web.json_response({"project": res["plan"]["project"], "saved": res["saved"], "copied": os.path.isdir(src)})
         except Exception as exc:
             return web.json_response({"error": str(exc)}, status=400)
 

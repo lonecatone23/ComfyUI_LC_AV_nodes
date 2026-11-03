@@ -130,7 +130,7 @@ Shows a progress bar per tile (also on the MiniMax Video VAE, which tiles itself
 
 ## H3 Long Video 🎬
 
-Minute-long MiniMax H3 videos made in short pieces, one shot at a time, on the same card that makes 5 s clips. **LC H3 Story 🎬** holds the cast, places and shots. **LC H3 Make 🎥** renders them and joins the movie. Example workflow: `LC H3 Story Workflow`.
+Minute-long MiniMax H3 videos made in short pieces, one shot at a time, on the same card that makes 5 s clips. **LC H3 Story 🎬** holds the cast, places and shots. **LC H3 Make 🎥** renders them and joins the movie. Example workflow: `LC H3 Showrunner V1.1`.
 
 **LC H3 Story (BETA) 🎬**
 - The whole movie on one node: **cast**, **places** and **shots**, each on its own card.

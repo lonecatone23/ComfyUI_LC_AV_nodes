@@ -41,7 +41,7 @@ from comfy_extras.nodes_audio import vae_decode_audio
 from comfy_extras.nodes_minimax_h3 import _empty_av_latent, _encode_ref_audio, _resize
 
 from .lc_av_media import audio_parts
-from .lc_h3_refs import REFS_TYPE, subset as _refs_subset
+from .lc_h3_refs import REFS_TYPE, frame_look, strip_clothes, subset as _refs_subset
 from .lc_save_video import _ffmpeg_bin, _write_wav, comfy_tags, metadata_args
 
 PLAN_TYPE = "LC_H3_PLAN"
@@ -1023,7 +1023,7 @@ _CLOTHES = re.compile(r"\b(sweater|jumper|blouse|shirt|t-shirt|tee|top|jacket|co
                       r"cardigan|jeans|trousers|pants|shorts|uniform|scarf|hat|cap|gown|robe|apron|overalls|tank)\b", re.I)
 
 
-def _unsay_looks(style: str, story: str, cast: dict) -> str:
+def _unsay_looks(style: str, story: str, cast: dict, tight: bool = False) -> str:
     """The Showrunner's look line describes everyone in words ("a man in his early forties with short dark hair ...").
     H3 follows the words far more than the picture, so the words have to describe the picture. When a face or full
     body picture has a note (its look: "early twenties, dark curls, clean-shaven") the note takes that person's place,
@@ -1038,23 +1038,44 @@ def _unsay_looks(style: str, story: str, cast: dict) -> str:
     out = []
     for part in head.split(";"):
         d = part.strip()
-        who = max(named, key=lambda n: difflib.SequenceMatcher(None, d.lower(), named[n][:len(d) + 10].lower()).ratio(), default=None)
+        label = re.match(r"([A-Z][\w' -]{0,30}?)\s*:", d)
+        if label:
+            # "Anika: a woman ..." is Anika; any other label ("Visual style: ...") is not a person. Matching it by
+            # likeness turned "Visual style" into a second Anika in every shot she was in (Coffee Date: a second
+            # character, framed for two)
+            if label.group(1) not in named:
+                out.append(d)
+                continue
+            who = label.group(1)
+        else:
+            who = max(named, key=lambda n: difflib.SequenceMatcher(None, d.lower(), named[n][:len(d) + 10].lower()).ratio(), default=None)
         r = cast.get(who) if who else None
         pics = (r or {}).get("face", []) + (r or {}).get("full body", [])
         look = next((p["note"].strip() for p in pics if str(p.get("note", "")).strip()), "")
         if not look:
             out.append(d)
             continue
+        look = re.sub(r"\.\s+", ", ", look).rstrip(". ")  # one clause: "curvy body. wearing ..." read as a new sentence
         wear = []
-        if not (r.get("full body") or r.get("outfit")):
+        if r.get("outfit"):
+            # an outfit picture rides along: its label ("wearing outfit 1", "wearing the red dress") stays, and no other
+            # clothing words (they beat the picture). The plan puts the label last
+            look = strip_clothes(look)
+            label = re.findall(r"\bwearing ([^,;.]+)", d)
+            wear = [label[-1].strip()] if label else []
+        elif not (r.get("full body") or _CLOTHES.search(look)):  # the note names the clothes already
             wear = [w.strip() for w in re.split(r",|\band\b|\bwith\b|\bwearing\b|\bin\b(?=\s+an?\b)", d) if _CLOTHES.search(w)]
+        if tight:  # a close-up or medium shot: the clothes that can't be in frame stay out
+            look = frame_look(look)
+            wear = [w for w in wear if frame_look(w)]
         out.append(f"{who}: {look}" + (", wearing " + " and ".join(wear) if wear else ""))
     if not out:
         return rest
     return "; ".join(out) + sep + rest
 
 
-def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = None, people: int = 1, auds: list | None = None, story: str = "") -> str:
+def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = None, people: int = 1, auds: list | None = None, story: str = "",
+                      tight: bool = False) -> str:
     """H3's trained reference layout for the Reference Assembler's pictures: one <Subject k> per named person (their
     face / full body pictures), and retention lines for each setting, prop and style picture. memory: "video" or
     "video_audio" when segment 1's memory clip rides along (no cast pictures in this shot), as <Video 1> / <Audio 1>."""
@@ -1076,7 +1097,7 @@ def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = 
     auds = [{**a, "n": a["n"] + shift} for a in (auds or [])]
     bundle = {"pictures": pics, "audios": auds}
     cast = _ref_people(bundle)
-    style = _unsay_looks(style, story, cast)
+    style = _unsay_looks(style, story, cast, tight)
     desc = (style + NL + NL + body).strip()
     people_pics = {n: r for n, r in cast.items() if r.get("face") or r.get("full body")}
     defs, kept, subjects = [], [], []
@@ -1089,7 +1110,7 @@ def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = 
         voice = [f"<Audio {a['n']}>" for a in r.get("voice", [])]
         defs.append(f"{subj} is {name}" + (f", the person shown in {join(look)}" if look else "")
                     + (f"; their voice is {join(voice)}" if voice else "") + ".")
-    kept += _ref_retention(bundle, subject_of)
+    kept += _ref_retention(bundle, subject_of, tight)
     if memory and not people_pics:
         subj = "<Subject 1> and <Subject 2>" if people > 1 else "<Subject 1>"
         subjects.append(subj)
@@ -1402,7 +1423,7 @@ class LCH3Segment:
             ref_kind = ("video_audio" if mem_clip[1] is not None else "video") if mem_clip is not None else "picture" if mem is not None else None
             if shot_refs:
                 prompt = _h3_sections_refs(style, action, shot_refs["pictures"], ref_kind if mem_clip is not None else None, cast,
-                                           shot_refs.get("audios"), plan.get("story", ""))
+                                           shot_refs.get("audios"), plan.get("story", ""), bool(shot.get("tight")))
             else:
                 prompt = _h3_sections(style, action, ref_kind, cast, focus if cast > 1 else None)
         elif shot_refs:

@@ -24,13 +24,15 @@ from PIL import Image
 
 import folder_paths
 
-from .lc_h3_story import (TIGHT, _framing, _names, _one_clause, _pic_abs, _pic_file, _place, _shot_view, _story_path,
+from .lc_h3_refs import frame_look, strip_clothes
+from .lc_h3_story import (TIGHT, wardrobe, _framing, _names, _one_clause, _pic_abs, _pic_file, _place, _shot_view, _story_path,
                            _view_path, _with_auto_views, _write_json)
 
-KINDS = ["cast card", "outfit", "place", "360 panorama", "prop"]
-SAVE_KINDS = ["from card", "cast card", "outfit", "place", "360 panorama", "prop", "shot start", "shot end"]
-SIZES = {"cast card": (1024, 1024), "outfit": (896, 1152), "place": (1344, 768), "360 panorama": (2048, 1024), "prop": (1024, 1024)}
-GREY_KINDS = {"cast card", "outfit", "prop"}  # cut out onto flat grey: a card's own background leaks into every shot it is in
+KINDS = ["cast card", "cast card + outfit", "cast outfit", "outfit", "place", "360 panorama", "prop"]
+SAVE_KINDS = ["from card", "cast card", "cast outfit", "outfit", "place", "360 panorama", "prop", "shot start", "shot end"]
+SIZES = {"cast card": (1024, 1024), "cast outfit": (896, 1152), "outfit": (896, 1152), "place": (1344, 768), "360 panorama": (2048, 1024),
+         "prop": (1024, 1024)}
+GREY_KINDS = {"cast card", "cast outfit", "outfit", "prop"}  # cut out onto flat grey: a card's own background leaks into every shot it is in
 
 
 def _kind(kind: str) -> str:
@@ -71,7 +73,17 @@ def card_prompt(story: dict, kind: str, name: str, style: str = "") -> tuple:
         o = _find(story.get("outfits", []), name)
         if not o:
             raise ValueError(f"[LC H3] No outfit card named '{name}'. Add it on the Story node first.")
+        # the description paints the picture in full detail; H3 only ever reads the card's simple name ("gym clothes")
         desc = str(o.get("description") or o.get("name") or "").strip().rstrip(".")
+        wearer = _find(story.get("cast", []), o.get("who")) if str(o.get("who") or "").strip() else None
+        if wearer:
+            # on the person, head to toe: a chest-up picture left the rest to H3, and it put back the old skirt and boots
+            # (2026-11-02, Anika's outfit 2)
+            who = str(wearer.get("who") or "person").strip()
+            look = strip_clothes(str(wearer.get("look") or "")).strip().rstrip(".")
+            return _sentences(f"A full-length photo of a {who}{', ' + look if look else ''}, wearing {desc}. Standing, head to toe, "
+                              f"the whole outfit in view, facing the camera, soft even light, plain light grey "
+                              f"background.{extra} {SUFFIX}"), o.get("name", "")
         return _sentences(f"A fashion catalog photo of {desc} on an invisible mannequin, front view, the whole outfit in view, "
                           f"soft even light, plain light grey background.{extra} {SUFFIX}"), o.get("name", "")
     if kind == "prop":
@@ -81,16 +93,27 @@ def card_prompt(story: dict, kind: str, name: str, style: str = "") -> tuple:
         desc = str(r.get("description") or r.get("name") or "").strip().rstrip(".")
         return _sentences(f"A product photo of {desc}, alone in the middle of the frame, the whole object in view, soft even light, "
                           f"plain light grey background.{extra} {SUFFIX}"), r.get("name", "")
-    if kind == "cast card":
+    if kind == "cast outfit":
         c = _find(story.get("cast", []), name)
         if not c:
             raise ValueError(f"[LC H3] No cast card named '{name}'. Add it on the Story node first.")
         who = str(c.get("who") or "person").strip()
         look = str(c.get("look") or "").strip().rstrip(".")
-        # a headshot: the face for Identity Edit and almost no clothes to copy. A torso card's shirt went into every
-        # shot of whoever had no outfit (2026-11-01 test); a bare torso came out nude. Clothes come from outfit cards.
-        return _sentences(f"A front-facing headshot photo of a {who}{', ' + look if look else ''}. Head and shoulders, looking straight "
-                          f"at the camera with a calm, neutral expression, soft even light, plain light grey background.{extra} {SUFFIX}"), c.get("name", "")
+        wear = str(c.get("outfit_notes") or "").strip().rstrip(".")
+        # the card's 👗 outfit picture: the person head to toe in the outfit. Its words are only for this picture; H3
+        # never reads them (the picture carries the clothes)
+        return _sentences(f"A full-length photo of a {who}{', ' + look if look else ''}{', wearing ' + wear if wear else ''}. Standing, "
+                          f"head to toe, the whole outfit in view, facing the camera, soft even light, plain light grey background.{extra} {SUFFIX}"), c.get("name", "")
+    if kind == "cast card":
+        c = _find(story.get("cast", []), name)
+        if not c:
+            raise ValueError(f"[LC H3] No cast card named '{name}'. Add it on the Story node first.")
+        who = str(c.get("who") or "person").strip()
+        look = strip_clothes(str(c.get("look") or "")).strip().rstrip(".")
+        # a headshot, never clothes: the headshot's sweater beat every outfit picture (2026-11-02). Not "head and
+        # shoulders" or a torso: shoulders bring a top with them. Clothes come from outfit cards only.
+        return _sentences(f"A headshot of a {who}{' with ' + look if look else ''}. Looking straight at the camera with a calm, "
+                          f"neutral expression, soft even light, plain light grey background.{extra} {SUFFIX}"), c.get("name", "")
     p = _find(story.get("places", []), name)
     if not p:
         raise ValueError(f"[LC H3] No place card named '{name}'. Add it on the Story node first.")
@@ -109,7 +132,7 @@ class LCH3StoryCardPrompt:
             "required": {
                 "project_name": ("STRING", {"forceInput": True, "tooltip": "From LC H3 Story 🎬 (so the story is saved before it is read)."}),
                 "vae": ("VAE", {"tooltip": "The image model's VAE: the empty latent is made to fit it."}),
-                "kind": (KINDS, {"default": "cast card", "tooltip": "cast card: a front-facing headshot from the look, on plain grey (clothes come from outfit cards). outfit: the clothes on an invisible mannequin, on plain grey. place: the room, empty. 360 panorama: the room all the way round (2:1), for the 🌐 slot. prop: the object alone, on plain grey."}),
+                "kind": (KINDS, {"default": "cast card", "tooltip": "cast card: a front-facing headshot from the look, on plain grey. cast card + outfit: the headshot and the person head to toe in their outfit (from the card's outfit notes), one run: both slots of the cast card get filled. cast outfit: only the 👗 outfit picture. outfit: a change of clothes on an invisible mannequin, on plain grey. place: the room, empty. 360 panorama: the room all the way round (2:1), for the 🌐 slot. prop: the object alone, on plain grey."}),
                 "name": ("STRING", {"default": "", "tooltip": "The cast, outfit, place or prop card. Blank = the first one."}),
                 "width": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 16, "tooltip": "0 = the size this kind wants (cast card and prop 1024 x 1024, outfit 896 x 1152, place 1344 x 768, 360 2048 x 1024)."}),
                 "height": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 16, "tooltip": "0 = the size this kind wants."}),
@@ -119,6 +142,7 @@ class LCH3StoryCardPrompt:
 
     RETURN_TYPES = ("LATENT", "STRING", "STRING")
     RETURN_NAMES = ("latent", "prompt", "card")
+    OUTPUT_IS_LIST = (True, True, True)  # cast card + outfit: two pictures, everything after runs once for each
     OUTPUT_TOOLTIPS = ("An empty latent at the picture's size.", "The image prompt. Edit it on the way if you like.",
                        "Which card the picture is for: plug into LC H3 Save to Story.")
     FUNCTION = "build"
@@ -133,14 +157,18 @@ class LCH3StoryCardPrompt:
     def build(self, project_name, vae, kind, name, width=0, height=0, style=""):
         kind = _kind(kind)
         story = _read(project_name)
-        prompt, card_name = card_prompt(story, kind, name, style)
-        dw, dh = SIZES[kind]
-        w, h = max(16, (width or dw) // 16 * 16), max(16, (height or dh) // 16 * 16)  # a typed 8 would make an empty latent
         ch = getattr(vae, "latent_channels", 16)
         down = vae.spacial_compression_encode() if hasattr(vae, "spacial_compression_encode") else 8
-        latent = {"samples": torch.zeros([1, ch, h // down, w // down])}
-        card = json.dumps({"project": project_name, "kind": kind, "name": card_name}, ensure_ascii=False)
-        return {"ui": {"text": [prompt]}, "result": (latent, prompt, card)}
+        latents, prompts, cards = [], [], []
+        # cast card + outfit: the headshot (who she is) and the 👗 outfit picture (what she wears), one run
+        for k in (["cast card", "cast outfit"] if kind == "cast card + outfit" else [kind]):
+            prompt, card_name = card_prompt(story, k, name, style)
+            dw, dh = SIZES[k]
+            w, h = max(16, (width or dw) // 16 * 16), max(16, (height or dh) // 16 * 16)  # a typed 8 would make an empty latent
+            latents.append({"samples": torch.zeros([1, ch, h // down, w // down])})
+            prompts.append(prompt)
+            cards.append(json.dumps({"project": project_name, "kind": k, "name": card_name}, ensure_ascii=False))
+        return {"ui": {"text": ["\n\n".join(prompts)]}, "result": (latents, prompts, cards)}
 
 
 def save_to_story(img: Image.Image, project: str, kind: str, name: str) -> dict:
@@ -154,8 +182,8 @@ def save_to_story(img: Image.Image, project: str, kind: str, name: str) -> dict:
     sub = f"lc_h3_refs/{_safe(project)}"
     folder = os.path.join(folder_paths.get_input_directory(), sub)
     os.makedirs(folder, exist_ok=True)
-    tag = {"cast card": "cast", "outfit": "outfit", "place": "place", "360 panorama": "pano", "prop": "prop", "shot start": "start",
-           "shot end": "end"}[kind]
+    tag = {"cast card": "cast", "cast outfit": "dress", "outfit": "outfit", "place": "place", "360 panorama": "pano", "prop": "prop",
+           "shot start": "start", "shot end": "end"}[kind]
     base = f"{tag}_{_safe(name or 'card').replace(' ', '_')}"
     fname, k = f"{base}.png", 2
     while os.path.exists(os.path.join(folder, fname)):  # never over an older picture: takes made from it keep it
@@ -179,14 +207,14 @@ def save_to_story(img: Image.Image, project: str, kind: str, name: str) -> dict:
             items.append(card)
             made = True
         card["picture"] = pic
-    elif kind == "cast card":
+    elif kind in ("cast card", "cast outfit"):
         items = story.setdefault("cast", [])
         card = _find(items, name)
         if not card:
             card = {"id": f"c{int(time.time() * 1000) % 10**8}", "name": name or "New", "who": "person", "look": "", "picture": None, "voice": None}
             items.append(card)
             made = True
-        card["picture"] = pic
+        card["outfit_picture" if kind == "cast outfit" else "picture"] = pic
     elif kind in ("place", "360 panorama"):
         items = story.setdefault("places", [])
         card = _place(story, name) if name.strip() else (items[0] if items else None)
@@ -215,7 +243,7 @@ class LCH3SaveToStory:
         return {
             "required": {
                 "images": ("IMAGE", {"tooltip": "The picture (the first one of a batch)."}),
-                "kind": (SAVE_KINDS, {"default": "from card", "tooltip": "Which slot it goes in. from card: what the Card Prompt was making. cast card, outfit and prop pictures are cut out onto plain grey. shot start / end: the shot's 🖼 start or 🏁 end frame."}),
+                "kind": (SAVE_KINDS, {"default": "from card", "tooltip": "Which slot it goes in. from card: what the Card Prompt was making. cast card: the headshot. cast outfit: the cast card's 👗 outfit. Cast, outfit and prop pictures are cut out onto plain grey. shot start / end: the shot's 🖼 start or 🏁 end frame."}),
                 "name": ("STRING", {"default": "", "tooltip": "Blank = the card from the Card Prompt. A cast, outfit, place or prop name with no card yet makes a new card. For shot start / end: the shot number."}),
                 "project": ("STRING", {"default": "", "tooltip": "Blank = the project from the Card Prompt."}),
             },
@@ -252,7 +280,7 @@ class LCH3SaveToStory:
             raise ValueError("[LC H3] Save to Story: no project. Plug in LC H3 Story Card Prompt, or type the project name.")
         arr = (images[0].clamp(0, 1).cpu().numpy() * 255).astype(np.uint8)
         patch = save_to_story(Image.fromarray(arr), project, kind, name)
-        what = {"cast card": "picture", "outfit": "outfit picture", "place": "room picture", "360 panorama": "🌐 360", "prop": "prop picture", "shot start": "🖼 start frame",
+        what = {"cast card": "picture", "cast outfit": "👗 outfit picture", "outfit": "outfit picture", "place": "room picture", "360 panorama": "🌐 360", "prop": "prop picture", "shot start": "🖼 start frame",
                 "shot end": "🏁 end frame"}[kind]
         who = patch["card"].get("name") or f"shot {name}"
         msg = f"Saved as {who}'s {what}" + (" (new card)" if patch["new"] else "") + f": {patch['pic']['filename']}"
@@ -367,8 +395,16 @@ def _unset_props(shots: list, n: int, shot: dict) -> list:
             if w not in seen]
 
 
-def _load_rgb(path: str, w: int | None = None, h: int | None = None):
+def _load_rgb(path: str, w: int | None = None, h: int | None = None, crop=None):
     img = Image.open(path).convert("RGB")
+    if isinstance(crop, (list, tuple)) and len(crop) == 4:  # the card's ✂ crop (fractions x, y, w, h)
+        try:
+            x, y, cw, ch = (float(v) for v in crop)
+            box = (round(x * img.width), round(y * img.height), round((x + cw) * img.width), round((y + ch) * img.height))
+            if box[2] > box[0] and box[3] > box[1]:
+                img = img.crop(box)
+        except (TypeError, ValueError):
+            pass  # a broken crop: the whole picture
     if w and h:  # centre crop to the frame's shape, then fit
         sw, sh = img.size
         r = max(w / sw, h / sh)
@@ -378,19 +414,35 @@ def _load_rgb(path: str, w: int | None = None, h: int | None = None):
     return torch.from_numpy(np.asarray(img, dtype=np.float32) / 255.0)[None]
 
 
+def _load_fit(path: str, w: int, h: int, crop=None):
+    """The whole picture fitted inside w x h on plain grey (an outfit keeps its head and feet)."""
+    img = _load_rgb(path, crop=crop)[0].numpy()
+    pic = Image.fromarray((img * 255).astype(np.uint8))
+    pic.thumbnail((w, h), Image.LANCZOS)
+    canvas = Image.new("RGB", (w, h), (128, 128, 128))
+    canvas.paste(pic, ((w - pic.width) // 2, (h - pic.height) // 2))
+    return torch.from_numpy(np.asarray(canvas, dtype=np.float32) / 255.0)[None]
+
+
 def _worn_at(story: dict, n: int) -> dict:
-    """{person: outfit card} at shot n: a shot that names an outfit puts its person in it from there on (as the plan does)."""
-    names = set(_names(story))
-    outfits = [o for o in story.get("outfits", []) or [] if isinstance(o, dict) and str(o.get("name") or "").strip()
-               and str(o.get("who") or "").strip() in names]
-    worn = {}
+    """{person: outfit} at shot n, as the plan has it: the cast card's own outfit from the start, then a shot that picks
+    one (👗 dropdown) or names it puts it on from there."""
+    robe = wardrobe(story)
+    worn = {nm: items[0] for nm, items in robe.items() if items and items[0]["card"] is None}
     for k, shot in enumerate([x for x in story.get("shots", []) if isinstance(x, dict)], start=1):
         if k > n:
             break
         said = " ".join(str(shot.get(f) or "") for f in ("action", "after"))
-        for o in outfits:
-            if re.search(rf"\b{re.escape(o['name'].strip())}\b", said, re.I):
-                worn[o["who"].strip()] = o
+        for nm, items in robe.items():
+            for o in items:
+                named = o["card"] and re.search(rf"\b{re.escape(o['card']['name'].strip())}\b", said, re.I)
+                labelled = re.search(rf"\b{re.escape(o['label'])}\b", said, re.I) and re.search(rf"\b{re.escape(nm)}\b", said, re.I)
+                if named or labelled:
+                    worn[nm] = o
+        for nm, oid in (shot.get("outfit") or {}).items():
+            o = next((o for o in robe.get(nm, []) if o["id"] == oid), None)
+            if o:
+                worn[nm] = o
     return worn
 
 
@@ -405,11 +457,22 @@ def shot_card(story: dict, shot_key: str, slot: str, width: int, height: int, st
         cast = [c for c in cast if c["name"].strip() == shot["subject"]] or cast
     worn = _worn_at(story, n)
 
+    tight = (shot.get("framing") or "") in TIGHT
+
     def look(c):
-        bits = [_one_clause(c.get("look"))] if _one_clause(c.get("look")) else []
+        # a tight frame leaves out the clothes that can't be in it: named anyway, they were drawn on extra people in
+        # the background (Coffee Date shot 3: two more women in Anika's skirt and boots)
         o = worn.get(c["name"].strip())
-        if o:  # the outfit the story is up to: the start frame is copied exactly, so it has to wear it already
-            bits.append("wearing " + _one_clause(o.get("description") or o.get("name")))
+        if o and o["picture"]:  # the outfit picture is on the cast sheet: no clothing words (they beat the picture)
+            own = strip_clothes(_one_clause(c.get("look")))
+            bits = ([own] if own else []) + ["wearing the outfit shown in the outfit picture"]
+        else:
+            own = frame_look(_one_clause(c.get("look")), tight)
+            bits = [own] if own else []
+            if o:  # the outfit the story is up to: the start frame is copied exactly, so it has to wear it already
+                worn_look = frame_look(o["notes"], tight)
+                if worn_look:
+                    bits.append("wearing " + worn_look)
         return f"{c['name'].strip()}, a {c.get('who') or 'person'}" + (", " + ", ".join(bits) if bits else "")
     cam, _focus = _framing(shot, names)
     desc = str((place or {}).get("description") or (place or {}).get("name") or "").strip().rstrip(".")
@@ -479,8 +542,13 @@ def shot_card(story: dict, shot_key: str, slot: str, width: int, height: int, st
     # left to right as the boxes stand, so a side-by-side sheet reads in the frame's order
     left = {str(b.get("name") or "").strip(): b["x"] + b["w"] / 2 for b in boxes}
     order = sorted(cast, key=lambda c: left.get(c["name"].strip(), 2.0))
-    faces = [_load_rgb(_pic_abs(c.get("picture")), 1024, 1024) for c in order
-             if _pic_file(c.get("picture")) and os.path.exists(_pic_abs(c.get("picture")))]
+    faces = []
+    for c in order:  # each person's headshot, then the outfit they wear in this shot (whole, on grey, not cut to a square)
+        if _pic_file(c.get("picture")) and os.path.exists(_pic_abs(c.get("picture"))):
+            faces.append(_load_rgb(_pic_abs(c.get("picture")), 1024, 1024, (c.get("picture") or {}).get("crop")))
+        o = worn.get(str(c.get("name") or "").strip())
+        if o and o["picture"] and os.path.exists(_pic_abs(o["picture"])):
+            faces.append(_load_fit(_pic_abs(o["picture"]), 1024, 1024, o["picture"].get("crop")))
     cast_img = torch.cat(faces) if faces else torch.zeros([1, 1024, 1024, 3])
     # one picture with everyone side by side; None (= not plugged) when nobody in the frame has a picture
     cast_sheet = torch.cat(faces, dim=2) if faces else None

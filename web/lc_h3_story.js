@@ -20,6 +20,13 @@ const CSS = `
 .lcst{font:12px Arial,sans-serif;color:#ddd;box-sizing:border-box;padding:8px;display:flex;flex-direction:column;gap:10px;background:#0a0a0a;min-height:100%}
 .lcst-part{border:1px solid #1a5a7a;border-radius:8px;background:#0f0f0f;overflow:hidden}
 .lcst-pb{padding:8px;display:flex;flex-direction:column;gap:6px}
+.lcst-part.min .lcst-pb{display:none}
+.lcst-part:not(.lcst-top) .lcst-h{cursor:pointer;user-select:none}
+.lcst-fold{width:10px;color:#9fd3ff}
+.lcst-menu{position:fixed;z-index:10001;min-width:200px;max-height:320px;overflow:auto;background:#1b1f24;border:1px solid #3a4250;border-radius:6px;box-shadow:0 10px 30px #0009;padding:4px;font:12px Arial,sans-serif;color:#ddd;display:flex;flex-direction:column;gap:4px}
+.lcst-menu .it{padding:5px 8px;border-radius:4px;cursor:pointer}
+.lcst-menu .it:hover{background:#2b3542}
+.lcst-menu .it.on{color:#eb4}
 .lcst-top{padding:8px;display:flex;flex-direction:column;gap:6px;background:linear-gradient(180deg,#10232c,#0f0f0f)}
 .lcst *{box-sizing:border-box}
 .lcst-h{font-weight:700;font-size:13px;color:#fff;display:flex;align-items:center;gap:6px;padding:6px 10px;background:linear-gradient(90deg,#1a5a7a,#123f56 70%,#0f0f0f);letter-spacing:.3px}
@@ -48,6 +55,18 @@ const CSS = `
 .lcst-slot.drop{border-color:#eb4;background-color:#3a3220}
 .lcst-slot .x{position:absolute;top:1px;right:1px;background:#000a;border:none;color:#ddd;border-radius:3px;cursor:pointer;font-size:11px;padding:0 4px;display:none}
 .lcst-slot:hover .x{display:block}
+.lcst-slot .x.cr{right:auto;left:1px}
+.lcst-crop{position:fixed;inset:5% 8%;background:#202020;border:1px solid #555;border-radius:8px;z-index:10000;display:flex;flex-direction:column;gap:8px;padding:8px;font:12px Arial,sans-serif;color:#ddd;box-shadow:0 10px 40px #000}
+.lcst-crop .on{background:#3a3220;border-color:#eb4;color:#eb4}
+.lcst-crop-stage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+.lcst-crop-wrap{position:relative;display:inline-block;line-height:0}
+.lcst-crop-wrap img{max-width:80vw;max-height:76vh;display:block;user-select:none}
+.lcst-crop-box{position:absolute;box-shadow:0 0 0 9999px #000a;border:1px solid #eb4;cursor:move;touch-action:none}
+.lcst-crop-box i{position:absolute;width:12px;height:12px;background:#eb4;border-radius:2px;margin:-6px 0 0 -6px}
+.lcst-crop-box i[data-h=nw]{left:0;top:0;cursor:nwse-resize}.lcst-crop-box i[data-h=n]{left:50%;top:0;cursor:ns-resize}
+.lcst-crop-box i[data-h=ne]{left:100%;top:0;cursor:nesw-resize}.lcst-crop-box i[data-h=e]{left:100%;top:50%;cursor:ew-resize}
+.lcst-crop-box i[data-h=se]{left:100%;top:100%;cursor:nwse-resize}.lcst-crop-box i[data-h=s]{left:50%;top:100%;cursor:ns-resize}
+.lcst-crop-box i[data-h=sw]{left:0;top:100%;cursor:nesw-resize}.lcst-crop-box i[data-h=w]{left:0;top:50%;cursor:ew-resize}
 .lcst-anch{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
 .lcst-anch .lcst-slot{width:52px;height:52px;flex-basis:52px}
 .lcst-tip{font-size:11px;color:#8a9aa2}
@@ -159,6 +178,17 @@ function fit(node) {
     if (grew && node.size[1] < want - 0.5) node.setSize([Math.max(node.size[0], MIN_W), want]);
     node.setDirtyCanvas?.(true, true);
   });
+}
+
+/** A section folded or opened: the node's bottom edge moves by exactly the height the panel lost or gained, so
+ * opening it again gives back what folding took. */
+function shrink(node, before) {
+  const inner = node.__lcst?.inner;
+  if (!inner || !before) return;
+  const delta = inner.offsetHeight - before;
+  node.__lcstPrev = height(node);
+  node.setSize([node.size[0], Math.max(200, node.size[1] + delta)]);
+  node.setDirtyCanvas?.(true, true);
 }
 
 function status(node, text, err, quiet) {
@@ -383,8 +413,139 @@ function wireSlot(node, el, onPick, libCat = "") {
 
 // a storyboard slot (shot start / end): ↻ empties it and the next LC H3 Shot Card run (shot blank) makes it again
 const REDO = `<button class="x" data-clr title="Redo: empties this slot. The next LC H3 Shot Card run (shot left blank) makes it again; or drop in your own picture.">↻</button>`;
-const slotHTML = (pic, attrs, label) =>
-  `<div class="lcst-slot" ${attrs} style="${pic?.filename ? `background-image:url('${viewURL(pic)}&preview=webp;70')` : ""}" title="${esc(pic?.filename ? `${pic.filename}\nClick to change, or drop a picture here` : "Click to pick a picture, or drop one here")}">${pic?.filename ? `<button class="x" data-clr>×</button>` : esc(label)}</div>`;
+// a card picture's crop (fractions x, y, w, h) shown in the slot: the cropped part fills it
+const cropCSS = (c) => {
+  if (!Array.isArray(c) || c.length !== 4) return "";
+  const [x, y, w, h] = c.map(Number);
+  if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) return "";
+  const pos = (o, s) => (s >= 1 ? 0 : (o / (1 - s)) * 100);
+  return `background-size:${100 / w}% ${100 / h}%;background-position:${pos(x, w)}% ${pos(y, h)}%;`;
+};
+const slotHTML = (pic, attrs, label, crop = false) =>
+  `<div class="lcst-slot" ${attrs} style="${pic?.filename ? `background-image:url('${viewURL(pic)}&preview=webp;70');${cropCSS(pic.crop)}` : ""}" title="${esc(pic?.filename ? `${pic.filename}\nClick to change, or drop a picture here` : "Click to pick a picture, or drop one here")}">${pic?.filename ? `<button class="x" data-clr>×</button>${crop ? `<button class="x cr" data-crop title="Crop: what of this picture the card uses (a head-and-shoulders face out of a full-length photo, just the coat of an outfit)">✂</button>` : ""}` : esc(label)}</div>`;
+
+// ------------------------------------------------------------------ the wardrobe
+// {person: [{id, label, card, pic}]}, the same as the server: the cast card's own 👗 outfit is outfit 1, then the person's
+// outfit cards in order. An outfit card's label is its own name ("the red dress"): a name that agrees with the picture
+// held it 8 of 8, "outfit 2" 4 of 8 (the headshot's clothes won).
+function robeOf(d) {
+  const out = {};
+  for (const c of d.cast || []) {
+    const nm = String(c.name || "").trim();
+    if (!nm) continue;
+    out[nm] = c.outfit_picture?.filename ? [{ id: `${c.id}_dress`, label: "outfit 1", card: null, pic: c.outfit_picture }] : [];
+  }
+  for (const o of d.outfits || []) {
+    const who = String(o.who || "").trim();
+    if (!String(o.name || "").trim() || !out[who]) continue;
+    const name = String(o.name).trim().replace(/^(the|a|an)\s+/i, "").replace(/\.$/, "");
+    out[who].push({ id: `${o.id}_outfit`, label: name ? `the ${name}` : `outfit ${out[who].length + 1}`, card: o, pic: o.picture?.filename ? o.picture : null });
+  }
+  return out;
+}
+
+// ------------------------------------------------------------------ ✂ crop a card picture
+// The box, its 8 handles, the minimum size and the aspect lock work like LC Image Crop (LC123). The crop is saved on
+// the picture as fractions [x, y, w, h]; the server crops every picture it sends (H3 references, the Shot Card).
+const CROP_ASPECTS = { free: 0, "1:1": 1, "4:5": 4 / 5, "3:4": 3 / 4, "16:9": 16 / 9 };
+const CROP_MIN = 0.04;
+
+function openCrop(pic, onDone) {
+  document.querySelector(".lcst-crop")?.remove();
+  const box = document.createElement("div");
+  box.className = "lcst-crop";
+  box.innerHTML = `<div class="lcst-row"><b style="color:#eb4">✂ Crop</b><span class="lcst-tip" style="flex:1">Drag the box or its corners. The card uses only what is inside.</span>
+      ${Object.keys(CROP_ASPECTS).map((k) => `<button class="lcst-b" data-ar="${k}">${k}</button>`).join("")}
+      <button class="lcst-b" data-cr-reset title="The whole picture">Reset</button><button class="lcst-b pri" data-cr-ok>Save</button><button class="lcst-b" data-cr-x>✕</button></div>
+    <div class="lcst-crop-stage"><div class="lcst-crop-wrap"><img draggable="false"><div class="lcst-crop-box">${["nw", "n", "ne", "e", "se", "s", "sw", "w"].map((h) => `<i data-h="${h}"></i>`).join("")}</div></div></div>`;
+  document.body.appendChild(box);
+  const img = box.querySelector("img");
+  const frame = box.querySelector(".lcst-crop-box");
+  const ok = (v) => Array.isArray(v) && v.length === 4 && v.every((x) => Number.isFinite(Number(x))) && Number(v[2]) > 0 && Number(v[3]) > 0;
+  let c = ok(pic.crop) ? pic.crop.map(Number) : [0, 0, 1, 1];
+  let ar = 0; // width / height of the crop in pixels, 0 = free
+  const draw = () => {
+    const [x, y, w, h] = c;
+    Object.assign(frame.style, { left: `${x * 100}%`, top: `${y * 100}%`, width: `${w * 100}%`, height: `${h * 100}%` });
+    box.querySelectorAll("[data-ar]").forEach((b) => b.classList.toggle("on", CROP_ASPECTS[b.dataset.ar] === ar));
+  };
+  const clamp = () => {
+    let [x, y, w, h] = c;
+    w = Math.min(1, Math.max(CROP_MIN, w));
+    h = Math.min(1, Math.max(CROP_MIN, h));
+    x = Math.min(1 - w, Math.max(0, x));
+    y = Math.min(1 - h, Math.max(0, y));
+    c = [x, y, w, h];
+  };
+  // the picture's own shape turns a pixel aspect into fractions
+  const fitAspect = (anchorBottom, anchorRight) => {
+    if (!ar || !img.naturalWidth) return;
+    const pa = img.naturalWidth / img.naturalHeight;
+    let [x, y, w, h] = c;
+    const want = (w * pa) / ar; // the height that gives the aspect at this width
+    if (want <= 1) {
+      if (anchorBottom) y += h - want;
+      h = want;
+    } else {
+      const nw = (h * ar) / pa;
+      if (anchorRight) x += w - nw;
+      w = nw;
+    }
+    c = [x, y, w, h];
+    clamp();
+  };
+  const close = () => box.remove();
+  img.onload = draw;
+  img.src = viewURL(pic);
+  let drag = null;
+  frame.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    frame.setPointerCapture(e.pointerId);
+    drag = { h: e.target.dataset.h || "move", sx: e.clientX, sy: e.clientY, c0: [...c] };
+  });
+  frame.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const r = img.getBoundingClientRect();
+    if (!r.width || !r.height) return; // not laid out yet: no size to measure the drag against
+    const dx = (e.clientX - drag.sx) / r.width, dy = (e.clientY - drag.sy) / r.height;
+    let [x, y, w, h] = drag.c0;
+    const hd = drag.h;
+    if (hd === "move") {
+      x += dx;
+      y += dy;
+    } else {
+      if (hd.includes("w")) { x += dx; w -= dx; }
+      if (hd.includes("e")) w += dx;
+      if (hd.includes("n")) { y += dy; h -= dy; }
+      if (hd.includes("s")) h += dy;
+    }
+    if (w < CROP_MIN) { if (hd.includes("w")) x -= CROP_MIN - w; w = CROP_MIN; }
+    if (h < CROP_MIN) { if (hd.includes("n")) y -= CROP_MIN - h; h = CROP_MIN; }
+    c = [x, y, w, h];
+    clamp();
+    if (hd !== "move") fitAspect(hd.includes("n"), hd.includes("w"));
+    draw();
+  });
+  frame.addEventListener("pointerup", () => (drag = null));
+  box.querySelectorAll("[data-ar]").forEach((b) => (b.onclick = () => {
+    ar = CROP_ASPECTS[b.dataset.ar];
+    fitAspect(false, false);
+    draw();
+  }));
+  box.querySelector("[data-cr-reset]").onclick = () => {
+    c = [0, 0, 1, 1];
+    ar = 0;
+    draw();
+  };
+  box.querySelector("[data-cr-ok]").onclick = () => {
+    if (!ok(c)) return close(); // never save a broken crop
+    const whole = c.every((v, k) => Math.abs(v - [0, 0, 1, 1][k]) < 1e-3);
+    onDone(whole ? null : c.map((v) => Math.round(v * 10000) / 10000));
+    close();
+  };
+  box.querySelector("[data-cr-x]").onclick = close;
+  box.addEventListener("keydown", (e) => (e.stopPropagation(), e.key === "Escape" && close()), true);
+}
 
 // ------------------------------------------------------------------ 360 angle per shot
 // Same projection as LC 360 View (MaskMaker) and the server's cut_view, so what you aim is what H3 gets.
@@ -817,7 +978,11 @@ function paintBoard(node) {
     const changed = segs.some((g) => g.changed);
     const locked = segs.some((g) => g.locked);
     const thumb = segs.find((g) => g.thumb)?.thumb;
-    const st = locked ? "🔒 locked" : changed ? "✏️ changed since made" : made ? `✅ made${segs.length > 1 ? ` · ${segs.length} parts` : ""}` : some ? "◐ part made" : "⬜ not made";
+    // ↻ queued it: queued until its first segment has a take newer than the click
+    const qd = node.__lcst.queued?.[s.id];
+    if (qd && (segs[0]?.video?.t || 0) >= qd) delete node.__lcst.queued[s.id];
+    const queued = !!node.__lcst.queued?.[s.id];
+    const st = queued ? "⏳ queued" : locked ? "🔒 locked" : changed ? "✏️ changed since made" : made ? `✅ made${segs.length > 1 ? ` · ${segs.length} parts` : ""}` : some ? "◐ part made" : "⬜ not made";
     return `<div class="lcst-tile${changed ? " chg" : ""}${locked ? " lck" : ""}">
       <div class="th" data-bplay="${i}" style="${thumb ? `background-image:url('${fileURL(thumb)}')` : ""}" title="${some ? "▶ Play" : "Not made yet"}">
         <b>${i + 1}</b>${thumb ? "" : "not made"}<span class="st">${st}</span></div>
@@ -921,7 +1086,10 @@ async function makeShot(node, i) {
   set("make", "redo");
   status(node, `↻ Making shot ${i + 1} (segment ${first})…`);
   try {
+    const at = Math.floor(Date.now() / 1000);
     await app.queuePrompt(0, 1);
+    node.__lcst.queued = { ...(node.__lcst.queued || {}), [d.shots[i].id]: at };
+    paintBoard(node);
   } catch (e) {
     status(node, e.message, true);
   } finally {
@@ -996,14 +1164,70 @@ function openWriter(node) {
 }
 
 // ------------------------------------------------------------------ project row
-async function loadProject(node) {
+/** A small dropdown under a button: closes on a click outside or Escape. */
+function openMenu(anchor, html) {
+  document.querySelector(".lcst-menu")?.remove();
+  const menu = document.createElement("div");
+  menu.className = "lcst-menu";
+  menu.innerHTML = html;
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  menu.style.left = Math.min(r.left, innerWidth - menu.offsetWidth - 8) + "px";
+  menu.style.top = Math.min(r.bottom + 4, innerHeight - menu.offsetHeight - 8) + "px";
+  const close = () => {
+    menu.remove();
+    document.removeEventListener("pointerdown", outside, true);
+  };
+  const outside = (e) => !menu.contains(e.target) && close();
+  setTimeout(() => document.addEventListener("pointerdown", outside, true), 0);
+  menu.addEventListener("keydown", (e) => (e.stopPropagation(), e.key === "Escape" && close()), true);
+  return { menu, close };
+}
+
+/** 📂 Load: the saved projects, newest first, as a dropdown. */
+async function loadProject(node, anchor) {
   let list = [];
   try {
     list = (await api.fetchApi(`/lc_h3/story/projects?t=${Date.now()}`).then((r) => r.json())).projects || [];
   } catch (_) {}
   const cur = getData(node).project;
-  const name = window.prompt(`Load which project?\n\n${list.slice(0, 25).join("\n")}`, cur);
-  if (!name) return;
+  const { menu, close } = openMenu(anchor, list.length
+    ? list.map((n) => `<div class="it${n === cur ? " on" : ""}" data-n="${esc(n)}">${esc(n)}</div>`).join("")
+    : `<span class="lcst-tip">No saved projects yet.</span>`);
+  menu.querySelectorAll("[data-n]").forEach((it) => (it.onclick = () => (close(), openProject(node, it.dataset.n))));
+}
+
+/** 💾 Save as: a variant of the project under a new name (its made shots come along); this node switches to it. */
+function saveProjectAs(node, anchor) {
+  const d = getData(node);
+  const { menu, close } = openMenu(anchor, `<div class="lcst-row"><input data-as value="${esc(`${d.project || "project"} v2`)}" style="width:190px" placeholder="new project name">
+    <button class="lcst-b pri" data-asgo>Save</button></div>
+    <div class="lcst-tip">Copies the whole project (made shots too). The original stays as it is.</div>`);
+  const input = menu.querySelector("[data-as]");
+  input.focus();
+  input.select();
+  const go = async () => {
+    const name = input.value.trim();
+    if (!name) return;
+    close();
+    status(node, `Saving a copy as "${name}"…`);
+    try {
+      const j = await api.fetchApi("/lc_h3/story/save_as", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ story: d, name, max_shot_seconds: widget(node, "max_shot_seconds")?.value || 20 }) }).then((r) => r.json());
+      if (j.error) throw new Error(j.error);
+      setData(node, { ...d, project: j.project }, true);
+      markSaved(node, j.saved);
+      status(node, `Saved as "${j.project}"${j.copied ? " (made shots copied)" : ""}. You're working on the copy now.`);
+      refreshBoard(node);
+    } catch (e) {
+      status(node, e.message, true);
+    }
+  };
+  menu.querySelector("[data-asgo]").onclick = go;
+  input.addEventListener("keydown", (e) => e.key === "Enter" && go());
+}
+
+async function openProject(node, name) {
   try {
     const j = await api.fetchApi(`/lc_h3/story/load?project=${encodeURIComponent(name)}&t=${Date.now()}`).then((r) => r.json());
     if (j.error) throw new Error(j.error);
@@ -1048,6 +1272,7 @@ function render(node) {
       <input data-k="project" value="${esc(d.project)}" placeholder="project name" title="The project folder: output/LC_H3/<name>/" style="width:170px">
       <button class="lcst-b" data-load title="Open a saved project (an old Shot List project is imported)">📂 Load</button>
       <button class="lcst-b" data-save title="Save story.json and plan.json now (Run saves too)">💾 Save</button>
+      <button class="lcst-b" data-saveas title="Save a variant under a new name: the made shots come along, the original stays as it is">💾 Save as</button>
       <span class="lcst-status" data-status></span>
     </div>
     <div class="lcst-row">
@@ -1059,9 +1284,12 @@ function render(node) {
     <input data-k="look" value="${esc(d.look)}" placeholder="The look of the whole movie: cinematic, soft natural light, shallow depth of field">
     </div></section>
 
-    <section class="lcst-part"><div class="lcst-h"><span>🎭 Cast</span><span class="lcst-tip" style="flex:0;white-space:nowrap;font-weight:400">the look words are what H3 follows most</span></div><div class="lcst-pb">
+    <section class="lcst-part"><div class="lcst-h"><span>🎭 Cast</span><span class="lcst-tip" style="flex:0;white-space:nowrap;font-weight:400">headshot = who they are, 👗 outfit = what they wear</span></div><div class="lcst-pb">
     ${d.cast.map((c, i) => `<div class="lcst-card lcst-pc">
-        ${slotHTML(c.picture, `data-pic="c|${i}"`, "face picture")}
+        <div class="lcst-col" style="flex:0 0 84px">
+          ${slotHTML(c.picture, `data-pic="c|${i}" title="Headshot: the face and hair. H3 takes who they are from it."`, "🙂 headshot", true)}
+          ${slotHTML(c.outfit_picture, `data-pic="w|${i}" title="Outfit 1: the whole outfit, head to toe (✂ to crop). H3 takes the clothes from this picture, so the look words stay on the face."`, "👗 outfit", true)}
+        </div>
         <div class="lcst-col">
           <div class="lcst-row">
             <input data-c="${i}" data-f="name" value="${esc(c.name)}" placeholder="Name" style="width:110px">
@@ -1072,21 +1300,22 @@ function render(node) {
             <button class="lcst-b" data-copy="${i}" title="Copy name + look, to paste into any image workflow">📋</button>
             <button class="lcst-b" data-del="cast|${i}" title="Remove this person">${TRASH}</button>
           </div>
-          <textarea rows="2" data-c="${i}" data-f="look" placeholder="in her twenties, long blonde hair, white sweater, black pleated skirt">${esc(c.look)}</textarea>
+          <textarea rows="2" data-c="${i}" data-f="look" placeholder="mid twenties, a soft oval face, green eyes, light freckles, fair skin, long wavy blonde hair" title="Describe the head and hair in detail, then stop: age, face, eyes, freckles, skin, hair. Never clothes. The headshot is made from this, and clothes in a headshot beat every outfit picture.">${esc(c.look)}</textarea>
+          <input data-c="${i}" data-f="outfit_notes" value="${esc(c.outfit_notes)}" placeholder="👗 outfit, in full detail: a cream cable knit sweater, a black pleated skirt, knee-high black boots" title="Describe the whole outfit head to toe in detail. Only the 👗 outfit picture is made from this (LC H3 Story Card Prompt: cast card + outfit). H3 never reads these words: it sees the picture.">
         </div></div>`).join("")}
     <button class="lcst-b lcst-add" data-add="cast">➕ Add person</button>
     </div></section>
 
-    <section class="lcst-part"><div class="lcst-h"><span>👗 Outfits</span><span class="lcst-tip" style="flex:0;white-space:nowrap;font-weight:400">a shot that names one puts them in it from then on</span></div><div class="lcst-pb">
+    <section class="lcst-part"><div class="lcst-h"><span>👗 Outfits</span><span class="lcst-tip" style="flex:0;white-space:nowrap;font-weight:400">a change of clothes: pick it on a shot (👗), or name it in the action</span></div><div class="lcst-pb">
     ${d.outfits.map((o, i) => `<div class="lcst-card lcst-pc">
-        ${slotHTML(o.picture, `data-pic="o|${i}"`, "outfit picture")}
+        ${slotHTML(o.picture, `data-pic="o|${i}"`, "outfit picture", true)}
         <div class="lcst-col">
           <div class="lcst-row">
-            <input data-o="${i}" data-f="name" value="${esc(o.name)}" placeholder="the red dress" style="flex:1" title="Name it in a shot's action with these exact words: from that shot on, they wear it">
+            <input data-o="${i}" data-f="name" value="${esc(o.name)}" placeholder="a simple name: gym clothes" style="flex:1" title="A simple name: red cocktail dress, yoga outfit, gym clothes. Never a list of pieces (shoes and pants pull close-ups wide). With a picture, this name is all H3 reads; the picture carries the rest. Pick it on a shot with 👗, or name it in the action.">
             <select data-o="${i}" data-f="who" title="Who wears it">${opts(["", ...names], names.includes(o.who) ? o.who : "", { "": "who wears it…" })}</select>
             <button class="lcst-b" data-del="outfits|${i}" title="Remove this outfit">${TRASH}</button>
           </div>
-          <textarea rows="2" data-o="${i}" data-f="description" placeholder="what it is: a red silk slip dress with thin straps">${esc(o.description)}</textarea>
+          <textarea rows="2" data-o="${i}" data-f="description" placeholder="in full detail, head to toe: an off the shoulder grey cutoff sweatshirt, high waisted black leggings, white gym shoes" title="Describe the whole outfit head to toe in detail. The outfit picture is made from this. With a picture, H3 never reads these words; with no picture, they are all there is.">${esc(o.description)}</textarea>
         </div></div>`).join("")}
     <button class="lcst-b lcst-add" data-add="outfits">➕ Add outfit</button>
     </div></section>
@@ -1094,7 +1323,7 @@ function render(node) {
     <section class="lcst-part"><div class="lcst-h"><span>📍 Places</span></div><div class="lcst-pb">
     ${d.places.map((p, i) => `<div class="lcst-card lcst-pc">
         <div class="lcst-col" style="flex:0 0 84px">
-          ${slotHTML(p.picture, `data-pic="p|${i}"`, "room picture")}
+          ${slotHTML(p.picture, `data-pic="p|${i}"`, "room picture", true)}
           ${slotHTML(p.panorama, `data-pano="${i}" title="A 360 panorama of this place (2:1, e.g. 2048 x 1024). Each shot then aims its own camera angle in it."`, "🌐 360").replace('class="lcst-slot"', 'class="lcst-slot pano"')}
         </div>
         <div class="lcst-col">
@@ -1121,7 +1350,7 @@ function render(node) {
 
     <section class="lcst-part"><div class="lcst-h"><span>👜 Props</span><span class="lcst-tip" style="flex:0;white-space:nowrap;font-weight:400">a shot gets the picture when it names the prop</span></div><div class="lcst-pb">
     ${d.props.map((r, i) => `<div class="lcst-card lcst-pc">
-        ${slotHTML(r.picture, `data-pic="r|${i}"`, "prop picture")}
+        ${slotHTML(r.picture, `data-pic="r|${i}"`, "prop picture", true)}
         <div class="lcst-col">
           <div class="lcst-row">
             <input data-r="${i}" data-f="name" value="${esc(r.name)}" placeholder="the red umbrella" style="flex:1" title="Name it in a shot's action with these exact words and the shot gets its picture">
@@ -1152,6 +1381,11 @@ function render(node) {
           <button class="lcst-b" data-del="shots|${i}" title="Remove this shot">${TRASH}</button>
         </div>
         <textarea rows="2" data-s="${i}" data-f="action" placeholder="What happens (before the line). Or write timed beats: At 0.00 seconds, ... At 2.40 seconds, ...">${esc(s.action)}</textarea>
+        ${Object.entries(robeOf(d)).filter(([, items]) => items.length > 1 || items.some((x) => x.card)).length ? `<div class="lcst-row">
+          ${Object.entries(robeOf(d)).filter(([, items]) => items.length > 1 || items.some((x) => x.card)).map(([nm, items]) =>
+            `<span class="lcst-tip">👗 ${esc(nm)}</span><select data-so="${i}|${esc(nm)}" title="${esc(nm)}'s outfit from this shot on (blank = as before)">
+              <option value="">as before</option>${items.map((x) => `<option value="${esc(x.id)}"${s.outfit?.[nm] === x.id ? " selected" : ""}>${esc(x.label)}${x.card ? "" : " · cast card"}${x.pic ? "" : " (no picture)"}</option>`).join("")}</select>`).join("")}
+        </div>` : ""}
         <div class="lcst-row">
           <select data-s="${i}" data-f="speaker" style="width:100px" title="Who says the line">${opts(["", ...names], s.speaker || "", { "": "no line" })}</select>
           <input data-s="${i}" data-f="line" value="${esc(s.line)}" placeholder="The line, word for word" style="flex:1">
@@ -1223,9 +1457,11 @@ function render(node) {
 
   q("[data-pic]").forEach((el) => {
     const [kind, i] = el.dataset.pic.split("|");
-    const item = kind === "c" ? d.cast[Number(i)] : kind === "o" ? d.outfits[Number(i)] : kind === "r" ? d.props[Number(i)] : d.places[Number(i)];
+    const item = kind === "c" || kind === "w" ? d.cast[Number(i)] : kind === "o" ? d.outfits[Number(i)] : kind === "r" ? d.props[Number(i)] : d.places[Number(i)];
+    const field = kind === "w" ? "outfit_picture" : "picture"; // w: the cast card's 👗 outfit
     wireSlot(node, el, async (pic, lib) => {
-      item.picture = kind === "p" ? pic : await onGrey(node, pic); // cast and props go on plain grey
+      item[field] = kind === "p" ? pic : await onGrey(node, pic); // cast, outfits and props go on plain grey
+      if (kind === "w") return save(true);
       if (lib) { // a library pick fills what the card doesn't say yet
         if (!String(item.name || "").trim()) item.name = lib.name || "";
         if (kind === "c" && !String(item.look || "").trim()) item.look = lib.text || "";
@@ -1236,10 +1472,28 @@ function render(node) {
     }, { c: "cast", o: "outfits", r: "props" }[kind] || "");
     el.querySelector("[data-clr]")?.addEventListener("click", (e) => {
       e.stopPropagation();
-      item.picture = null;
+      item[field] = null;
       save(true);
     });
+    el.querySelector("[data-crop]")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openCrop(item[field], (crop) => {
+        item[field] = { ...item[field] };
+        if (crop) item[field].crop = crop;
+        else delete item[field].crop;
+        save(true);
+      });
+    });
   });
+  q("[data-so]").forEach((el) => (el.onchange = () => {
+    const [i, nm] = [Number(el.dataset.so.split("|")[0]), el.dataset.so.slice(el.dataset.so.indexOf("|") + 1)];
+    const s = d.shots[i];
+    s.outfit = { ...(s.outfit || {}) };
+    if (el.value) s.outfit[nm] = el.value;
+    else delete s.outfit[nm];
+    if (!Object.keys(s.outfit).length) delete s.outfit;
+    save(true);
+  }));
   q("[data-anch]").forEach((el) => {
     const [i, k] = el.dataset.anch.split("|");
     const p = d.places[Number(i)];
@@ -1427,8 +1681,29 @@ function render(node) {
     const m = node.__lcst.board?.movie;
     if (m) openPlayer(node, [{ video: m }], null, 0, true);
   }));
-  q("[data-load]").forEach((b) => (b.onclick = () => loadProject(node)));
+  q("[data-load]").forEach((b) => (b.onclick = () => loadProject(node, b)));
   q("[data-save]").forEach((b) => (b.onclick = () => saveProject(node)));
+  q("[data-saveas]").forEach((b) => (b.onclick = () => saveProjectAs(node, b)));
+
+  // a click on a section's title bar folds it away (kept with the workflow); the bar's own buttons still work
+  const folded = new Set(node.properties?.lc_story_folded || []);
+  face.inner.querySelectorAll("section.lcst-part:not(.lcst-top)").forEach((sec) => {
+    const h = sec.querySelector(".lcst-h");
+    const key = (h?.querySelector("span")?.textContent || "").replace(/[^\p{L}\p{N} ]/gu, "").trim().toLowerCase();
+    if (!h || !key) return;
+    h.insertAdjacentHTML("afterbegin", `<span class="lcst-fold">${folded.has(key) ? "▸" : "▾"}</span>`);
+    sec.classList.toggle("min", folded.has(key));
+    h.onclick = (e) => {
+      if (e.target.closest("button,input,select")) return;
+      const set = new Set(node.properties?.lc_story_folded || []);
+      set.has(key) ? set.delete(key) : set.add(key);
+      node.properties = { ...(node.properties || {}), lc_story_folded: [...set] };
+      const before = face.inner.offsetHeight;
+      sec.classList.toggle("min", set.has(key));
+      h.querySelector(".lcst-fold").textContent = set.has(key) ? "▸" : "▾";
+      shrink(node, before);
+    };
+  });
 
   // keep typing where it was after a redraw
   if (fkey) {
@@ -1458,6 +1733,11 @@ app.registerExtension({
     api.addEventListener("execution_success", () => {
       for (const n of app.graph?._nodes || []) if (n.type === NODE && n.__lcst) refreshBoard(n);
     });
+    // a stopped or failed run made nothing: ⏳ queued goes back to what the shot was
+    for (const ev of ["execution_interrupted", "execution_error"])
+      api.addEventListener(ev, () => {
+        for (const n of app.graph?._nodes || []) if (n.type === NODE && n.__lcst?.queued) (n.__lcst.queued = {}), paintBoard(n);
+      });
     // LC H3 Save to Story put a picture on a card (story.json is saved already): the open Story node takes it too
     api.addEventListener("executed", (e) => {
       const p = e.detail?.output?.lc_story_card?.[0];

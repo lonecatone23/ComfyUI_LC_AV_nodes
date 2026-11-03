@@ -3,13 +3,15 @@ LC H3 Make (BETA, working name): the engine for LC H3 Story in one node. It buil
 samples it (the same Basic Guider + Basic Scheduler + Sampler Custom Advanced the workflows used) and saves it
 (LC H3 Segment Save: the takes, the tail the next shot starts from, the joined movie).
 
-The model, VAEs, size, steps, sampler and seed come in on one LC MiniMax H3 Pipe V2. make: all remaining chains
+The model, VAEs, size, steps and sampler come in on one LC MiniMax H3 Pipe V2; every shot gets a random seed (saved
+with its take). make: all remaining chains
 shot after shot like the Segment did (Stop ends it); the Story board's ↻ points it at one shot.
 """
 from __future__ import annotations
 
 import json
 import os
+import random
 
 import comfy.samplers
 from comfy_execution.graph import ExecutionBlocker
@@ -32,7 +34,8 @@ class LCH3Make:
             "required": {
                 "plan": (PLAN_TYPE, {"tooltip": "From LC H3 Story 🎬."}),
                 "pipe": (PIPE_TYPE_V2, {"tooltip": "LC MiniMax H3 Pipe V2 with the H3 model (fl2va_model), its text encoder, the video "
-                                                   "and audio VAEs, width / height, steps, sampler, scheduler and seed."}),
+                                                   "and audio VAEs, width / height, steps, sampler and scheduler. The seed is random "
+                                                   "for every shot and every redo (saved with the take)."}),
                 "make": opt["make"],
                 "index": req["index"],
                 "crf": ("INT", {"default": 16, "min": 0, "max": 40, "tooltip": "mp4 quality. Lower = better and bigger. 16 is close to lossless."}),
@@ -78,7 +81,7 @@ class LCH3Make:
         steps = int(p.get("total_steps") or 8)
         sampler_name = p.get("sampler_name") or "res_multistep"
         scheduler = p.get("scheduler") or "simple"
-        seed = int(p.get("seed") or 0)
+        seed = random.randrange(2 ** 63)  # every shot and every redo gets its own (saved with the take)
 
         # all remaining with every shot made: the shots edited since they were made are made again (Run = "make my
         # changes"), one after another; nothing edited: the finished movie is shown
