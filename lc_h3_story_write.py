@@ -38,7 +38,7 @@ Shape:
 Rules:
 - cast: every person who appears, with the names the pitch gives them (NAME above is only a placeholder). Make up a short first name only for someone the pitch does not name. "name" starts with a capital letter. "who" is one of {", ".join(WHO)}.
 - cast look: ONE clause, no full stops: age, hair, clothes (what they wear in the whole film). These words are what the video model follows for the person, so be concrete. Never write "detailed skin" or quality words.
-- places: every place a shot happens in. "name" starts with "the". "sound" is the ambience only (no music, no voices).
+- places: every place a shot happens in. "name" starts with "the". "sound" is only things you can hear: rain on the glass, footsteps, a door, cups clinking. Never write who speaks or does not speak, never "no voices", never music: naming speech makes the video model speak.
 - framing is one of: {", ".join(f for f in FRAMINGS if f != "custom")}.
 - move is one of: {", ".join(MOVES)}. Mostly "still".
 - subject is "everyone" or one cast name.

@@ -14,7 +14,7 @@ How to fill in the cards on **LC H3 Story** so MiniMax H3 makes the movie you me
 
 ## How H3 reads your cards
 
-You never write a prompt by hand. The Story node builds one per shot, and that text is **exactly** what H3 gets (open a shot's preview to read it):
+You never write a prompt by hand. The Story node builds one per shot, and that text is **exactly** what H3 gets (open a shot's **H3 prompt** to read it; **↻** refreshes it, **✎ Edit** lets you rewrite it):
 
 - **The cast line**: each person's name, who they are, their look, and "wearing <outfit>" when they're in one. Plus the movie's look.
 - **Place:** the place card's description.
@@ -77,7 +77,7 @@ An outfit card dresses one person from the shot that names it on. The cast line 
 ## 📍 Places
 
 - **description**: what is there, as things you could point at, with left and right: "a small French cafe with a marble counter on the left, big arched windows on the right, bentwood chairs, warm lamps".
-- **sound**: the room tone only: "soft cafe chatter, cups clinking". Ask for "people talking" and H3 makes up voices.
+- **sound**: sounds you can hear, nothing else: "rain on the glass, cups clinking, footsteps". Never write who speaks or "nobody speaks / no voices": naming speech makes H3 speak (tested 2026-11-03: the same silent shot with "nobody speaks except the quoted lines" in the sound talked in French and English on two seeds; without it, silence). "People talking" does the same.
 - **room picture**: **empty**. A person in the room picture shows up in the movie.
 - **🌐 360 panorama**: the whole room, horizon level, nobody in it. Make a few, keep the best. Then turn the place viewer to what your wide shot shows (**📷 the wide shot faces**) once.
     - Every close-up gets the right part of the room behind it, by itself: a close-up with no angle of its own gets the reverse of the person across from it.
@@ -138,6 +138,16 @@ An outfit card dresses one person from the shot that names it on. The cast line 
 
 ---
 
+## 🔇 Silent shots
+
+- A shot with no line is silent only if nothing in it mentions speech. The Story adds "Nobody speaks." itself: do not add your own.
+- The cast voice is sent only to shots with a line.
+- No mouth "slightly open" or "about to speak" wording.
+- Stop a shot before a person reaches someone they could greet: a walk-up to the counter invited speech.
+- If you hear a language you did not write, it is invented speech: look at the sound line first.
+
+---
+
 ## 🎥 Close-ups across a table
 
 - The camera words the Story writes for you: "faces the camera, eyes just past the lens to the left/right, toward the person across the table". The person on the left of the wide looks just right of the lens, and the other way round. That's what makes them look at each other across the cut.
@@ -183,6 +193,14 @@ An outfit card dresses one person from the shot that names it on. The cast line 
 - **The shot opens on your picture, then jumps to another room:** the inserted start frame isn't the shot's place. Make it its own place.
 - **Too many pictures in one shot (⚠️ 5 pictures):** every named person, outfit and prop adds one. Name fewer props in a busy wide.
 - **Garbled speech:** the line is too long for the shot, or a mouth action during it.
+- **Speech in a silent shot (any language):** speech words in the place's sound line. Sounds only.
+- **The cup / handover comes before the line:** it is in the action, which plays first. Put it in the **after** box.
+- **A person freezes at the end of the shot:** the shot is pinned to an end frame and they got there early. End the action on the move into that frame, and keep the shot short.
+- **Faces and mouths garbled in a wide shot:** a face there is 45-75 px and H3 draws in 16 px blocks. Use a medium, two-shot or over-the-shoulder shot.
+- **The person seen from behind wears someone else's clothes:** only the person the shot is on has their pictures sent. Put the other person's clothes in the cast card's outfit notes (the over-the-shoulder shot says them in words).
+- **Leaving looks like arriving:** both shots use the same angle of the same place. Pick another 🌐 angle for the exit.
+- **Every angle looks like daytime:** the 360 panorama was made in daylight. Make it again with the same time of day as the story.
+- **The door or room is different after a cut:** H3 does not keep two cuts consistent. Keep cuts few, pin a start frame, or hide the cut in a keep-rolling shot.
 - **The line is said twice:** spare time after the line. Add an **after** beat.
 - **A keep-rolling shot jumps to a new room:** the framing changed. Make it a cut.
 - **face match under 0.40:** ↻ the shot. If it keeps failing, it's the card picture or the look words.

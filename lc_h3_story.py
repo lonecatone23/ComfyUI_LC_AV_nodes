@@ -59,6 +59,7 @@ SCALE = {"wide shot": 0, "side view": 1, "two-shot": 1, "from behind": 1, "over 
 TIGHT = {"medium shot", "close-up", "extreme close-up", "over the shoulder"}
 
 _AT_RE = re.compile(r"\bAt (\d+(?:\.\d+)?) seconds\b", re.I)
+_SPEECH_IN_SOUND = re.compile(r"\b(?:speak\w*|talk\w*|voices?|says?|saying|spoken|dialogue|nobody|no one|quoted)\b", re.I)
 _QUOTE_RE = re.compile(r"[\"“](.+?)[\"”]", re.DOTALL)
 
 EXAMPLE = {
@@ -465,6 +466,8 @@ def _shot_text(story: dict, shot: dict, place: dict | None, span: float, offset:
         nm = str(place.get("name") or "").strip()
         lines.append(f"Place: {_sentence(desc or nm)[:-1] if (desc or nm) else ''}".rstrip() + ".")
     cam, focus = _framing(frame_shot or shot, names)  # a part of a long shot keeps the whole shot's framing
+    if cam and (frame_shot or shot).get("framing") == "over the shoulder":
+        cam += _behind_outfit(story, frame_shot or shot, names)
     if cam and shot.get("_seated"):
         cam += f", {focus} seated at the table"
     move = MOVES.get(shot.get("move") or "still", "").format(who=focus)
@@ -499,7 +502,11 @@ def _shot_text(story: dict, shot: dict, place: dict | None, span: float, offset:
     body = " ".join(f"At {t + offset:.2f} seconds, {b}" for t, b in beats)
     has_line = bool(_QUOTE_RE.search(body))
     # Segment moves the Sound line into H3's overall_soundscape section
-    ambience = _sentence(str((place or {}).get("sound") or "").strip() or "quiet natural ambience")
+    ambience = str((place or {}).get("sound") or "").strip()
+    # 2026-11-03 A/B, same seed: "nobody speaks except the quoted lines" in a place's sound made H3 talk in a silent shot (French,
+    # then English); without it, silence. The H3 prompt box on the card shows what is sent, and can be edited.
+    kept = [c for c in re.split(r"\s*,\s*", ambience) if c and not _SPEECH_IN_SOUND.search(c)]
+    ambience = _sentence(", ".join(kept) or "quiet natural ambience")
     sound = f"Sound: {ambience} " + ("The only voice is the quoted line." if has_line else "Nobody speaks.")
     head = "\n".join(lines)
     return (f"{head}\n\n{body}\n{sound}" if head else f"{body}\n{sound}"), warn
@@ -630,6 +637,24 @@ def wardrobe(story: dict) -> dict:
     return out
 
 
+def _behind_outfit(story: dict, shot: dict, names: list) -> str:
+    """", Marco wearing a dark grey shirt ...": the person an over-the-shoulder shot shows from behind. Only the other
+    person's pictures go to H3 there, so without words Marco wore her parka (Parka night cafe v5)."""
+    who = shot.get("subject") if shot.get("subject") in names else ""
+    other = next((n for n in names if n != who), "")
+    if not who or not other:
+        return ""
+    notes = ""
+    for c in story.get("cast", []) or []:
+        if str(c.get("name") or "").strip() == other:
+            notes = str(c.get("outfit_notes") or "").strip()
+    if not notes:
+        notes = next((str(o.get("description") or o.get("name") or "").strip() for o in story.get("outfits", []) or []
+                      if isinstance(o, dict) and str(o.get("who") or "").strip() == other), "")
+    notes = frame_look(_one_clause(notes), True) if notes else ""
+    return f", {other} wearing {notes}" if notes else ""
+
+
 def build_plan(story: dict, max_s: float = 20.0) -> tuple:
     """story -> (plan for LC H3 Segment, per-shot preview list, warnings)."""
     story = {**story, "shots": [_one_person(s, _names(story)) if isinstance(s, dict) else s for s in story.get("shots") or []]}
@@ -746,7 +771,7 @@ def build_plan(story: dict, max_s: float = 20.0) -> tuple:
             sw.append("🛑 Pick who says the line.")
         elif line and shot.get("speaker") and shot.get("speaker") not in names:
             sw.append(f"🛑 {shot.get('speaker')} is not in the cast.")
-        if (shot.get("framing") or "wide shot") in TIGHT and shot.get("subject") in names:
+        if (shot.get("framing") or "wide shot") in TIGHT and (shot.get("framing") or "") != "over the shoulder" and shot.get("subject") in names:
             others = [n for n in names if n != shot["subject"] and re.search(rf"\b{re.escape(n)}\b", said, re.I)]
             if others:
                 # "Anika stares at Nova": H3 cut to Nova inside Anika's close-up, even with only Anika's pictures sent (test)
@@ -776,6 +801,11 @@ def build_plan(story: dict, max_s: float = 20.0) -> tuple:
                 part_shot["_seated"] = True
             text, tw = _shot_text(story, part_shot, place, span, ovl_s if cont else 0.0, names, shot, prev)
             sw += tw
+            auto_text = text
+            hand = shot.get("prompt_edit") if isinstance(shot.get("prompt_edit"), dict) else {}
+            edited = str(hand.get(str(k + 1)) or "").strip()
+            if edited:  # the user's own words: exactly what H3 gets for this part, whatever the cards say
+                text = edited
             frames = snap_frames(span + (ovl_s if cont else 0.0))
             start = round(end - ovl_s, 3) if cont else round(end, 3)
             end = start + frames / FPS
@@ -831,7 +861,8 @@ def build_plan(story: dict, max_s: float = 20.0) -> tuple:
                 first_seg.setdefault(setup, seg["index"])
             seen[seg["index"]] = now
             plan_shots.append(seg)
-            segs.append({"index": seg["index"], "mode": seg["mode"], "seconds": round(frames / FPS, 2), "text": text})
+            segs.append({"index": seg["index"], "mode": seg["mode"], "seconds": round(frames / FPS, 2), "text": text,
+                         "edited": bool(edited), "auto": auto_text if edited else ""})
         previews.append({"shot": i, "seconds": sec, "segments": segs, "warnings": list(dict.fromkeys(sw))})
         warnings += [f"Shot {i}: {w}" for w in dict.fromkeys(sw)]
     plan = {"version": 1, "source": "story", "project": str(story.get("project") or "untitled").strip() or "untitled",

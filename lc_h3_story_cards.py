@@ -65,12 +65,41 @@ def _find(items: list, name: str) -> dict | None:
     return next((x for x in items if str(x.get("name") or "").strip().lower() == key), None)
 
 
+SLOT_OF = {"cast card": "picture", "cast outfit": "outfit_picture", "outfit": "picture", "prop": "picture", "place": "picture",
+           "360 panorama": "panorama"}
+WHAT_OF = {"cast card": "cast", "cast outfit": "cast", "outfit": "outfit", "prop": "prop", "place": "place", "360 panorama": "place"}
+
+
+def _resolve(items: list, name: str, slot: str, what: str) -> dict | None:
+    """The card a picture job is for. A name picks that card (the job makes a new take of it). A blank name picks the first card
+    whose slot is still empty and refuses when every card has a picture: a blank name never writes over a picture."""
+    if str(name or "").strip():
+        return _find(items, name)
+    for x in items:
+        if not _pic_file(x.get(slot)):
+            return x
+    names = ", ".join(str(x.get("name") or "?") for x in items) or "none yet"
+    raise ValueError(f"[LC H3] Name the {what} card: each one already has a picture ({names}). A blank name never writes over a picture. "
+                     "Type the card's name to make a new take of it.")
+
+
+def _keep_old(card: dict, slot: str):
+    """The picture a slot had goes on the card's list of earlier ones (newest first, 8 kept), so ↶ on the slot can bring it back."""
+    old = card.get(slot)
+    if not isinstance(old, dict) or not old.get("filename"):
+        return
+    prev = card.setdefault("prev", {}).setdefault(slot, [])
+    prev[:] = [p for p in prev if p.get("filename") != old.get("filename")]
+    prev.insert(0, {k: v for k, v in old.items() if k in ("type", "subfolder", "filename", "crop")})
+    del prev[8:]
+
+
 def card_prompt(story: dict, kind: str, name: str, style: str = "") -> tuple:
     """(prompt, card name) for one picture, in plain sentences from the card's own words."""
     extra = f" {style.strip().rstrip('.')}." if style.strip() else ""
     kind = _kind(kind)
     if kind == "outfit":
-        o = _find(story.get("outfits", []), name)
+        o = _resolve(story.get("outfits", []), name, "picture", "outfit")
         if not o:
             raise ValueError(f"[LC H3] No outfit card named '{name}'. Add it on the Story node first.")
         # the description paints the picture in full detail; H3 only ever reads the card's simple name ("gym clothes")
@@ -87,14 +116,14 @@ def card_prompt(story: dict, kind: str, name: str, style: str = "") -> tuple:
         return _sentences(f"A fashion catalog photo of {desc} on an invisible mannequin, front view, the whole outfit in view, "
                           f"soft even light, plain light grey background.{extra} {SUFFIX}"), o.get("name", "")
     if kind == "prop":
-        r = _find(story.get("props", []), name)
+        r = _resolve(story.get("props", []), name, "picture", "prop")
         if not r:
             raise ValueError(f"[LC H3] No prop card named '{name}'. Add it on the Story node first.")
         desc = str(r.get("description") or r.get("name") or "").strip().rstrip(".")
         return _sentences(f"A product photo of {desc}, alone in the middle of the frame, the whole object in view, soft even light, "
                           f"plain light grey background.{extra} {SUFFIX}"), r.get("name", "")
     if kind == "cast outfit":
-        c = _find(story.get("cast", []), name)
+        c = _resolve(story.get("cast", []), name, "outfit_picture", "cast")
         if not c:
             raise ValueError(f"[LC H3] No cast card named '{name}'. Add it on the Story node first.")
         who = str(c.get("who") or "person").strip()
@@ -105,7 +134,7 @@ def card_prompt(story: dict, kind: str, name: str, style: str = "") -> tuple:
         return _sentences(f"A full-length photo of a {who}{', ' + look if look else ''}{', wearing ' + wear if wear else ''}. Standing, "
                           f"head to toe, the whole outfit in view, facing the camera, soft even light, plain light grey background.{extra} {SUFFIX}"), c.get("name", "")
     if kind == "cast card":
-        c = _find(story.get("cast", []), name)
+        c = _resolve(story.get("cast", []), name, "picture", "cast")
         if not c:
             raise ValueError(f"[LC H3] No cast card named '{name}'. Add it on the Story node first.")
         who = str(c.get("who") or "person").strip()
@@ -114,7 +143,7 @@ def card_prompt(story: dict, kind: str, name: str, style: str = "") -> tuple:
         # shoulders" or a torso: shoulders bring a top with them. Clothes come from outfit cards only.
         return _sentences(f"A headshot of a {who}{' with ' + look if look else ''}. Looking straight at the camera with a calm, "
                           f"neutral expression, soft even light, plain light grey background.{extra} {SUFFIX}"), c.get("name", "")
-    p = _find(story.get("places", []), name)
+    p = _resolve(story.get("places", []), name, SLOT_OF[kind], "place")
     if not p:
         raise ValueError(f"[LC H3] No place card named '{name}'. Add it on the Story node first.")
     desc = str(p.get("description") or p.get("name") or "").strip().rstrip(".")
@@ -160,6 +189,12 @@ class LCH3StoryCardPrompt:
         ch = getattr(vae, "latent_channels", 16)
         down = vae.spacial_compression_encode() if hasattr(vae, "spacial_compression_encode") else 8
         latents, prompts, cards = [], [], []
+        if kind == "cast card + outfit" and not str(name or "").strip():  # one person for both pictures: the first with a slot still empty
+            cast = story.get("cast", [])
+            pick = next((c for c in cast if not _pic_file(c.get("picture")) or not _pic_file(c.get("outfit_picture"))), None)
+            if pick is None:
+                _resolve(cast, "", "picture", "cast")  # raises: says which cards are full
+            name = str(pick.get("name") or "")
         # cast card + outfit: the headshot (who she is) and the 👗 outfit picture (what she wears), one run
         for k in (["cast card", "cast outfit"] if kind == "cast card + outfit" else [kind]):
             prompt, card_name = card_prompt(story, k, name, style)
@@ -191,38 +226,35 @@ def save_to_story(img: Image.Image, project: str, kind: str, name: str) -> dict:
     img.save(os.path.join(folder, fname))
     pic = {"type": "input", "subfolder": sub, "filename": fname}
     made = False
+    slot = SLOT_OF.get(kind)
     if kind == "outfit":
         items = story.setdefault("outfits", [])
-        card = _find(items, name)
+        card = _resolve(items, name, slot, "outfit")
         if not card:
             card = {"id": f"o{int(time.time() * 1000) % 10**8}", "name": name or "the outfit", "who": "", "description": "", "picture": None}
             items.append(card)
             made = True
-        card["picture"] = pic
     elif kind == "prop":
         items = story.setdefault("props", [])
-        card = _find(items, name)
+        card = _resolve(items, name, slot, "prop")
         if not card:
             card = {"id": f"r{int(time.time() * 1000) % 10**8}", "name": name or "the prop", "description": "", "picture": None}
             items.append(card)
             made = True
-        card["picture"] = pic
     elif kind in ("cast card", "cast outfit"):
         items = story.setdefault("cast", [])
-        card = _find(items, name)
+        card = _resolve(items, name, slot, "cast")
         if not card:
             card = {"id": f"c{int(time.time() * 1000) % 10**8}", "name": name or "New", "who": "person", "look": "", "picture": None, "voice": None}
             items.append(card)
             made = True
-        card["outfit_picture" if kind == "cast outfit" else "picture"] = pic
     elif kind in ("place", "360 panorama"):
         items = story.setdefault("places", [])
-        card = _place(story, name) if name.strip() else (items[0] if items else None)
+        card = _place(story, name) if name.strip() else _resolve(items, name, slot, "place")
         if not card:
             card = {"id": f"p{int(time.time() * 1000) % 10**8}", "name": name or "the place", "description": "", "sound": "", "picture": None, "anchors": []}
             items.append(card)
             made = True
-        card["panorama" if kind == "360 panorama" else "picture"] = pic
     else:
         shots = story.get("shots", [])
         key = str(name or "").strip()
@@ -231,7 +263,9 @@ def save_to_story(img: Image.Image, project: str, kind: str, name: str) -> dict:
             card = shots[int(key) - 1]
         if card is None:
             raise ValueError(f"[LC H3] Save to Story: no shot '{key}'. Use the shot number (1 = the first shot).")
-        card["end" if kind == "shot end" else "start"] = pic
+        slot = "end" if kind == "shot end" else "start"
+    _keep_old(card, slot)  # the picture that was there is not lost: ↶ on the slot brings it back
+    card[slot] = pic
     story["saved"] = time.time()
     _write_json(_story_path(project), story)
     return {"project": project, "kind": kind, "id": card.get("id"), "card": card, "new": made, "saved": story["saved"], "pic": pic}

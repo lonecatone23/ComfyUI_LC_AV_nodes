@@ -64,7 +64,6 @@ _load("lc_h3_story_cards")
 _load("lc_h3_cutout")  # cast and prop cards on plain grey (a route, no node)
 _load("lc_h3_library")  # ready-made card pictures (routes, no node)
 _load("lc_h3_story_write")
-_load("lc_h3_story_join")
 _load("lc_h3_make")
 _load("lc_frame_interpolate")
 

@@ -130,25 +130,34 @@ Shows a progress bar per tile (also on the MiniMax Video VAE, which tiles itself
 
 ## H3 Long Video 🎬
 
-Minute-long MiniMax H3 videos made in short pieces, one shot at a time, on the same card that makes 5 s clips. **LC H3 Story 🎬** holds the cast, places and shots. **LC H3 Make 🎥** renders them and joins the movie. Example workflow: `LC H3 Showrunner V1.1`.
+Minute-long MiniMax H3 videos made in short pieces, one shot at a time, on the same card that makes 5 s clips. **LC H3 Story 🎬** holds the cast, places and shots. **LC H3 Make 🎥** renders them and joins the movie. Example workflow: `MMH3 Showrunner V2.0` (with a guided tour: **Vision Assistant** → **Tour**).
 
 **LC H3 Story (BETA) 🎬**
 - The whole movie on one node: **cast**, **places** and **shots**, each on its own card.
-- ✋ **The text a shot builds is exactly what H3 gets.** Nothing rewrites it behind your back.
+- ✋ **The text a shot builds is exactly what H3 gets.** Open the shot's **H3 prompt** to read it. One thing is left out quietly: a place's sound line loses any clause about speech ("nobody speaks"), because naming speech makes H3 speak. You see the result in the H3 prompt.
 - **Cast card:** a name, who they are (woman, man, cat, etc.), their look, a face picture and a voice.
     - 💡 Use a neutral face on a plain grey background. A card's background, props and expression leak into every shot it's in.
-- **Place card:** a description, the sound of the room ("rain on the window, soft cafe chatter") and a picture of it empty. A **360 panorama** lets close-ups face any side of the room: aim them with the 🌐 viewer on the shot.
+- **Place card:** a description, the sound of the room ("rain on the window, cups clinking, footsteps": sounds only, never who speaks) and a picture of it empty. A **360 panorama** lets close-ups face any side of the room: aim them with the 🌐 viewer on the shot.
 - **Shot card:** framing, who it's on, camera move, cut or keep rolling, the action, who speaks and the line.
     - **seconds**: **auto** fits the beats and the line, or type your own. The number you type wins.
     - 🖼 **start** / 🏁 **end** pin the first or last frame. H3 copies a pinned frame exactly, so make it sharp.
-    - 📐 draws boxes: who stands where. The storyboard group turns them into a start frame.
+    - 📐 draws boxes: who stands where. **✨** on the 🖼 start slot turns them into a start frame.
     - Count props once ("each holds one cup") or extras show up.
 - **✨ Write the story** turns a short pitch into cards with a local LLM, once. After that it's plain text you edit.
-- **🔗 Check the join** (keep-rolling shots) looks at the end of the shot before and suggests an action that carries on from it.
 - **The board** under the shots: a tile per shot. ✅ made, ✏️ changed since it was made, 🔒 locked. ▶ plays it, ↻ makes it again, 📌 on a paused frame sets that place's anchor.
 - **max_shot_seconds**: the longest shot this machine renders in one go (20 default). A longer shot is made in parts, each carrying on from the one before.
 - ⚠️ A keep-rolling shot that changes framing (wide to close-up) breaks: H3 cuts by itself to a room it invents. Use a cut.
+- **H3 prompt** (under each shot): the exact text H3 gets for that shot. **↻** builds it from the cards again right now, so you see what will be sent before you spend time rendering. **✎ Edit** lets you write it by hand: what you save is sent as is, and changes to the cards stop changing it until you press **↶ Back to automatic**.
+- **✨ on a picture slot** (cast, outfit, place, 🌐 360, prop, 🖼 start, 🏁 end) makes that picture. The Story switches on the part of the workflow that makes it, keeps Make off, runs once and puts everything back. A blank card name never writes over a picture, and **↶** brings back the picture before (the last 8 are kept).
+- **📐 size** (under the project name) shows the size and aspect ratio the project was first made at, and which shots differ. **💾 Save as** keeps a variant under a new name.
+- The 🌐 shot angle is also the background of the 📐 boxes, so you place people on the view the shot will use.
 - Everything saves to `output/LC_H3/<project>/` (story.json, plan.json, the takes and the movie). Pictures go in `input/lc_h3_refs/<project>/`.
+
+**The picture makers** (inside the **Cards & Storyboard 🃏** subgraph of the example workflow; you run them with ✨ on the Story)
+- **LC H3 Story Card Prompt**: a card's description as an image prompt and an empty latent at the size that picture needs (headshot, outfit, room, 360 panorama, prop). **kind** and **name** are set by ✨.
+- **LC H3 Shot Card**: one shot's start or end frame as a storyboard job for any image model: the prompt, the 📐 boxes, the background (the shot's 360 view or the room) and the cast pictures.
+- **LC H3 Save to Story**: puts the finished picture on its card (**from card**), or on a shot's start or end frame. A new take gets a number, so older pictures are kept (↶).
+- Any image model works: the model sits in the workflow (the **LC Model Optimizer** and the LoRA loader in front of the subgraph), never in these nodes.
 
 **LC H3 Make (BETA) 🎥**
 - Renders the Story's shots one after another and joins them into the movie. Wire in the Story's **plan** and **refs**, and an **LC MiniMax H3 Pipe V2** (model, text encoder, both VAEs, size, steps, sampler, seed).

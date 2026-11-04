@@ -56,6 +56,10 @@ const CSS = `
 .lcst-slot .x{position:absolute;top:1px;right:1px;background:#000a;border:none;color:#ddd;border-radius:3px;cursor:pointer;font-size:11px;padding:0 4px;display:none}
 .lcst-slot:hover .x{display:block}
 .lcst-slot .x.cr{right:auto;left:1px}
+.lcst-slot .mk,.lcst-slot .un{position:absolute;bottom:1px;background:#000a;border:none;color:#ddd;border-radius:3px;cursor:pointer;font-size:11px;padding:0 4px;display:none}
+.lcst-slot .mk{right:1px}
+.lcst-slot .un{left:1px}
+.lcst-slot:hover .mk,.lcst-slot:hover .un{display:block}
 .lcst-crop{position:fixed;inset:5% 8%;background:#202020;border:1px solid #555;border-radius:8px;z-index:10000;display:flex;flex-direction:column;gap:8px;padding:8px;font:12px Arial,sans-serif;color:#ddd;box-shadow:0 10px 40px #000}
 .lcst-crop .on{background:#3a3220;border-color:#eb4;color:#eb4}
 .lcst-crop-stage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
@@ -74,6 +78,10 @@ const CSS = `
 .lcst-stop{font-size:11px;color:#ff8c8c}
 .lcst-sec{width:62px}
 .lcst-pv summary{cursor:pointer;color:#6cc4e6;font-size:11px}
+.lcst-pv summary .lcst-b{margin-left:6px;padding:0 6px}
+.lcst-pvh{color:#6cc4e6;font-size:11px;margin:5px 0 2px}
+.lcst-pvh b{color:#ffd860}
+.lcst-pv textarea{width:100%;box-sizing:border-box;min-height:150px;resize:vertical;background:#050505;color:#e8e8e8;border:1px solid #ffd860;border-radius:4px;padding:5px;font:11px Consolas,monospace}
 .lcst-pv pre{white-space:pre-wrap;background:#050505;border:1px solid #1d3a47;border-radius:4px;padding:5px;margin:3px 0 0;font:11px Consolas,monospace;color:#cfcfcf}
 .lcst-status{font-size:11px;color:#9fd3ff;flex:1;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lcst-pick{position:fixed;inset:6% 10%;background:#202020;border:1px solid #555;border-radius:8px;z-index:10000;display:flex;flex-direction:column;font:12px Arial,sans-serif;color:#ddd;box-shadow:0 10px 40px #000}
@@ -575,6 +583,17 @@ function panoFor(url, done) {
   return null;
 }
 
+const TIGHT_FRAMINGS = ["medium shot", "close-up", "extreme close-up", "over the shoulder"];
+/** The angle the server gives a close cut with no 🌐 angle of its own (reverse angle across from a person who has one). */
+function autoView(d, i, place) {
+  const s = d.shots[i];
+  if (!TIGHT_FRAMINGS.includes(s.framing || "wide shot")) return null;
+  const same = (k) => shotPlace(d, k) === place;
+  const other = d.shots.find((o, k) => same(k) && (o.subject || "everyone") !== (s.subject || "everyone") && o.view?.on);
+  if (other) return { yaw: ((((Number(other.view.yaw) || 0) + 360) % 360) - 180), pitch: other.view.pitch ?? -1, fov: other.view.fov ?? 55 };
+  return { yaw: 0, pitch: -1, fov: 55 };
+}
+
 /**
  * Blocking on a shot card: boxes for people and props, x/y/w/h as 0..1 of the frame, saved as shot.boxes
  * [{name, x, y, w, h}]. The background is the shot's start frame, else its place's room picture.
@@ -585,7 +604,11 @@ function blockingEditor(node, d, i, box, onChange) {
   const cv = box.querySelector("[data-bkc]");
   const rows = box.querySelector("[data-bkr]");
   const names = d.cast.map((c) => String(c.name || "").trim()).filter(Boolean);
-  const bgPic = s.start?.filename ? s.start : shotPlace(d, i)?.picture;
+  const place = shotPlace(d, i);
+  const angle = !s.start?.filename && place?.panorama?.filename ? s.view?.on ? s.view : autoView(d, i, place) : null;
+  const panoURL = angle ? viewURL(place.panorama) : "";
+  const bgPic = angle ? place.panorama : s.start?.filename ? s.start : place?.picture;
+  let bgCache = null;
   const img = new Image();
   let sel = s.boxes.length ? 0 : -1;
   let drag = null;
@@ -599,7 +622,20 @@ function blockingEditor(node, d, i, box, onChange) {
     const g = cv.getContext("2d");
     g.fillStyle = "#111";
     g.fillRect(0, 0, W, H);
-    if (img.complete && img.naturalWidth) g.drawImage(img, 0, 0, W, H);
+    const pano = angle ? panoFor(panoURL, paint) : null;
+    if (angle && pano) {
+      const key = `${W}x${H}|${angle.yaw}|${angle.pitch}|${angle.fov}|${place.front?.yaw}`;
+      if (bgCache?.key === key) g.putImageData(bgCache.data, 0, 0);
+      else {
+        renderView(g, W, H, pano, { ...angle, yaw: (Number(angle.yaw) || 0) + (Number(place.front?.yaw) || 0) });
+        bgCache = { key, data: g.getImageData(0, 0, W, H) };
+      }
+      g.fillStyle = "rgba(0,0,0,.55)";
+      g.fillRect(0, H - 16, W, 16);
+      g.fillStyle = "#ddd";
+      g.font = "11px sans-serif";
+      g.fillText(s.view?.on ? "background: this shot's 🌐 angle" : "background: the angle this shot gets by itself", 6, H - 4);
+    } else if (!angle && img.complete && img.naturalWidth) g.drawImage(img, 0, 0, W, H);
     else {
       g.fillStyle = "#555";
       g.font = "12px sans-serif";
@@ -685,7 +721,7 @@ function blockingEditor(node, d, i, box, onChange) {
     list();
     paint();
   };
-  if (bgPic) {
+  if (bgPic && !angle) {
     img.onload = paint;
     img.src = viewURL(bgPic);
   }
@@ -701,19 +737,8 @@ function shotPlace(d, i) {
   return d.places.find((p) => String(p.name || "").trim().toLowerCase() === key) || null;
 }
 
-function paintView(vv, vs, pano, v) {
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const W = Math.max(16, Math.round(vv.clientWidth * dpr)), H = Math.max(9, Math.round(vv.clientHeight * dpr));
-  vv.width = W;
-  vv.height = H;
-  const g = vv.getContext("2d");
-  if (!pano) {
-    g.fillStyle = "#888";
-    g.font = `${12 * dpr}px Arial`;
-    g.textAlign = "center";
-    g.fillText("loading the panorama…", W / 2, H / 2);
-    return;
-  }
+/** A flat view out of the panorama (pano = panoFor's result) drawn onto g, W x H. */
+function renderView(g, W, H, pano, v) {
   const src = pano.data, PW = src.width, PH = src.height, sd = src.data;
   const out = g.createImageData(W, H), od = out.data;
   const f = W / 2 / Math.tan((v.fov * Math.PI) / 360);
@@ -738,6 +763,21 @@ function paintView(vv, vs, pano, v) {
     }
   }
   g.putImageData(out, 0, 0);
+}
+function paintView(vv, vs, pano, v) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const W = Math.max(16, Math.round(vv.clientWidth * dpr)), H = Math.max(9, Math.round(vv.clientHeight * dpr));
+  vv.width = W;
+  vv.height = H;
+  const g = vv.getContext("2d");
+  if (!pano) {
+    g.fillStyle = "#888";
+    g.font = `${12 * dpr}px Arial`;
+    g.textAlign = "center";
+    g.fillText("loading the panorama…", W / 2, H / 2);
+    return;
+  }
+  renderView(g, W, H, pano, v);
   // the strip: the whole panorama with the view's spot marked
   const SW = Math.max(16, Math.round(vs.clientWidth * dpr)), SH = Math.max(8, Math.round(vs.clientHeight * dpr));
   vs.width = SW;
@@ -869,11 +909,54 @@ function paintPreview(node) {
     if (sec) sec.placeholder = `auto ${s.seconds.toFixed(1)} s`;
     const w = node.__lcst.wrap.querySelector(`[data-warn="${i}"]`);
     if (w) w.innerHTML = (s.warnings || []).map((x) => `<div class="${x.startsWith("🛑") ? "lcst-stop" : "lcst-warn"}">${esc(x)}</div>`).join("");
-    const pre = node.__lcst.wrap.querySelector(`[data-pv="${i}"]`);
-    if (pre) {
-      pre.textContent = (s.segments || []).map((g) => (s.segments.length > 1 ? `— part ${g.index} · ${g.mode} · ${g.seconds} s —\n` : `${g.mode} · ${g.seconds} s\n`) + g.text).join("\n\n");
-    }
+    const pv = node.__lcst.wrap.querySelector(`[data-pv="${i}"]`);
+    if (pv && !node.__lcstEditing?.has(getData(node).shots[i]?.id)) paintPrompt(node, pv, s, i);
   }
+}
+
+/**
+ * The H3 prompt of one shot: the built text per part, or a text box when ✎ Edit is on. A saved hand edit is
+ * shot.prompt_edit {"1": text}; the server sends it as that part's text and gives back the automatic one (`auto`).
+ */
+function paintPrompt(node, pv, s, i) {
+  const d = getData(node);
+  const shot = d.shots[i];
+  if (!shot) return;
+  const editing = node.__lcstEditing?.has(shot.id);
+  const segs = s.segments || [];
+  const head = (g) => `${segs.length > 1 ? `part ${g.index} · ` : ""}${g.mode} · ${g.seconds} s${g.edited ? " · <b>✎ your text: the cards no longer change it</b>" : ""}`;
+  if (!editing) {
+    pv.innerHTML = segs.map((g) => `<div class="lcst-pvh">${head(g)}</div><pre>${esc(g.text)}</pre>`).join("");
+    return;
+  }
+  pv.innerHTML = segs.map((g, k) => `<div class="lcst-pvh">${head(g)}</div><textarea data-pvt="${k + 1}" spellcheck="false">${esc(g.text)}</textarea>`).join("")
+    + `<div class="lcst-row"><button class="lcst-b" data-pvsave>Use this text</button><button class="lcst-b" data-pvcancel>Cancel</button>`
+    + `<button class="lcst-b" data-pvauto title="Throw your text away and build it from the cards again">↶ Back to automatic</button></div>`;
+  const done = () => {
+    node.__lcstEditing.delete(shot.id);
+    paintPrompt(node, pv, s, i);
+    fit(node);
+  };
+  pv.querySelector("[data-pvcancel]").onclick = done;
+  pv.querySelector("[data-pvauto]").onclick = () => {
+    const d2 = getData(node);
+    delete d2.shots[i].prompt_edit;
+    node.__lcstEditing.delete(shot.id);
+    setData(node, d2, true);
+  };
+  pv.querySelector("[data-pvsave]").onclick = () => {
+    const d2 = getData(node);
+    const hand = {};
+    pv.querySelectorAll("[data-pvt]").forEach((ta) => {
+      const g = segs[Number(ta.dataset.pvt) - 1];
+      const built = g.edited ? g.auto : g.text;
+      if (ta.value.trim() && ta.value.trim() !== built.trim()) hand[ta.dataset.pvt] = ta.value.trim();
+    });
+    if (Object.keys(hand).length) d2.shots[i].prompt_edit = hand;
+    else delete d2.shots[i].prompt_edit;
+    node.__lcstEditing.delete(shot.id);
+    setData(node, d2, true);
+  };
 }
 
 // ------------------------------------------------------------------ the board (what is made)
@@ -890,77 +973,8 @@ async function refreshBoard(node) {
     if (j.error) throw new Error(j.error);
     node.__lcst.board = j;
     paintBoard(node);
-    const t = await api.fetchApi("/lc_h3/story/join_state", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ story: d }) }).then((r) => r.json());
-    node.__lcst.tails = t.tails || {};
-    paintJoins(node);
   } catch (e) {
     console.warn("[LC H3 Story] board:", e.message);
-  }
-}
-
-// ------------------------------------------------------------------ 🔗 join check (keep-rolling shots)
-function paintJoins(node) {
-  const face = node.__lcst;
-  if (!face) return;
-  const d = getData(node);
-  face.wrap.querySelectorAll("[data-join]").forEach((el) => {
-    const i = Number(el.dataset.join);
-    const s = d.shots[i];
-    if (!s || !i || s.join !== "roll") return (el.innerHTML = "");
-    const made = (face.tails || {})[s.id] || 0;
-    const jc = s.joincheck;
-    const stale = jc && made && Math.abs(made - jc.tail_t) > 1;
-    let body = "";
-    if (jc && jc.state === "open" && !stale) {
-      body = `<div class="lcst-tip">🔗 Shot ${i} ends: ${esc(jc.end)}</div>` + (jc.suggestion
-        ? `<div class="lcst-row" style="align-items:flex-start"><div class="lcst-warn" style="flex:1">Start this shot from there instead: ${esc(jc.suggestion)}</div>
-            <button class="lcst-b" data-jok="${i}" title="Use it: replaces the action above (you can still edit it)">✓</button>
-            <button class="lcst-b" data-jno="${i}" title="Keep my text">✗</button></div>`
-        : jc.same ? `<div class="lcst-tip" style="color:#8fd18f">✓ The opening already fits.</div>`
-          : `<div class="lcst-tip">No suggestion (${esc((jc.rejected || []).join(", "))}): your text stays.</div>`);
-    }
-    const label = !made ? `🔗 Join check: make shot ${i} first` : stale ? `🔗 Shot ${i} was made again: check the join` : jc ? "🔗 Check the join again" : "🔗 Check the join";
-    el.innerHTML = `<div class="lcst-row"><button class="lcst-b" data-jgo="${i}" ${made ? "" : "disabled"}
-        title="Looks at how shot ${i} really ended and suggests an opening for this shot that starts from there. Uses the ✨ model (a vision one, e.g. Qwen3-VL).">${label}</button>
-        <span class="lcst-tip" data-jst="${i}"></span></div>${body}`;
-  });
-  const q = (sel) => face.wrap.querySelectorAll(sel);
-  q("[data-jgo]").forEach((b) => (b.onclick = () => joinCheck(node, Number(b.dataset.jgo))));
-  q("[data-jok]").forEach((b) => (b.onclick = () => {
-    const d2 = getData(node);
-    const s = d2.shots[Number(b.dataset.jok)];
-    s.action = s.joincheck.suggestion;
-    s.joincheck.state = "used";
-    setData(node, d2, true);
-  }));
-  q("[data-jno]").forEach((b) => (b.onclick = () => {
-    const d2 = getData(node);
-    d2.shots[Number(b.dataset.jno)].joincheck.state = "dismissed";
-    setData(node, d2, true);
-  }));
-}
-
-async function joinCheck(node, i) {
-  const st = node.__lcst.wrap.querySelector(`[data-jst="${i}"]`);
-  const btn = node.__lcst.wrap.querySelector(`[data-jgo="${i}"]`);
-  const d = getData(node);
-  const model = node.__lcst.wrap.querySelector("[data-model]")?.value || d.model || "";
-  if (btn) btn.disabled = true;
-  const t0 = Date.now();
-  const tick = setInterval(() => st && (st.textContent = `looking at the end of shot ${i}… ${Math.round((Date.now() - t0) / 1000)} s`), 500);
-  try {
-    const j = await api.fetchApi("/lc_h3/story/join", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ story: d, shot: i, model }) }).then((r) => r.json());
-    if (j.error) throw new Error(j.error);
-    const d2 = getData(node);
-    d2.shots[i].joincheck = { ...j, state: "open" };
-    setData(node, d2, true);
-  } catch (e) {
-    if (st) (st.textContent = e.message), (st.className = "lcst-stop");
-    if (btn) btn.disabled = false;
-  } finally {
-    clearInterval(tick);
   }
 }
 
@@ -1302,6 +1316,180 @@ async function saveProject(node) {
   }
 }
 
+// ------------------------------------------------------------------ ✨ make this, ↶ the picture before
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** The picture a slot had goes on the card's list of earlier ones (newest first, 8 kept): ↶ brings it back. The files stay on disk. */
+function keepOld(card, slot) {
+  const old = card?.[slot];
+  if (!old?.filename) return;
+  const prev = ((card.prev = card.prev || {})[slot] = (card.prev[slot] || []).filter((p) => p.filename !== old.filename));
+  prev.unshift({ type: old.type, subfolder: old.subfolder, filename: old.filename, ...(old.crop ? { crop: old.crop } : {}) });
+  prev.length = Math.min(prev.length, 8);
+}
+
+/** ↶: the slot goes back one picture. The one it has now goes to the end of the list, so repeated clicks go round them all. */
+function earlier(card, slot) {
+  const cur = card[slot];
+  const list = (card.prev?.[slot] || []).filter((p) => p.filename !== cur?.filename);
+  if (!list.length) return false;
+  const pick = list.shift();
+  if (cur?.filename) list.push({ type: cur.type, subfolder: cur.subfolder, filename: cur.filename, ...(cur.crop ? { crop: cur.crop } : {}) });
+  card.prev = { ...(card.prev || {}), [slot]: list };
+  card[slot] = pick;
+  return true;
+}
+
+/** What a picture slot is: which card and field it fills, and the job that makes it (kind + name for the Story Card Prompt, shot + slot for the Shot Card). */
+function slotInfo(d, el) {
+  const ds = el.dataset;
+  if (ds.pic) {
+    const [k, i] = ds.pic.split("|");
+    const n = Number(i);
+    if (k === "c") return { find: (x) => x.cast[n], slot: "picture", kind: "cast card", what: "headshot" };
+    if (k === "w") return { find: (x) => x.cast[n], slot: "outfit_picture", kind: "cast outfit", what: "outfit picture" };
+    if (k === "o") return { find: (x) => x.outfits[n], slot: "picture", kind: "outfit", what: "outfit picture" };
+    if (k === "r") return { find: (x) => x.props[n], slot: "picture", kind: "prop", what: "prop picture" };
+    if (k === "p") return { find: (x) => x.places[n], slot: "picture", kind: "place", what: "room picture" };
+  }
+  if (ds.pano) return { find: (x) => x.places[Number(ds.pano)], slot: "panorama", kind: "360 panorama", what: "360 panorama" };
+  if (ds.start) return { find: (x) => x.shots[Number(ds.start)], slot: "start", shot: Number(ds.start) + 1, what: "start frame" };
+  if (ds.end) return { find: (x) => x.shots[Number(ds.end)], slot: "end", shot: Number(ds.end) + 1, what: "end frame" };
+  return null;
+}
+
+const setW = (n, w, v) => {
+  w.value = v;
+  w.callback?.(v, app.canvas, n, null, null);
+};
+
+/**
+ * ✨ on a slot: aims the workflow's LC H3 Story Card Prompt (or Shot Card) at exactly this card, switches its section on, runs, and
+ * puts every widget back as it was. Nothing to type, so nothing can aim at the wrong card.
+ */
+/** Every node of the workflow, the ones inside subgraph nodes too (the Cards & Storyboard node holds the card makers). */
+function allNodes(graph) {
+  const out = [];
+  const walk = (g, seen) => {
+    for (const n of g?._nodes || []) {
+      out.push(n);
+      if (n.subgraph && !seen.has(n.subgraph)) {
+        seen.add(n.subgraph);
+        walk(n.subgraph, seen);
+      }
+    }
+  };
+  walk(graph, new Set());
+  return out;
+}
+
+/** The nodes of one section of a subgraph: the ones inside the group whose title matches (by position, like the Section Bypasser). */
+function sectionNodes(maker, re) {
+  const g = maker.graph;
+  if (!g || g === app.graph) return [];
+  const boxes = (g._groups || []).filter((x) => re.test(String(x.title || ""))).map((x) => Array.from(x._bounding || x.bounding || []));
+  return (g._nodes || []).filter((n) => boxes.some(([x, y, w, h]) => n.pos[0] >= x && n.pos[0] <= x + w && n.pos[1] >= y && n.pos[1] <= y + h));
+}
+
+async function makeThis(node, info) {
+  if (node.__lcstMaking) return status(node, "Still making the last picture: wait for it to finish.", true);
+  const card = info.find(getData(node));
+  const isShot = info.shot !== undefined;
+  const nodes = allNodes(node.graph || app.graph);
+  const maker = nodes.find((n) => n.type === (isShot ? "LCH3ShotCard" : "LCH3StoryCardPrompt"));
+  if (!maker) return status(node, `Add ${isShot ? "LC H3 Shot Card" : "LC H3 Story Card Prompt"} and LC H3 Save to Story to this workflow first.`, true);
+  const mw = (nm) => maker.widgets?.find((w) => w.name === nm);
+  const want = isShot ? /storyboard/i : /story card prompt|cards? (&|and) storyboard/i;
+  let bypasser = null;
+  let target = null;
+  for (const n of nodes) for (const w of n.widgets || []) if (w.type === "toggle" && want.test(String(w.label || w.name))) (bypasser = n), (target = w);
+  const inSub = !!maker.graph && maker.graph !== app.graph;
+  if (!bypasser && inSub) for (const n of nodes) for (const w of n.widgets || []) if (w.type === "toggle" && /\bmake\b/i.test(String(w.label || w.name))) bypasser = n; // Make goes off for the run
+  // no switch: the nodes inside the Make group are bypassed for the run (the ✨ run once also rendered the movie, 2026-11-03)
+  let makeNodes = [];
+  if (inSub && !bypasser) {
+    const boxes = (app.graph._groups || []).filter((x) => /\bmake\b/i.test(String(x.title || ""))).map((x) => Array.from(x._bounding || x.bounding || []));
+    makeNodes = (app.graph._nodes || []).filter((n) => n.mode === 0 && boxes.some(([x, y, w, h]) => n.pos[0] >= x && n.pos[0] <= x + w && n.pos[1] >= y && n.pos[1] <= y + h));
+    if (!makeNodes.some((n) => n.type === "LCH3Make")) return status(node, "✨ Could not find the Make node: it has to stay off while a picture is made, or the run would also render the movie.", true);
+  }
+  if (!bypasser && !inSub && (maker.mode === 2 || maker.mode === 4)) return status(node, `${isShot ? "Storyboard Maker" : "Story Card Prompt"} is switched off in the workflow: turn it on first.`, true);
+  const aim = isShot ? { shot: String(info.shot), slot: info.slot } : { kind: info.kind, name: String(card?.name || "").trim() };
+  const savers = nodes.filter((n) => n.type === "LCH3SaveToStory");
+  const was = {
+    maker: Object.keys(aim).map((k) => [mw(k), mw(k)?.value]),
+    toggles: bypasser ? bypasser.widgets.map((w) => w.value) : null,
+    savers: savers.map((n) => n.widgets.map((w) => w.value)),
+  };
+  const sect = sectionNodes(maker, isShot ? /storyboard maker/i : /story card prompt/i);
+  was.modes = sect.map((n) => [n, n.mode]);
+  was.make = makeNodes.map((n) => [n, n.mode]);
+  const who = isShot ? `shot ${info.shot}` : aim.name;
+  const before = card?.[info.slot]?.filename || "";
+  const sidx = (n, nm) => n.widgets.find((w) => w.name === nm);
+  try {
+    for (const [k, v] of Object.entries(aim)) if (mw(k)) setW(maker, mw(k), v);
+    for (const n of savers) {
+      if (sidx(n, "kind")) setW(n, sidx(n, "kind"), "from card");
+      if (sidx(n, "name")) setW(n, sidx(n, "name"), "");
+    }
+    if (bypasser) bypasser.widgets.forEach((w) => setW(bypasser, w, w === target));
+    for (const [n] of was.modes) n.mode = 0;
+    for (const [n] of was.make) n.mode = 4;
+    await sleep(300); // the section switch settles before the graph is read
+    node.__lcstMaking = true;
+    status(node, `✨ Making ${who}'s ${info.what}...`);
+    await app.queuePrompt(0, 1);
+  } catch (e) {
+    node.__lcstMaking = false;
+    status(node, `✨ ${e.message || e}`, true);
+  } finally {
+    // the job is read at the moment it is queued: the workflow goes back exactly as it was
+    for (const [w, v] of was.maker) if (w) setW(maker, w, v);
+    savers.forEach((n, k) => n.widgets.forEach((w, j) => w.value !== was.savers[k][j] && setW(n, w, was.savers[k][j])));
+    if (bypasser) bypasser.widgets.forEach((w, k) => w.value !== was.toggles[k] && setW(bypasser, w, was.toggles[k]));
+    for (const [n, m] of was.modes) n.mode = m;
+    for (const [n, m] of was.make) n.mode = m;
+  }
+  if (!node.__lcstMaking) return;
+  for (let i = 0; i < 900; i++) {
+    await sleep(2000);
+    const q = await api.fetchApi("/queue").then((r) => r.json()).catch(() => null);
+    if (q && !q.queue_running?.length && !q.queue_pending?.length) break;
+  }
+  node.__lcstMaking = false;
+  const now = info.find(getData(node))?.[info.slot]?.filename || "";
+  status(node, now && now !== before ? `✨ New ${info.what} for ${who}. The old one is kept: ↶ brings it back.` : `✨ ${who}'s ${info.what} did not change: check the run for an error.`, !(now && now !== before));
+}
+
+/** The two small buttons on a picture slot (shown on hover): ✨ make this picture, ↶ the picture before. */
+function decorateSlot(node, d, el, save) {
+  const info = slotInfo(d, el);
+  const card = info?.find(d);
+  if (!card) return;
+  const mk = document.createElement("button");
+  mk.className = "mk";
+  mk.textContent = "✨";
+  mk.title = `Make this ${info.what}: aims the workflow's ${info.shot !== undefined ? "Shot Card" : "Story Card Prompt"} at this card and runs it. The picture on it now is kept (↶).`;
+  mk.onclick = (e) => {
+    e.stopPropagation();
+    if (info.shot === undefined && !String(card.name || "").trim()) return status(node, "Name the card first, then ✨.", true);
+    if (card[info.slot]?.filename && !window.confirm(`Make a new ${info.what}?\nThe one on the card is kept: ↶ brings it back.`)) return;
+    makeThis(node, info);
+  };
+  el.appendChild(mk);
+  if ((card.prev?.[info.slot] || []).some((p) => p.filename !== card[info.slot]?.filename)) {
+    const un = document.createElement("button");
+    un.className = "un";
+    un.textContent = "↶";
+    un.title = "The picture before this one (click again to go round them all)";
+    un.onclick = (e) => {
+      e.stopPropagation();
+      if (earlier(card, info.slot)) save(true);
+    };
+    el.appendChild(un);
+  }
+}
+
 // ------------------------------------------------------------------ the form
 function render(node) {
   const face = ensureFace(node);
@@ -1376,7 +1564,7 @@ function render(node) {
         <div class="lcst-col">
           <div class="lcst-row">
             <input data-p="${i}" data-f="name" value="${esc(p.name)}" placeholder="the cafe" style="width:150px" title="Shots pick their place by this name">
-            <input data-p="${i}" data-f="sound" value="${esc(p.sound)}" placeholder="sound: soft cafe chatter, cups clinking" style="flex:1">
+            <input data-p="${i}" data-f="sound" value="${esc(p.sound)}" placeholder="sounds only: rain on the glass, cups clinking, footsteps (never who speaks)" title="Sounds you can hear. Do not write who speaks or 'nobody speaks': naming speech makes H3 speak." style="flex:1">
             <button class="lcst-b" data-del="places|${i}" title="Remove this place">${TRASH}</button>
           </div>
           <textarea rows="2" data-p="${i}" data-f="description" placeholder="What is there: the room, the furniture, the light">${esc(p.description)}</textarea>
@@ -1455,9 +1643,8 @@ function render(node) {
           <input data-vb="${i}" value="${esc(s.view.behind)}" placeholder="what is behind them: the arched windows" style="flex:1" title="Said in the Camera line too: H3 follows words over pictures">` : `<span class="lcst-tip">pick the camera angle in the 360 panorama</span>`}
         </div>
         ${s.view?.on ? `<div class="lcst-vw" data-view="${i}"><canvas data-vv title="Drag to look around. Wheel or Shift + drag zooms."></canvas><canvas data-vs title="Click to jump there"></canvas></div>` : ""}` : ""}
-        <div data-join="${i}"></div>
         <div data-warn="${i}"></div>
-        <details class="lcst-pv"${node.__lcstOpen?.has(s.id) ? " open" : ""} data-pvd="${esc(s.id)}"><summary>H3 gets ▾</summary><pre data-pv="${i}">…</pre></details>
+        <details class="lcst-pv"${node.__lcstOpen?.has(s.id) ? " open" : ""} data-pvd="${esc(s.id)}"><summary>H3 prompt ▾<button class="lcst-b" data-pvedit="${i}" title="Write this shot's prompt by hand. What you save is exactly what H3 gets for this shot; changes to the cards stop changing it until you go back to automatic.">✎ Edit</button><button class="lcst-b" data-pvref="${i}" title="Build it from the cards again now and show exactly what will be sent to the model.">↻</button></summary><div data-pv="${i}">…</div></details>
       </div>`).join("")}
     <button class="lcst-b lcst-add" data-add="shots">➕ Add shot</button>
     </div></section>`;
@@ -1507,6 +1694,7 @@ function render(node) {
     const item = kind === "c" || kind === "w" ? d.cast[Number(i)] : kind === "o" ? d.outfits[Number(i)] : kind === "r" ? d.props[Number(i)] : d.places[Number(i)];
     const field = kind === "w" ? "outfit_picture" : "picture"; // w: the cast card's 👗 outfit
     wireSlot(node, el, async (pic, lib) => {
+      keepOld(item, field);
       item[field] = kind === "p" ? pic : await onGrey(node, pic); // cast, outfits and props go on plain grey
       if (kind === "w") {
         if (lib && !String(item.outfit_notes || "").trim()) item.outfit_notes = lib.text || ""; // the library card text
@@ -1522,6 +1710,7 @@ function render(node) {
     }, { c: "cast", w: "outfits", o: "outfits", r: "props" }[kind] || "");
     el.querySelector("[data-clr]")?.addEventListener("click", (e) => {
       e.stopPropagation();
+      keepOld(item, field);
       item[field] = null;
       save(true);
     });
@@ -1562,6 +1751,7 @@ function render(node) {
   q("[data-pano]").forEach((el) => {
     const p = d.places[Number(el.dataset.pano)];
     wireSlot(node, el, (pic, lib) => {
+      keepOld(p, "panorama");
       p.panorama = pic;
       if (lib && !String(p.description || "").trim()) p.description = lib.text || "";
       if (lib && !String(p.name || "").trim()) p.name = lib.name || "";
@@ -1569,6 +1759,7 @@ function render(node) {
     }, "360");
     el.querySelector("[data-clr]")?.addEventListener("click", (e) => {
       e.stopPropagation();
+      keepOld(p, "panorama");
       p.panorama = null;
       save(true);
     });
@@ -1596,11 +1787,13 @@ function render(node) {
   q("[data-start]").forEach((el) => {
     const s = d.shots[Number(el.dataset.start)];
     wireSlot(node, el, (pic) => {
+      keepOld(s, "start");
       s.start = pic;
       save(true);
     });
     el.querySelector("[data-clr]")?.addEventListener("click", (e) => {
       e.stopPropagation();
+      keepOld(s, "start");
       s.start = null;
       save(true);
     });
@@ -1608,11 +1801,13 @@ function render(node) {
   q("[data-end]").forEach((el) => {
     const s = d.shots[Number(el.dataset.end)];
     wireSlot(node, el, (pic) => {
+      keepOld(s, "end");
       s.end = pic;
       save(true);
     });
     el.querySelector("[data-clr]")?.addEventListener("click", (e) => {
       e.stopPropagation();
+      keepOld(s, "end");
       s.end = null;
       save(true);
     });
@@ -1718,6 +1913,31 @@ function render(node) {
     else node.__lcstOpen.delete(el.dataset.pvd);
     fit(node);
   }));
+  q("[data-pvedit]").forEach((b) => (b.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const i = Number(b.dataset.pvedit);
+    const id = getData(node).shots[i]?.id;
+    node.__lcstEditing = node.__lcstEditing || new Set();
+    node.__lcstOpen = node.__lcstOpen || new Set();
+    node.__lcstEditing.add(id);
+    node.__lcstOpen.add(id);
+    const det = b.closest("details");
+    if (det) det.open = true;
+    const sh = node.__lcst.preview?.shots?.find((x) => x.shot === i + 1);
+    const pv = face.wrap.querySelector(`[data-pv="${i}"]`);
+    if (sh && pv) paintPrompt(node, pv, sh, i);
+    fit(node);
+  }));
+  q("[data-pvref]").forEach((b) => (b.onclick = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    clearTimeout(node.__lcstT);
+    b.textContent = "…";
+    await preview(node);
+    b.textContent = "✓";
+    setTimeout(() => (b.textContent = "↻"), 900);
+  }));
   q("[data-model]").forEach((sel) => {
     fillModels(sel, d);
     sel.onchange = () => {
@@ -1734,6 +1954,8 @@ function render(node) {
   q("[data-load]").forEach((b) => (b.onclick = () => loadProject(node, b)));
   q("[data-save]").forEach((b) => (b.onclick = () => saveProject(node)));
   q("[data-saveas]").forEach((b) => (b.onclick = () => saveProjectAs(node, b)));
+
+  q("[data-pic],[data-pano],[data-start],[data-end]").forEach((el) => decorateSlot(node, d, el, save));
 
   // a click on a section's title bar folds it away (kept with the workflow); the bar's own buttons still work
   const folded = new Set(node.properties?.lc_story_folded || []);
@@ -1763,7 +1985,6 @@ function render(node) {
   }
   paintPreview(node);
   paintBoard(node);
-  paintJoins(node);
   paintSize(node);
   fit(node);
 }

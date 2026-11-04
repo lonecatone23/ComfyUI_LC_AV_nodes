@@ -784,11 +784,24 @@ _SAYS = re.compile(r"\b(says|say|said|asks|whispers|replies|answers|shouts|calls
 _SUBJECT = re.compile(r"\b(?:the\s+(?:man|woman|girl|boy|barista|waiter|waitress)|she|he|[A-Z][a-z]+)\b(?!['’]s)")
 _NOT_NAMES = {"At", "The", "A", "An", "Her", "His", "Their", "It", "Then", "As", "When", "While", "After", "Before",
               "And", "But", "With", "In", "On", "She", "He", "They"}
+# a cast name is one capitalised word ("Anika") or two ("Parka girl", "Old Tom"); "Visual style:" is a label, not a person
+_NAME = r"[A-Z][a-z]+(?: [A-Za-z]+)?"
+_LABELS = {"visual style"}
 
 
-def _speaker(text: str, end: int):
+def _clean_name(name: str):
+    """A name the story regex found: "Then Anika" is Anika, "At night" is nobody."""
+    if " " in name and name.split(" ", 1)[0] in _NOT_NAMES:
+        name = name.split(" ", 1)[1]
+        if not name[:1].isupper():
+            return None
+    return name
+
+
+def _speaker(text: str, end: int, known=()):
     """Who says the quote that starts at `end`: the subject of its sentence ("Claire squeezes his hand and says" ->
-    Claire, "At 1.85 seconds, she says" -> she), or None when no say-verb leads into it (a sign that reads "OPEN")."""
+    Claire, "At 1.85 seconds, she says" -> she), or None when no say-verb leads into it (a sign that reads "OPEN").
+    known: the two-word cast names (lower case, "parka girl"): the whole name is the speaker."""
     start = max(text.rfind(c, 0, end) for c in (".", ";", "\n", "seconds,"))
     clause = text[start + 1:end]
     if not _SAYS.search(clause):
@@ -797,7 +810,12 @@ def _speaker(text: str, end: int):
         w = m.group(0)
         if w in _NOT_NAMES and w not in ("She", "He"):
             continue
-        return start + 1 + m.start(), start + 1 + m.end(), w.lower()
+        stop = m.end()
+        for k in known:
+            if clause[m.start():m.start() + len(k)].lower() == k:
+                w, stop = clause[m.start():m.start() + len(k)], m.start() + len(k)
+                break
+        return start + 1 + m.start(), start + 1 + stop, w.lower()
     return None
 
 
@@ -808,10 +826,11 @@ def _dialogue(text: str, style: str = "") -> str:
     (a CONTINUE where only the second person speaks would otherwise call her S1, and the first speaker's mouth moves).
     Speakers the style block doesn't name follow in the order they speak."""
     quotes = list(_SPOKEN.finditer(text))
-    who = [_speaker(text, m.start()) for m in quotes]
+    cast = [m.group(1).lower() for m in re.finditer(rf"(?:^|[;.\n]\s*)({_NAME}):", style.strip())  # "Anika: ...; Nova: ..."
+            if " " not in m.group(1) or (m.group(1).lower() not in _LABELS and m.group(1).split(" ", 1)[0] not in _NOT_NAMES)]
+    who = [_speaker(text, m.start(), [c for c in cast if " " in c]) for m in quotes]
     names = [w[2] for w in who if w]
     low = style.lower()
-    cast = [m.group(1).lower() for m in re.finditer(r"(?:^|[;.\n]\s*)([A-Z][a-z]+):", style.strip())]  # "Anika: ...; Nova: ..."
     order = list(dict.fromkeys(cast + names))
     order = sorted(order, key=lambda k: (low.find(k) if k in low else 10 ** 6, order.index(k)))
     ids = {k: i + 1 for i, k in enumerate(order)}
@@ -1025,6 +1044,10 @@ def _shot_refs(refs: dict, shot: dict, style: str, genders: dict | None = None, 
         sub["pictures"] = [{**q, "n": k + 1} for k, q in enumerate(q for q in sub["pictures"] if q["role"] not in ("setting", "layout"))]
     sub["lock"] = [a for a in sub["audios"] if a["role"] == "line"]
     sub["audios"] = [{**a, "n": k + 1} for k, a in enumerate(a for a in sub["audios"] if a["role"] != "line")]
+    if not quotes:
+        # a voice clip on a shot where nobody speaks is played back by H3 as speech (2026-11-03: same seed, bf16 and int8 alike
+        # 75% voiced babble with the clip, silence without it): voices ride along only on shots with a quoted line
+        sub["audios"] = [{**a, "n": k + 1} for k, a in enumerate(a for a in sub["audios"] if a["role"] != "voice")]
     sub["text"] = _ref_sentences(sub)
     return sub if sub["pictures"] or sub["audios"] or sub["lock"] else None
 
@@ -1047,7 +1070,8 @@ def _unsay_looks(style: str, story: str, cast: dict, tight: bool = False) -> str
     if not cast or ";" not in style and not re.match(r"\s*an?\s+(man|woman|boy|girl|guy|lady)\b", style, re.I):
         return style
     head, sep, rest = style.partition(". ")
-    named = {m.group(1): story[m.end():m.end() + 200] for m in re.finditer(r"\b([A-Z][a-z]+),\s+(?=an?\s)", story)}
+    named = {_clean_name(m.group(1)): story[m.end():m.end() + 200] for m in re.finditer(rf"\b({_NAME}),\s+(?=an?\s)", story)
+             if _clean_name(m.group(1))}
     out = []
     for part in head.split(";"):
         d = part.strip()
@@ -1142,13 +1166,19 @@ def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = 
             + "retention_analysis:" + NL + NL.join(kept) + NL + NL + "detailed_description: " + desc + tail)
 
 
-_NAMED = re.compile(r"\b([A-Z][a-z]+),\s+an?\s+(man|woman|boy|girl|guy|lady)\b")
+_NAMED = re.compile(rf"\b({_NAME}),\s+an?\s+(man|woman|boy|girl|guy|lady)\b")
 
 
 def _cast_names(plan_or_story) -> dict:
-    """{name: "man" / "woman" ...} from the story ("Daniel, a man in his forties ..."). Empty when it names nobody."""
+    """{name: "man" / "woman" ...} from the story ("Daniel, a man in his forties ..."; two-word names work too:
+    "Parka girl, a woman ..."). Empty when it names nobody."""
     story = plan_or_story.get("story", "") if isinstance(plan_or_story, dict) else str(plan_or_story or "")
-    return {m.group(1): m.group(2) for m in _NAMED.finditer(story)}
+    out = {}
+    for m in _NAMED.finditer(story):
+        name = _clean_name(m.group(1))
+        if name:
+            out[name] = m.group(2)
+    return out
 
 
 def _solo(text: str, names: dict) -> str | None:
@@ -1317,6 +1347,8 @@ class LCH3Segment:
                 cast = 1
             if solo:
                 focus = (solo, names[solo])
+            if mem_clip is not None and mem_clip[1] is not None and not _SPOKEN.search(shot["action"]):
+                mem_clip = (mem_clip[0], None)  # a silent shot gets the face memory without its sound (the sound is played back as speech)
         if cont:
             mem = None
         # your references (LC H3 Reference Assembler): the ones this shot names, on CUTs and re-anchors by default
@@ -1340,7 +1372,7 @@ class LCH3Segment:
                 pictured = {p["name"] for p in shot_refs["pictures"] if p["role"] in ("face", "full body")}
                 voiced = {a["name"] for a in shot_refs["audios"] if a["role"] == "voice"}
                 added = False
-                for nm in dict.fromkeys(re.findall(r"\b([A-Z][\w'-]+) says\b", shot["action"])):
+                for nm in dict.fromkeys(re.findall(r"\b([A-Z][\w'-]+(?: [a-z]+)?) says\b", shot["action"])):
                     vp = _voice_path(folder, nm) if nm in pictured and nm not in voiced else None
                     if vp and len(shot_refs["audios"]) < 3:
                         shot_refs["audios"].append({"id": f"voice_{nm}", "role": "voice", "name": nm, "note": "", "file": vp,
@@ -1596,7 +1628,7 @@ def _solo_name(segment: dict) -> str | None:
     return _solo(segment.get("prompt", ""), _cast_names(plan))
 
 
-_SAID_AT = re.compile(r"At (\d+(?:\.\d+)?) seconds, ([A-Z][\w'-]+)(?: \(S\d+\))? says:?\s*(?:<d>\[\w+\]\s*(.+?)\s*</d>|[\"“](.+?)[\"”])", re.S)
+_SAID_AT = re.compile(r"At (\d+(?:\.\d+)?) seconds, ([A-Z][\w'-]+(?: [a-z]+)?)(?: \(S\d+\))? says:?\s*(?:<d>\[\w+\]\s*(.+?)\s*</d>|[\"“](.+?)[\"”])", re.S)
 
 
 def _voice_path(folder: str, name: str) -> str | None:
