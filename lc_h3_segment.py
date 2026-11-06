@@ -387,6 +387,67 @@ def _color_match(frames: torch.Tensor, ref: torch.Tensor, strength: float) -> to
     return (frames + (matched - frames) * strength).clamp(0, 1)
 
 
+JOIN_SMOOTH_AFTER = 12  # new frames after a CONTINUE join that the brightness smoothing reaches into (0.5 s)
+JOIN_SMOOTH_BEFORE = 6  # and frames of the previous segment before its crossfade
+
+
+def _smooth_light(win: np.ndarray, size: int = 9) -> np.ndarray:
+    """Even out frame-to-frame brightness across a join (the idea of ffmpeg's deflicker, only where it's needed):
+    each frame's per-channel mean is pulled toward a running average of its neighbours. The pull fades to nothing at
+    both ends of the window, so the frames on either side are untouched and no new step appears. float [N,H,W,3] in,
+    uint8 out."""
+    n = len(win)
+    if n < 3:
+        return win.round().clip(0, 255).astype(np.uint8)
+    mean = win.reshape(n, -1, 3).mean(1) + 1e-3
+    pad = size // 2
+    padded = np.pad(mean, ((pad, pad), (0, 0)), mode="edge")
+    target = np.stack([padded[k:k + size].mean(0) for k in range(n)])
+    taper = np.sin(np.linspace(0, np.pi, n))[:, None]
+    gain = np.clip(1 + (target / mean - 1) * taper, 0.85, 1.15)
+    return (win * gain[:, None, None, :]).round().clip(0, 255).astype(np.uint8)
+
+
+def _repair_pin(plan: dict, folder: str, i: int, make: str, redo_after: str, frame_count: int, ovl: int, cont: bool,
+                width: int, height: int, vae, audio_vae):
+    """Repair in place (the idea of H3-Continuous's Repair Segment): redoing one saved segment with "repair (keep
+    its ending)" while the next one already continues from it pins the redo's ending to the old ending, video and sound,
+    so the next segment still joins and nothing after it has to be made again. -> (keyframe, note) or None."""
+    shots = plan.get("shots") or []
+    if make != "redo" or not redo_after.startswith("repair") or i >= len(shots) or not _is_done(folder, i) or not _is_done(folder, i + 1):
+        return None
+    try:
+        with open(_seg_path(folder, i + 1, ".json"), encoding="utf-8") as f:
+            if json.load(f).get("mode") != "CONTINUE":
+                return None
+    except Exception:
+        return None
+    kf = _latent_tail(_seg_path(folder, i, "_latent.safetensors"), ovl, width, height)
+    n = ovl
+    if kf is None:  # no saved latent (or another size): the old tail mp4 + wav, VAE encoded
+        tail_mp4 = _seg_path(folder, i, "_tail.mp4")
+        if not os.path.exists(tail_mp4):
+            return None
+        tail = _read_mp4_frames(tail_mp4, width, height)
+        n = min(ovl, tail.shape[0])
+        while n > 5 and n % 17 != 5:  # H3 guide clips are 5, 22, 39, 56 ... frames
+            n -= 1
+        if n < 5:
+            return None
+        kf = {"latent": vae.encode(tail[-n:])}
+        tail_wav = _seg_path(folder, i, "_tail.wav")
+        if os.path.exists(tail_wav):
+            from comfy.ldm.minimax.model import FRAME_RESCALE
+            a_lat, _ = _encode_ref_audio(audio_vae, _read_wav(tail_wav))
+            kf["audio_latent"] = a_lat[..., :max(1, int(round(n * FRAME_RESCALE)))]
+    room = frame_count - n - (ovl if cont else 0)  # frames of its own between the carried start and the pinned end
+    if room < FPS:  # under a second to get from one to the other: too tight to pin, make it the old way
+        print(f"[LC H3] Repair segment {i}: too short to pin both ends ({frame_count} frames), made without the end pin.")
+        return None
+    kf["resolved_frame_index"] = frame_count - n
+    return kf, f"ending pinned to the old one, so segment {i + 1} still joins"
+
+
 def _scene_start(plan: dict, i: int, folder: str = "") -> int:
     """The segment a CONTINUE run grew from: the last CUT at or before i (segment 1 counts as a cut). A segment
     saved as a CUT counts as one even when the plan says CONTINUE."""
@@ -1227,7 +1288,7 @@ class LCH3Segment:
                 "first_frame": ("IMAGE", {"tooltip": "Start image for segment 1 (and for CUT segments when wired)."}),
                 "memory_image": ("IMAGE", {"tooltip": "Your own cast picture (a character sheet or a still) to use as the memory instead of segment 1's frame. Used for every segment, segment 1 included."}),
                 "prompt_format": (["sections (H3 trained)", "plain"], {"default": "sections (H3 trained)", "tooltip": "sections: the layout H3 was trained on (description / soundscape / non_diegetic_music: none, dialogue as <d>[English] ... </d>, and the reference block for the memory). plain: style + action text."}),
-                "redo_after": (["just this segment", "this + the CONTINUE ones after it"], {"default": "this + the CONTINUE ones after it", "tooltip": "When index redoes a segment that is already saved. The old take is always kept in the project's takes folder. this + the CONTINUE ones after it: the segments that carry straight on from this one no longer join, so they are set aside too; set index back to 0 and queue to make them again. A CUT after it stays."}),
+                "redo_after": (["just this segment", "repair (keep its ending)", "this + the CONTINUE ones after it"], {"default": "this + the CONTINUE ones after it", "tooltip": "When index redoes a segment that is already saved. The old take is always kept in the project's takes folder.\njust this segment: a new ending. The segments after it are kept, but the next one no longer joins (it shows as made from the old ending) until you redo it.\nrepair (keep its ending): its ending is pinned to the old ending, so the segment after it still joins and nothing else changes.\nSeveral bad segments in a row (5 and 6 bad, 7 fine): redo 5 with just this segment, then 6 with repair.\nthis + the CONTINUE ones after it: the segments that carry straight on from this one are set aside too; set index back to 0 and queue to make them again. A CUT after it stays."}),
                 "refs": (REFS_TYPE, {"tooltip": "From LC H3 Reference Assembler: your cast, setting, prop and style pictures. Each segment gets only the ones its shot names."}),
                 "refs_on": (["cuts only", "cuts + re-anchors", "cuts + places on continues", "every segment"], {"default": "cuts only", "tooltip": "When the references are sent. cuts only: CUT segments only, so every CONTINUE carries straight on from the frames before it (smoothest joins). cuts + re-anchors: CUT segments, and a CONTINUE that lost the face (a reference on a plain CONTINUE pulled the opening away from the carried frames in tests). cuts + places on continues: CUT segments get everything; a CONTINUE gets only the place, layout and prop pictures (who stands where, which way the door opens), never the faces, which carry on from the frames before it. A CONTINUE that isn't a close-up also gets the place's room (your room picture, or the place's first wide segment) so a camera that pulls back finds the same room. every segment: always."}),
                 "make": (["all remaining", "next segment", "redo"], {"default": "all remaining", "tooltip": "all remaining: one Run makes every segment not saved yet, one after another, however many there are (only one run ever waits in the queue, so Stop ends it right there; Run again to carry on). next segment: one Run, one segment. redo: makes segment number index again."}),
@@ -1561,6 +1622,10 @@ class LCH3Segment:
                 raise ValueError(f"[LC H3] Segment {i}'s end frame {end_frame} isn't there (or is outside ComfyUI's input / output folders).")
             pic = torch.from_numpy(np.asarray(Image.open(p).convert("RGB"), dtype=np.float32) / 255.0)[None]
             keyframes.append({"resolved_frame_index": frame_count - 1, "latent": vae.encode(_resize(pic, width, height, "center"))})
+        repair = "" if end_frame else _repair_pin(plan, folder, i, make, redo_after, frame_count, ovl_frames, cont, width, height,
+                                                  vae, audio_vae)
+        if repair:
+            keyframes.append(repair[0])
 
         if ref_items:
             tokens = clip.tokenize(prompt, minimax_ref_items=ref_items)
@@ -1577,7 +1642,7 @@ class LCH3Segment:
         note_first_size(folder, width, height)
         segment = {"project": plan["project"], "folder": folder, "index": i, "count": len(shots), "mode": "CONTINUE" if cont else "CUT",
                    "seed": int(seed), "prompt": prompt, "width": width, "height": height, "frames": frame_count,
-                   "overlap_frames": ovl_frames, "memory": "clip" if mem_clip is not None else (mem is not None), "reanchor": reanchor, "scene_start": _scene_start(plan, i, folder), "lead_frames": 0, "redo_after": redo_after.startswith("this +"),
+                   "overlap_frames": ovl_frames, "memory": "clip" if mem_clip is not None else (mem is not None), "reanchor": reanchor, "scene_start": _scene_start(plan, i, folder), "lead_frames": 0, "redo_after": redo_after.startswith("this +") and not repair, "pinned_end": bool(repair),
                    "refs": [f"<Picture {p['n']}> {p['role']} {p['name']}".strip() for p in (shot_refs or {}).get("pictures", [])]
                            + [f"<Audio {x['n']}> {x['role']} {x['name']}".strip() for x in (shot_refs or {}).get("audios", [])],
                    "locked_lines": locked, "layout_from": layout_from,
@@ -1593,7 +1658,8 @@ class LCH3Segment:
                 + (f" (face re-anchored: {reanchor})" if mem_clip is not None and reanchor else "")
                 + (" | refs: " + ", ".join([f"<Picture {p['n']}> {p['name'] or p['role']}" for p in shot_refs["pictures"]]
                                           + [f"<Audio {x['n']}> {x['name']} ({x['role']})" for x in shot_refs.get("audios", [])]) if shot_refs else "")
-                + (" | line locked: " + ", ".join(locked) if locked else ""))
+                + (" | line locked: " + ", ".join(locked) if locked else "")
+                + (f" | repair: {repair[1]}" if repair else ""))
         n_pics = len((shot_refs or {}).get("pictures", []))
         if n_pics > SHOT_PICTURES_OK:
             info += (f" | ⚠️ {n_pics} pictures in one shot: heavy on VRAM, and H3 starts mixing them up. Fewer, named "
@@ -1790,6 +1856,18 @@ def _write_segment(segment: dict, frames_u8: np.ndarray, wave, sr: int, crf: int
     _encode(frames_u8[n - ovl:], _seg_path(folder, i, "_tail.mp4"), 8, "yuv444p")
     if wave is not None:
         _write_wav(_seg_path(folder, i, "_tail.wav"), wave[:, int((n - ovl) * per_frame):], sr)
+    if segment.get("pinned_end") and _is_done(folder, i + 1):
+        # a repair landed on the old ending: the next segment still joins, so it counts as made from this tail
+        nxt = _seg_path(folder, i + 1, ".json")
+        try:
+            with open(nxt, encoding="utf-8") as f:
+                meta = json.load(f)
+            meta["from_tail_mtime"] = os.path.getmtime(_seg_path(folder, i, "_tail.mp4"))
+            made_t = os.path.getmtime(nxt)  # the Story board dates a take by its json: keep segment i + 1's date
+            _save_json(nxt, meta, indent=1, ensure_ascii=False)
+            os.utime(nxt, (made_t, made_t))
+        except Exception as e:
+            print(f"[LC H3] Repair segment {i}: couldn't mark segment {i + 1} as joining ({e}).")
     # the cast memory (kept under segment 1's name) comes from the first segment that shows a face: a story can open
     # on a van pulling up, and a memory of the van would be sent as "the people" to every later cut
     mem_files = ("_memory.png", "_face_ref.png", "_face_refs.npy", "_memory_clip.mp4", "_memory_head.mp4", "_memory_clip.wav",
@@ -2023,7 +2101,7 @@ class LCH3Assemble:
             return a
 
         try:
-            held_v, held_a = None, None  # the previous segment's last frames / audio, held back for blending
+            held_v, held_a, held_pre = None, None, 0  # the previous segment's last frames / audio, held back for blending
             for k, seg in enumerate(segs):
                 comfy.model_management.throw_exception_if_processing_interrupted()
                 i = seg["index"]
@@ -2034,10 +2112,20 @@ class LCH3Assemble:
                 n, ovl = len(frames), int(seg.get("overlap_frames", 0))
                 if seg["mode"] == "CONTINUE" and k > 0:
                     # the old ending and the remade start show the same moments: crossfade them, then go on with new frames
-                    nb = len(held_v) if held_v is not None else 0
+                    nb = len(held_v) - held_pre if held_v is not None else 0
                     if nb:
                         t = (np.arange(1, nb + 1, dtype=np.float32) / (nb + 1))[:, None, None, None]
-                        emit((held_v * (1 - t) + frames[ovl - nb:ovl] * t).round().astype(np.uint8))
+                        blend = held_v[held_pre:] * (1 - t) + frames[ovl - nb:ovl] * t
+                        # H3's replayed opening pumps in brightness at its 17-frame chunk edges and dips where the
+                        # new footage starts (a repaired ending carries the same dip): smooth the brightness from a few
+                        # frames before the blend into the first new frames
+                        m = max(0, min(JOIN_SMOOTH_AFTER, n - ovl - blend_frames))
+                        win = _smooth_light(np.concatenate([held_v[:held_pre].astype(np.float32), blend,
+                                                            frames[ovl:ovl + m].astype(np.float32)]))
+                        nb += held_pre
+                        emit(win[:nb])
+                        if m:
+                            frames[ovl:ovl + m] = win[nb:]  # this segment's own array, read just above
                         new_a = aud[:, int(round((ovl - nb) * spf)):int(round(ovl * spf))]
                         ln = min(new_a.shape[1], held_a.shape[1])
                         ta = np.linspace(0, 1, ln, dtype=np.float32)
@@ -2054,9 +2142,11 @@ class LCH3Assemble:
                 # hold back this segment's last frames when the next segment will blend into them
                 keep = min(blend_frames, int(nxt.get("overlap_frames", 0))) if nxt is not None and nxt["mode"] == "CONTINUE" else 0
                 body_end = n - keep
-                emit(frames[start:body_end])
+                # a few more frames of picture (not sound) wait too, so the join's brightness smoothing can reach them
+                held_pre = min(JOIN_SMOOTH_BEFORE, max(0, body_end - start)) if keep else 0
+                emit(frames[start:body_end - held_pre])
                 audio_out.append(aud[:, int(round(start * spf)):int(round(body_end * spf))])
-                held_v = frames[body_end:] if keep else None
+                held_v = frames[body_end - held_pre:] if keep else None
                 held_a = aud[:, int(round(body_end * spf)):int(round(n * spf))] if keep else None
             enc.stdin.close()
             enc.wait()
