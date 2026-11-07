@@ -197,23 +197,29 @@ def _ask(path: str, pitch: str, max_s: float) -> str:
         msgs = [{"role": "system", "content": SYSTEM.replace("{max_s:g}", f"{max_s:g}")},
                 {"role": "user", "content": f"Pitch: {pitch.strip()}\n\nWrite the cards: the whole story from start to end, "
                                             f"{f'{want} shots' if want else '4 to 8 shots'}. /no_think"}]
-        text = ""
-        for _ in range(2):  # one more try when it stops short (a small model copies the one example shot)
+        text, best, best_n = "", "", -1
+        need = want or 3
+        for _ in range(3):  # more tries when the JSON is broken, or it stops short (a small model copies the example shot)
             res = llm.create_chat_completion(messages=msgs, max_tokens=MAX_TOKENS, temperature=0.7, top_p=0.9,
                                              response_format={"type": "json_object"})
             text = res["choices"][0]["message"]["content"] or ""
             try:
                 got = len(_json(text).get("shots") or [])
-            except Exception:
-                got = 0
-            need = want or 3
-            if got >= min(need, want or need):
+            except Exception as exc:  # broken JSON (often cut off): tell it what went wrong and ask for the whole thing
+                print(f"[LC H3] Story: ✨ answer was not readable JSON ({exc}), asking again")
+                msgs += [{"role": "assistant", "content": text[:4000]},
+                         {"role": "user", "content": f"That was not valid JSON ({exc}). Write the COMPLETE JSON again, every "
+                                                     f"card, nothing else. Keep it shorter if it got cut off. /no_think"}]
+                continue
+            if got > best_n:
+                best, best_n = text, got
+            if got >= need:
                 break
             print(f"[LC H3] Story: ✨ wrote {got} shots, asking for {need}")
             msgs += [{"role": "assistant", "content": text},
                      {"role": "user", "content": f"That is only {got} shots. Write the full JSON again with all {want or 'the'} shots "
                                                  f"that tell the whole pitch, start to end. /no_think"}]
-        return text
+        return best or text  # the fullest readable answer; an unreadable one raises in write_story
     finally:
         free_llm(llm)
         print("[LC H3] Story: writer unloaded")
