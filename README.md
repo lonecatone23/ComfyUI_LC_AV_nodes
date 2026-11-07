@@ -140,6 +140,8 @@ Minute-long MiniMax H3 videos made in short pieces, one shot at a time, on the s
 - **Place card:** a description, the sound of the room ("rain on the window, cups clinking, footsteps": sounds only, never who speaks) and a picture of it empty. A **360 panorama** lets close-ups face any side of the room: aim them with the 🌐 viewer on the shot.
 - **Shot card:** framing, who it's on, camera move, cut or keep rolling, the action, who speaks and the line.
     - **seconds**: **auto** fits the beats and the line, or type your own. The number you type wins.
+    - **Name (V.O.)** in the speaker list is a voiceover: heard off screen, lips stay closed.
+    - 💡 One line over a cut: end it with `...` on this shot and start the next shot's line with `...`. The next shot picks the line up straight away.
     - 🖼 **start** / 🏁 **end** pin the first or last frame. H3 copies a pinned frame exactly, so make it sharp.
     - 📐 draws boxes: who stands where. **✨** on the 🖼 start slot turns them into a start frame.
     - Count props once ("each holds one cup") or extras show up.

@@ -1622,7 +1622,7 @@ function render(node) {
               <option value="">as before</option>${items.map((x) => `<option value="${esc(x.id)}"${s.outfit?.[nm] === x.id ? " selected" : ""}>${esc(x.label)}${x.card ? "" : " · cast card"}${x.pic ? "" : " (no picture)"}</option>`).join("")}</select>`).join("")}
         </div>` : ""}
         <div class="lcst-row">
-          <select data-s="${i}" data-f="speaker" style="width:100px" title="Who says the line">${opts(["", ...names], s.speaker || "", { "": "no line" })}</select>
+          <select data-s="${i}" data-f="speaker" style="width:100px" title="Who says the line. (V.O.) = voiceover: heard off screen, lips closed">${opts(["", ...names, ...names.map((n) => n + " (V.O.)")], s.speaker || "", { "": "no line" })}</select>
           <input data-s="${i}" data-f="line" value="${esc(s.line)}" placeholder="The line, word for word" style="flex:1">
           <span class="lcst-tip" data-wc="${i}">${words(s.line) ? words(s.line) + " words" : ""}</span>
         </div>

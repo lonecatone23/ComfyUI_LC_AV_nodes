@@ -906,6 +906,93 @@ def _dialogue(text: str, style: str = "") -> str:
     return "".join(out) + text[last:]
 
 
+# MiniMax's H3 prompt guide (skills/h3-prompt-writing, base-en.txt): the wording below is copied from it
+VO_SAYS = "says in an off-screen voiceover"
+_VO_TYPED = re.compile(r"\s*\((?:V\.?\s?O\.?|voice-?over)\)\s*(?:says|said)\b|\bsays\s+(?:in\s+(?:an?\s+)?)?(?:off-screen\s+)?voice-?over\b", re.I)
+_VO_LINE = re.compile(r"(?:(?P<who>[A-Z][\w'-]*(?: [a-z]+)?) (?:\(S\d+\) )?)?" + VO_SAYS + r":?\s*(?P<d><d>\[\w+\].*?</d>)", re.S)
+_D_LINE = re.compile(r"<d>\[\w+\]\s*(.*?)\s*</d>", re.S)
+_AT_SEC = re.compile(r"At (\d+(?:\.\d+)?) seconds,")
+_DOTS = re.compile(r"\s*(?:\.\.\.|…)\s*$")
+_DOTS_HEAD = re.compile(r"^\s*(?:\.\.\.|…)\s*")
+H3_OFFICIAL = True  # False = the wording before 0.5.15 (benched 2026-11-06)
+
+
+def _vo_words(text: str) -> str:
+    """A typed voiceover ("Parka (V.O.) says", "says in voiceover") in the guide's wording, before the (S1) tags go in."""
+    return _VO_TYPED.sub(lambda m: (" " if m.group(0)[:1].isspace() else "") + VO_SAYS, text) if H3_OFFICIAL else text
+
+
+def _vo_closed(body: str) -> str:
+    """After every voiceover line the guide states that the person's lips stay closed."""
+    if not H3_OFFICIAL:
+        return body
+
+    def fix(m):
+        if re.match(r"\s*,?\s*while\b[^.]{0,40}\blips\b", body[m.end():m.end() + 80]):
+            return m.group(0)
+        who = m.group("who")
+        lips = f"{who}'s lips" if who and who not in _NOT_NAMES else "their lips"
+        return m.group(0) + f" while {lips} remain completely closed."
+    return _VO_LINE.sub(fix, body)
+
+
+def _line_edges(prompt: str, seconds: float, plan: dict, i: int) -> str:
+    """A line the clip ends on gets <cutoff>; a line split over a cut ("I still remember..." / "...that road.", the
+    next shot a cut) gets <scenetrans> on both sides and says the sound carries across."""
+    if not H3_OFFICIAL:
+        return prompt
+    from .lc_h3_story import WORDS_PER_SECOND
+
+    shots = {int(s.get("index", 0) or 0): s for s in plan.get("shots", [])}
+
+    def quotes(k):
+        s = shots.get(k)
+        return [m.group(1) for m in _SPOKEN.finditer(s.get("action", ""))] if s else []
+
+    def is_cut(k):
+        return k in shots and str(shots[k].get("mode", "")).upper() != "CONTINUE"
+
+    lines = list(_D_LINE.finditer(prompt))
+    if not lines:
+        return prompt
+    nxt, prv = quotes(i + 1), quotes(i - 1)
+    out, last = [], 0
+    for n, m in enumerate(lines):
+        text, after = m.group(1), ""
+        to_next = n == len(lines) - 1 and _DOTS.search(text) and nxt and _DOTS_HEAD.search(nxt[0]) and is_cut(i + 1)
+        from_prev = n == 0 and _DOTS_HEAD.search(text) and prv and _DOTS.search(prv[-1]) and is_cut(i)
+        if from_prev:
+            text = "<scenetrans> " + _DOTS_HEAD.sub("", text)
+            after = " The line carries over from the previous shot."
+        if to_next:
+            text = _DOTS.sub("", text) + " <scenetrans>"
+            after += ", and the line continues seamlessly across the cut."
+        else:
+            at = list(_AT_SEC.finditer(prompt, 0, m.start()))
+            words = len(re.findall(r"[A-Za-z0-9']+", text))
+            if at and float(at[-1].group(1)) + words / WORDS_PER_SECOND > seconds + 0.3:
+                text += " <cutoff>"
+        tag = m.group(0)[:m.group(0).index("]") + 1]
+        out.append(prompt[last:m.start()] + f"{tag} {text.strip()} </d>" + after)
+        last = m.end()
+    return "".join(out) + prompt[last:]
+
+
+def _align_line(first: bool, end: bool, seconds: float) -> str:
+    """The guide's first line for pinned pictures: the start picture at 0.00, the end picture at the last second."""
+    t = f"{math.floor(seconds * 100 + 0.5) / 100:.2f}"  # half up: 243 frames = 10.125 s -> 10.13
+    if first and end:
+        return ("How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second "
+                f"mark of the target video; Picture 2 (from Shot 1) aligns with the {t}-second mark of the target video.")
+    if end:
+        return f"How the reference pictures align with the target video — <Picture 1> (from [Shot 1]) aligns with the {t}-second mark of the target video."
+    return "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."
+
+
+def _music_none() -> str:
+    return "N/A" if H3_OFFICIAL else "none"
+
+
 def _h3_sections(style: str, action: str, ref: str | None, people: int = 1, focus=None) -> str:
     """The prompt in H3's trained layout: integrated_multimodal_description / overall_soundscape / non_diegetic_music,
     quoted lines as <d>[English] ... </d>, and with a reference the subject_definitions / summary / retention_analysis
@@ -916,10 +1003,10 @@ def _h3_sections(style: str, action: str, ref: str | None, people: int = 1, focu
             sound = line.split(":", 1)[1].strip()
         else:
             keep.append(line)
-    body = _dialogue("\n".join(keep).strip(), style)
+    body = _vo_closed(_dialogue(_vo_words("\n".join(keep).strip()), style))
     sound = re.sub(r"\s*No music\.?", "", sound).strip()  # the music section says it
     desc = (style + NL + NL + body).strip()
-    tail = NL + NL + "overall_soundscape: " + (sound or "quiet natural ambience.") + NL + NL + "non_diegetic_music: none"
+    tail = NL + NL + "overall_soundscape: " + (sound or "quiet natural ambience.") + NL + NL + "non_diegetic_music: " + _music_none()
     if ref is None:
         return "integrated_multimodal_description: " + desc + tail
     who = "<Picture 1>" if ref == "picture" else "<Video 1>"
@@ -1183,10 +1270,10 @@ def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = 
             sound = line.split(":", 1)[1].strip()
         else:
             keep.append(line)
-    body = _dialogue("\n".join(keep).strip(), style)
+    body = _vo_closed(_dialogue(_vo_words("\n".join(keep).strip()), style))
     sound = re.sub(r"\s*No music\.?", "", sound).strip()
     desc = (style + NL + NL + body).strip()
-    tail = NL + NL + "overall_soundscape: " + (sound or "quiet natural ambience.") + NL + NL + "non_diegetic_music: none"
+    tail = NL + NL + "overall_soundscape: " + (sound or "quiet natural ambience.") + NL + NL + "non_diegetic_music: " + _music_none()
     from .lc_h3_refs import people as _ref_people, retention as _ref_retention
 
     tag = lambda p: f"<Picture {p['n']}>"  # noqa: E731
@@ -1287,7 +1374,7 @@ class LCH3Segment:
             "optional": {
                 "first_frame": ("IMAGE", {"tooltip": "Start image for segment 1 (and for CUT segments when wired)."}),
                 "memory_image": ("IMAGE", {"tooltip": "Your own cast picture (a character sheet or a still) to use as the memory instead of segment 1's frame. Used for every segment, segment 1 included."}),
-                "prompt_format": (["sections (H3 trained)", "plain"], {"default": "sections (H3 trained)", "tooltip": "sections: the layout H3 was trained on (description / soundscape / non_diegetic_music: none, dialogue as <d>[English] ... </d>, and the reference block for the memory). plain: style + action text."}),
+                "prompt_format": (["sections (H3 trained)", "plain"], {"default": "sections (H3 trained)", "tooltip": "sections: the layout H3 was trained on (description / soundscape / non_diegetic_music: N/A, dialogue as <d>[English] ... </d>, and the reference block for the memory). plain: style + action text."}),
                 "redo_after": (["just this segment", "repair (keep its ending)", "this + the CONTINUE ones after it"], {"default": "this + the CONTINUE ones after it", "tooltip": "When index redoes a segment that is already saved. The old take is always kept in the project's takes folder.\njust this segment: a new ending. The segments after it are kept, but the next one no longer joins (it shows as made from the old ending) until you redo it.\nrepair (keep its ending): its ending is pinned to the old ending, so the segment after it still joins and nothing else changes.\nSeveral bad segments in a row (5 and 6 bad, 7 fine): redo 5 with just this segment, then 6 with repair.\nthis + the CONTINUE ones after it: the segments that carry straight on from this one are set aside too; set index back to 0 and queue to make them again. A CUT after it stays."}),
                 "refs": (REFS_TYPE, {"tooltip": "From LC H3 Reference Assembler: your cast, setting, prop and style pictures. Each segment gets only the ones its shot names."}),
                 "refs_on": (["cuts only", "cuts + re-anchors", "cuts + places on continues", "every segment"], {"default": "cuts only", "tooltip": "When the references are sent. cuts only: CUT segments only, so every CONTINUE carries straight on from the frames before it (smoothest joins). cuts + re-anchors: CUT segments, and a CONTINUE that lost the face (a reference on a plain CONTINUE pulled the opening away from the carried frames in tests). cuts + places on continues: CUT segments get everything; a CONTINUE gets only the place, layout and prop pictures (who stands where, which way the door opens), never the faces, which carry on from the frames before it. A CONTINUE that isn't a close-up also gets the place's room (your room picture, or the place's first wide segment) so a camera that pulls back finds the same room. every segment: always."}),
@@ -1532,6 +1619,7 @@ class LCH3Segment:
                                            shot_refs.get("audios"), plan.get("story", ""), bool(shot.get("tight")))
             else:
                 prompt = _h3_sections(style, action, ref_kind, cast, focus if cast > 1 else None)
+            prompt = _line_edges(prompt, frame_count / FPS, plan, i)
         elif shot_refs:
             prompt = shot_refs["text"] + NL + NL + prompt
         if cont:
@@ -1621,11 +1709,26 @@ class LCH3Segment:
             if not p or not os.path.isfile(p):
                 raise ValueError(f"[LC H3] Segment {i}'s end frame {end_frame} isn't there (or is outside ComfyUI's input / output folders).")
             pic = torch.from_numpy(np.asarray(Image.open(p).convert("RGB"), dtype=np.float32) / 255.0)[None]
-            keyframes.append({"resolved_frame_index": frame_count - 1, "latent": vae.encode(_resize(pic, width, height, "center"))})
+            end_img = _resize(pic, width, height, "center")
+            keyframes.append({"resolved_frame_index": frame_count - 1, "latent": vae.encode(end_img)})
         repair = "" if end_frame else _repair_pin(plan, folder, i, make, redo_after, frame_count, ovl_frames, cont, width, height,
                                                   vae, audio_vae)
         if repair:
             keyframes.append(repair[0])
+        if (H3_OFFICIAL and not ref_items and prompt.startswith("integrated_multimodal_description: ")
+                and (images or end_frame) and "aligns with the" not in prompt and "is fully referenced" not in prompt):
+            # MiniMax's own First-Last-Frame layout: the text encoder sees the end picture too (the stock node passes it
+            # as Picture 2), the guide's first line says which picture sits where, and the description is [Shot 1]
+            first = bool(images)
+            if end_frame:
+                images.append(end_img)
+            desc = prompt[len("integrated_multimodal_description: "):]
+            if end_frame:
+                land = (f"At the end of the shot, everything settles into the pose, framing and composition established by "
+                        f"{'Picture 2' if first else '<Picture 1>'}.")
+                head, sep, rest = desc.partition(NL + NL + "overall_soundscape:")
+                desc = head.rstrip() + " " + land + sep + rest
+            prompt = _align_line(first, bool(end_frame), frame_count / FPS) + NL + NL + "integrated_multimodal_description: [Shot 1] " + desc
 
         if ref_items:
             tokens = clip.tokenize(prompt, minimax_ref_items=ref_items)

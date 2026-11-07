@@ -118,6 +118,15 @@ def _line_seconds(line) -> float:
     return n / WORDS_PER_SECOND if n else 0.0
 
 
+VO = " (V.O.)"  # the speaker dropdown's voiceover pick: "Parka (V.O.)"
+
+
+def _who_says(speaker) -> tuple:
+    """(cast name, voiceover?) from the speaker field."""
+    s = str(speaker or "").strip()
+    return (s[:-len(VO)].strip(), True) if s.endswith(VO) else (s, False)
+
+
 def _names(story: dict) -> list:
     return [str(c.get("name") or "").strip() for c in story.get("cast", []) if str(c.get("name") or "").strip()]
 
@@ -318,10 +327,11 @@ def _auto_beats(shot: dict, span: float, names: list) -> list:
             action.append(s)
     line = _clean_line(shot.get("line"))
     after = str(shot.get("after") or "").strip()
-    speaker = str(shot.get("speaker") or "").strip() or (names[0] if len(names) == 1 else "")
+    speaker, vo = _who_says(shot.get("speaker"))
+    speaker = speaker or (names[0] if len(names) == 1 else "")
     say_s = _line_seconds(line)
     beats = []
-    if line:
+    if line and not vo:  # a voiceover comes from off screen: the lips stay closed, so a drink can go on
         # mouth actions (drinking, eating ...) and a line in one shot: H3 had her drink right through the line even with
         # the drinking moved after it (Coffee Date take 4), so the drinks stay down for the whole shot
         mouth = [a for a in action if _MOUTH_RE.search(a)]
@@ -341,13 +351,14 @@ def _auto_beats(shot: dict, span: float, names: list) -> list:
             beats.append((round(k * step, 2), _beat(a)))
     if line:
         t_line = max(t_line, beats[-1][0] + 0.6) if beats else t_line
-        beats.append((round(t_line, 2), f"{speaker or 'Someone'} says: \"{line}\""))
+        # MiniMax's guide: "says in an off-screen voiceover", then the lips stay closed (Segment adds that sentence)
+        beats.append((round(t_line, 2), f"{speaker or 'Someone'} says{' in an off-screen voiceover' if vo else ''}: \"{line}\""))
     if after:
         t_after = (t_line + say_s + 0.3) if line else (beats[-1][0] + 0.8 if beats else 0.0)
         beats.append((round(min(t_after, max(0.0, span - 0.4)), 2), _beat(after) + (" Nobody says anything more." if line else "")))
     elif line and t_line + say_s + 0.3 < span - 0.3:
         # time left after the line: H3 filled it by saying the line again (Coffee Date 2026-10-29, Nova)
-        beats.append((round(t_line + say_s + 0.3, 2), f"{speaker or 'They'} stops talking. Nobody says anything more; the moment holds in silence."))
+        beats.append((round(t_line + say_s + 0.3, 2), f"{'The voiceover ends' if vo else (speaker or 'They') + ' stops talking'}. Nobody says anything more; the moment holds in silence."))
     if not beats:
         beats.append((0.0, "The moment holds: small natural movement only."))
     return beats
@@ -769,8 +780,8 @@ def build_plan(story: dict, max_s: float = 20.0) -> tuple:
         line = _clean_line(shot.get("line"))
         if line and not (shot.get("speaker") or len(names) == 1):
             sw.append("🛑 Pick who says the line.")
-        elif line and shot.get("speaker") and shot.get("speaker") not in names:
-            sw.append(f"🛑 {shot.get('speaker')} is not in the cast.")
+        elif line and shot.get("speaker") and _who_says(shot.get("speaker"))[0] not in names:
+            sw.append(f"🛑 {_who_says(shot.get('speaker'))[0]} is not in the cast.")
         if (shot.get("framing") or "wide shot") in TIGHT and (shot.get("framing") or "") != "over the shoulder" and shot.get("subject") in names:
             others = [n for n in names if n != shot["subject"] and re.search(rf"\b{re.escape(n)}\b", said, re.I)]
             if others:
