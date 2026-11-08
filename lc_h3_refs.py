@@ -217,9 +217,25 @@ def sentences(refs):
 
 
 _CLOTHING = re.compile(r"\b(sweaters?|jumpers?|blouses?|shirts?|t-shirts?|tees?|tops?|jackets?|coats?|parkas?|hoodies?|dress(es)?|"
-                       r"skirts?|suits?|blazers?|vests?|cardigans?|jeans|trousers|pants|shorts|uniforms?|scarf|scarves|hats?|caps?|"
+                       r"skirts?|suits?|jumpsuits?|bodysuits?|catsuits?|spacesuits?|flightsuits?|armou?r|"
+                       r"blazers?|vests?|cardigans?|jeans|trousers|pants|shorts|uniforms?|scarf|scarves|hats?|caps?|"
                        r"gowns?|robes?|aprons?|overalls|tank|leggings|stockings|tights|socks|shoes?|boots?|heels?|sneakers?|"
                        r"trainers|sandals?|loafers?|pumps|stilettos?|wearing|dressed|outfit|clothes|clothing)\b", re.I)
+
+
+def outfit_name(notes, fallback="outfit 1"):
+    """A short name for a cast card's own 👗 outfit from its notes, up to the first garment: "dark blue jumpsuit",
+    "red and grey jumpsuit", "white sweater". The label is all H3 reads about an outfit picture, and a meaningless
+    "outfit 1" over a bare-shouldered headshot gave two naked women ("Uber run", 2026-11-07); a label that names the
+    garment held it 8 of 8 (2026-11-02). No garment in the notes: the fallback."""
+    for part in re.split(r"[,;.]", str(notes or "")):
+        m = next((m for m in _CLOTHING.finditer(part)
+                  if m.group(1).lower() not in ("wearing", "dressed", "outfit", "clothes", "clothing")), None)
+        if m:
+            head = re.sub(r"^\s*((wearing|dressed in|in)\s+)?(a|an|the)?\s*", "", part[:m.end()].strip(), flags=re.I)
+            words = head.split()
+            return " ".join(words[-6:]).lower() or fallback
+    return fallback
 
 
 def strip_clothes(text):

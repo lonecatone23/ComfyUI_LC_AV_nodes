@@ -6,7 +6,7 @@ Custom nodes for ComfyUI by lonecatone23.
 * **Image companion:** https://github.com/lonecatone23/ComfyUI_LC123_nodes
 * **CivitAI:** lonecatone23
 * **Support:** https://ko-fi.com/lonecatone
-* **Version:** 0.3.13
+* **Version:** 0.5.17 · **27 nodes**
 
 > Small tools that remove friction: frames, soundtrack, metadata, fewer extra packs.
 
@@ -130,15 +130,22 @@ Shows a progress bar per tile (also on the MiniMax Video VAE, which tiles itself
 
 ## H3 Long Video 🎬
 
-Minute-long MiniMax H3 videos made in short pieces, one shot at a time, on the same card that makes 5 s clips. **LC H3 Story 🎬** holds the cast, places and shots. **LC H3 Make 🎥** renders them and joins the movie. Example workflow: `MMH3 Showrunner V2.0` (with a guided tour: **Vision Assistant** → **Tour**).
+Minute-long MiniMax H3 videos made in short pieces, one shot at a time, on the same card that makes 5 s clips. **LC H3 Story 🎬** holds the cast, places and shots. **LC H3 Make 🎥** renders them and joins the movie. Example workflow: `MMH3 Showrunner V2.5.2` (with a guided tour: **Vision Assistant** → **Tour**).
+
+📘 **[User Guide](docs/showrunner/USER_GUIDE.md)**: every part of the workflow, step by step, with screenshots. ✍️ **[Prompting Guide](docs/showrunner/PROMPTING_GUIDE.md)**: how to word looks, outfits, actions and lines.
 
 **LC H3 Story (BETA) 🎬**
-- The whole movie on one node: **cast**, **places** and **shots**, each on its own card.
+- The whole movie on one node: **cast**, **outfits**, **places**, **props** and **shots**, each on its own card.
 - ✋ **The text a shot builds is exactly what H3 gets.** Open the shot's **H3 prompt** to read it. One thing is left out quietly: a place's sound line loses any clause about speech ("nobody speaks"), because naming speech makes H3 speak. You see the result in the H3 prompt.
-- **Cast card:** a name, who they are (woman, man, cat, etc.), their look, a face picture and a voice.
+- **Cast card:** a name, who they are (woman, man, cat, etc.), their look, a headshot (head and hair only), a 👗 outfit picture and a voice.
     - 💡 Use a neutral face on a plain grey background. A card's background, props and expression leak into every shot it's in.
+- **Outfit card:** a change of clothes, with a simple name ("red cocktail dress"), who wears it, a head-to-toe description and a picture. A state of dress works too ("naked", "topless, black jeans", "wrapped in a white towel"): H3 gets it as written.
+- **Prop card:** an object that matters (a cup, a sign), with its own picture.
+- 📚 Every cast, outfit, prop and 🌐 360 slot has a **Library** tab: 102 ready-made pictures, free (CC BY 4.0).
 - **Place card:** a description, the sound of the room ("rain on the window, cups clinking, footsteps": sounds only, never who speaks) and a picture of it empty. A **360 panorama** lets close-ups face any side of the room: aim them with the 🌐 viewer on the shot.
-- **Shot card:** framing, who it's on, camera move, cut or keep rolling, the action, who speaks and the line.
+- **Shot card:** framing, who it's on (everyone, one person, or **nobody** for an empty shot), camera move, cut or keep rolling, the action, who speaks and the line.
+    - 🎞 **keep rolling** carries straight on from the shot before and **locks** its framing, place, 🌐 angle, outfits and start frame (🔒). People can still walk in, and they get their face pictures.
+    - 🎛 **LoRA for this shot**: any LoRA for that shot only, on top of the pipe's LoRAs, picked like the LC LoRA Loader (folder picker, strength, ℹ trigger words). Keep rolling uses its cut's LoRAs.
     - **seconds**: **auto** fits the beats and the line, or type your own. The number you type wins.
     - **Name (V.O.)** in the speaker list is a voiceover: heard off screen, lips stay closed.
     - 💡 One line over a cut: end it with `...` on this shot and start the next shot's line with `...`. The next shot picks the line up straight away.
@@ -146,12 +153,13 @@ Minute-long MiniMax H3 videos made in short pieces, one shot at a time, on the s
     - 📐 draws boxes: who stands where. **✨** on the 🖼 start slot turns them into a start frame.
     - Count props once ("each holds one cup") or extras show up.
 - **✨ Write the story** turns a short pitch into cards with a local LLM, once. After that it's plain text you edit.
-- **The board** under the shots: a tile per shot. ✅ made, ✏️ changed since it was made, 🔒 locked. ▶ plays it, ↻ makes it again, 📌 on a paused frame sets that place's anchor.
+    - **🔞 NSFW** (off by default): lets the writer write adult scenes, the same rule as LC Vision's NSFW style tag.
+- **The board** under the shots: a tile per shot. ✅ made, ✏️ changed since it was made, 🔒 locked. ▶ plays it, ↻ makes that one shot again and stops, 📌 on a paused frame sets that place's room anchor, 🖼 on a paused frame starts the next shot from it.
+- **▾** folds a shot to one line. The project bar stays pinned at the top.
 - **max_shot_seconds**: the longest shot this machine renders in one go (20 default). A longer shot is made in parts, each carrying on from the one before.
-- ⚠️ A keep-rolling shot that changes framing (wide to close-up) breaks: H3 cuts by itself to a room it invents. Use a cut.
 - **H3 prompt** (under each shot): the exact text H3 gets for that shot. **↻** builds it from the cards again right now, so you see what will be sent before you spend time rendering. **✎ Edit** lets you write it by hand: what you save is sent as is, and changes to the cards stop changing it until you press **↶ Back to automatic**.
 - **✨ on a picture slot** (cast, outfit, place, 🌐 360, prop, 🖼 start, 🏁 end) makes that picture. The Story switches on the part of the workflow that makes it, keeps Make off, runs once and puts everything back. A blank card name never writes over a picture, and **↶** brings back the picture before (the last 8 are kept).
-- **📐 size** (under the project name) shows the size and aspect ratio the project was first made at, and which shots differ. **💾 Save as** keeps a variant under a new name.
+- **📐 size** (under the project name) shows the size the project is made at. Change it and the next Run makes every shot made at the old size again. **💾 Save as** keeps a variant under a new name.
 - The 🌐 shot angle is also the background of the 📐 boxes, so you place people on the view the shot will use.
 - Everything saves to `output/LC_H3/<project>/` (story.json, plan.json, the takes and the movie). Pictures go in `input/lc_h3_refs/<project>/`.
 
@@ -173,7 +181,8 @@ Minute-long MiniMax H3 videos made in short pieces, one shot at a time, on the s
 - **color_match**: 0 = off. 0.2 to 0.4 when **info** flags a scene drifting warmer or cooler.
 - **crf** 16 is close to lossless.
 - **info** reports the face match per shot (0.55 and up = same person, under 0.40 = someone else, redo it) and how smooth each join is.
-- 💡 960 x 544 is the low VRAM size. Keep one size for the whole project, then upscale the finished movie (VOSR2 2x + Frame Interpolate to 48 gave the best result in my tests).
+- A shot's 🎛 LoRAs go on a copy of the model for that shot only; the next cut starts from the pipe's model again.
+- 💡 960 x 544 is the low VRAM size. Frame Interpolate to 48 fps is the post step that clearly helps; upscalers were barely worth it in my tests.
 
 **LC H3 Audio Sync (BETA) 🎤**
 - Makes an H3 video perform YOUR track (a song, a line of dialogue) instead of sound the model invents. Put it between the latent and the sampler.

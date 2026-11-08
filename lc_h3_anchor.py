@@ -20,7 +20,7 @@ def capture(project: str, index: int, time_s: float) -> str:
     folder = project_dir(project)
     if not _is_done(folder, index):
         raise ValueError(f"Segment {index} of {project} isn't made yet.")
-    src = _seg_path(folder, index, ".mp4")
+    src = _seg_path(folder, index, "_part.mp4")  # what the Story player shows (a keep-rolling take's file opens on the shot before)
     sub = os.path.join("lc_h3_refs", "anchors")
     dest_dir = os.path.join(folder_paths.get_input_directory(), sub)
     os.makedirs(dest_dir, exist_ok=True)

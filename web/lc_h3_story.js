@@ -27,7 +27,8 @@ const CSS = `
 .lcst-menu .it{padding:5px 8px;border-radius:4px;cursor:pointer}
 .lcst-menu .it:hover{background:#2b3542}
 .lcst-menu .it.on{color:#eb4}
-.lcst-top{padding:8px;display:flex;flex-direction:column;gap:6px;background:linear-gradient(180deg,#10232c,#0f0f0f)}
+.lcst-top{padding:8px;display:flex;flex-direction:column;gap:6px;background:linear-gradient(180deg,#10232c,#0f0f0f);position:sticky;top:0;z-index:5;box-shadow:0 6px 12px #000c}
+.lcst-min .lcst-sum{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#bbb}
 .lcst *{box-sizing:border-box}
 .lcst-h{font-weight:700;font-size:13px;color:#fff;display:flex;align-items:center;gap:6px;padding:6px 10px;background:linear-gradient(90deg,#1a5a7a,#123f56 70%,#0f0f0f);letter-spacing:.3px}
 .lcst-h .lcst-tip{color:#bfe3f2}
@@ -104,6 +105,8 @@ const CSS = `
 .lcst-play{position:fixed;inset:8% 12%;background:#181818;border:1px solid #555;border-radius:8px;z-index:10000;display:flex;flex-direction:column;gap:6px;padding:8px;font:12px Arial,sans-serif;color:#ddd;box-shadow:0 10px 40px #000}
 .lcst-play video{flex:1;min-height:0;width:100%;background:#000;border-radius:4px}
 .lcst-slot.sm{width:54px;height:30px;flex:0 0 54px;font-size:10px}
+.lcst-lock{opacity:.35;pointer-events:none}
+select.lcst-lock,select:disabled{opacity:.4;cursor:default}
 .lcst-b.on{background:#3a3220;border-color:#eb4;color:#eb4}
 .lcst-vw{display:flex;gap:6px;align-items:flex-start}
 .lcst-bk{display:flex;flex-direction:column;gap:4px;margin:4px 0}
@@ -729,6 +732,16 @@ function blockingEditor(node, d, i, box, onChange) {
   requestAnimationFrame(paint);
 }
 
+/** A keep-rolling shot's source: [the cut that started the run, its number], or null for a cut. Keep rolling carries
+ * the framing, subject, place, 🌐 angle and clothes straight on from it, with no start frame or blocking of its own
+ * (the server's inherit_rolls does the same), so those controls are greyed out on the card. */
+function rollSrc(d, i) {
+  if (!i || d.shots[i]?.join !== "roll") return null;
+  let k = i;
+  while (k > 0 && d.shots[k]?.join === "roll") k--;
+  return [d.shots[k], k + 1];
+}
+
 /** The place a shot is in: its own pick, else the shot before's, else the first place (as the server works it out). */
 function shotPlace(d, i) {
   let where = "";
@@ -1028,13 +1041,15 @@ function paintBoard(node) {
   }));
 }
 
-/** ▶: the shot's parts one after the other; 📌 grabs the frame on screen as an anchor of the shot's place. */
+/** ▶: the shot's parts one after the other (the parts the movie uses); 📌 grabs the frame on screen as an anchor of
+ * the shot's place, 🖼 makes it the next shot's start frame. */
 function openPlayer(node, segs, shot, i, movie) {
   document.querySelector(".lcst-play")?.remove();
   const box = document.createElement("div");
   box.className = "lcst-play";
   box.innerHTML = `<div class="lcst-row"><b style="color:#eb4">${movie ? "🎬 The movie" : `Shot ${i + 1}`}</b><span data-pinfo class="lcst-tip" style="flex:1"></span>
-      ${movie ? "" : `<button class="lcst-b" data-pin title="This frame becomes an anchor of the shot's place: later shots there keep the room the same">📌 Use this frame as an anchor</button>`}
+      ${movie ? "" : `<button class="lcst-b" data-pin title="Room anchor: this frame is shown to H3 as a reference for the shot's place (who sits where, the furniture), so later shots there keep the room. It does not start any shot.">📌 Room anchor</button>`}
+      ${movie || !getData(node).shots[i + 1] ? "" : `<button class="lcst-b" data-next title="Shot ${i + 2} opens exactly on this frame (its 🖼 start). A keep-rolling shot ${i + 2} becomes a cut, since rolling already starts from the end of this one.">🖼 Start shot ${i + 2} here</button>`}
       <button class="lcst-b" data-close>✕</button></div><video controls autoplay></video>`;
   document.body.appendChild(box);
   const v = box.querySelector("video");
@@ -1053,22 +1068,66 @@ function openPlayer(node, segs, shot, i, movie) {
   const close = () => box.remove();
   box.querySelector("[data-close]").onclick = close;
   box.addEventListener("keydown", (e) => (e.stopPropagation(), e.key === "Escape" && close()), true);
-  box.querySelector("[data-pin]")?.addEventListener("click", async () => {
+  const grab = async () => {
     v.pause();
     const d = getData(node);
+    const j = await api.fetchApi("/lc_h3/anchor", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: d.project, index: segs[k].index, time: v.currentTime }) }).then((r) => r.json());
+    if (j.error) throw new Error(j.error);
+    const [sub, name] = [j.file.slice(0, j.file.lastIndexOf("/")), j.file.slice(j.file.lastIndexOf("/") + 1)];
+    return { d, pic: { type: "input", subfolder: sub, filename: name } };
+  };
+  // the buttons answer on themselves (the Story node's status line is often off screen behind the player): working,
+  // then green with what happened, or red with why; plus a toast. The player stays open for the room anchor (add a few)
+  const feedback = (btn, state, text) => {
+    const label = btn.dataset.label || (btn.dataset.label = btn.textContent);
+    btn.disabled = state === "busy";
+    btn.textContent = state === "busy" ? "⏳ grabbing the frame…" : text;
+    btn.style.background = state === "ok" ? "#1e6b3a" : state === "err" ? "#7a2222" : "";
+    btn.style.borderColor = state === "ok" ? "#3fbf6f" : state === "err" ? "#e05555" : "";
+    if (state !== "busy") {
+      clearTimeout(btn.__lcReset);
+      btn.__lcReset = setTimeout(() => ((btn.textContent = label), (btn.style.background = ""), (btn.style.borderColor = ""), (btn.disabled = false)), 2500);
+      try {
+        app.extensionManager?.toast?.add({ severity: state === "ok" ? "success" : "error", summary: "LC H3 Story", detail: text, life: 4000 });
+      } catch (_e) {}
+    }
+  };
+  box.querySelector("[data-pin]")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    feedback(btn, "busy");
     try {
-      const j = await api.fetchApi("/lc_h3/anchor", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project: d.project, index: segs[k].index, time: v.currentTime }) }).then((r) => r.json());
-      if (j.error) throw new Error(j.error);
+      const { d, pic } = await grab();
       const place = shotPlace(d, i);
       if (!place) throw new Error("This shot has no place to add the anchor to.");
-      const [sub, name] = [j.file.slice(0, j.file.lastIndexOf("/")), j.file.slice(j.file.lastIndexOf("/") + 1)];
-      place.anchors = [...(place.anchors || []), { type: "input", subfolder: sub, filename: name }];
+      place.anchors = [...(place.anchors || []), pic];
       setData(node, d, true);
-      status(node, `📌 Added an anchor to ${place.name} (${v.currentTime.toFixed(2)} s of shot ${i + 1}).`);
-      close();
-    } catch (e) {
-      status(node, e.message, true);
+      const msg = `📌 Room anchor ${place.anchors.length} added to ${place.name} (${v.currentTime.toFixed(2)} s of shot ${i + 1})`;
+      status(node, msg + ".");
+      feedback(btn, "ok", `✅ ${msg}`);
+    } catch (err) {
+      status(node, err.message, true);
+      feedback(btn, "err", `⚠ ${err.message}`);
+    }
+  });
+  // the next shot opens exactly on this frame: its 🖼 start slot (a pinned frame 0 is followed exactly)
+  box.querySelector("[data-next]")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    feedback(btn, "busy");
+    try {
+      const { d, pic } = await grab();
+      const nxt = d.shots[i + 1];
+      if (!nxt) throw new Error("There is no next shot.");
+      nxt.start = pic;
+      if ((nxt.join || "cut") === "roll") nxt.join = "cut"; // a keep-rolling shot starts from the shot before: a start frame needs a cut
+      setData(node, d, true);
+      const msg = `🖼 Shot ${i + 2} now starts on this frame (${v.currentTime.toFixed(2)} s of shot ${i + 1}). Run to make it again`;
+      status(node, msg + ".");
+      feedback(btn, "ok", `✅ ${msg}`);
+      setTimeout(close, 1500);
+    } catch (err) {
+      status(node, err.message, true);
+      feedback(btn, "err", `⚠ ${err.message}`);
     }
   });
 }
@@ -1080,37 +1139,109 @@ function findSegment() {
   return all.filter((n) => (n.type === "LCH3Segment" || n.type === "LCH3Make") && n.mode !== 2 && n.mode !== 4);
 }
 
-/** ↻: save, point the Segment at the shot's first segment (make = redo) and queue one run. */
-async function makeShot(node, i) {
+/** One run of the Segment / Make node on segment `index` as a redo of that segment only (redo_after = just this
+ * segment); every widget goes back right after the run is queued. */
+async function redoSegment(index) {
   const segNodes = findSegment();
-  if (segNodes.length !== 1) return status(node, segNodes.length ? "More than one LC H3 Segment is on: set its index by hand." : "No LC H3 Segment in this workflow.", true);
-  await saveProject(node);
-  await refreshBoard(node);
-  const d = getData(node);
-  const b = (node.__lcst.board?.shots || []).find((s) => s.shot_id === d.shots[i].id);
-  const first = b?.segments?.[0]?.index;
-  if (!first) return status(node, "Could not find that shot in the saved plan. 💾 Save and try again.", true);
+  if (segNodes.length !== 1) throw new Error(segNodes.length ? "More than one LC H3 Segment is on: set its index by hand." : "No LC H3 Segment in this workflow.");
   const seg = segNodes[0];
+  const get = (name) => seg.widgets?.find((x) => x.name === name)?.value;
   const set = (name, val) => {
     const w = seg.widgets?.find((x) => x.name === name);
-    if (w) (w.value = val), w.callback?.(val);
+    if (w && val !== undefined) (w.value = val), w.callback?.(val);
   };
-  const before = { index: seg.widgets?.find((x) => x.name === "index")?.value, make: seg.widgets?.find((x) => x.name === "make")?.value };
-  set("index", first);
+  const before = { index: get("index"), make: get("make"), redo_after: get("redo_after") };
+  set("index", index);
   set("make", "redo");
-  status(node, `↻ Making shot ${i + 1} (segment ${first})…`);
+  set("redo_after", "just this segment");
   try {
-    const at = Math.floor(Date.now() / 1000);
     await app.queuePrompt(0, 1);
-    node.__lcst.queued = { ...(node.__lcst.queued || {}), [d.shots[i].id]: at };
-    paintBoard(node);
-  } catch (e) {
-    status(node, e.message, true);
   } finally {
     // the queued run keeps redo; the node goes back, so the next Run makes all remaining / your changes again
     set("make", before.make === "redo" ? "all remaining" : before.make);
     set("index", before.index);
+    set("redo_after", before.redo_after);
   }
+}
+window.__lcH3RedoSegment = redoSegment; // the segment chain makes a long shot's later parts with it
+
+/** ↻: remakes this shot and nothing after it (its own parts, when it is longer than max_shot_seconds). The shots after
+ * it are kept as they are and the movie is joined again with the new take; a keep-rolling shot after it no longer
+ * joins smoothly until it is remade too (user rule 2026-11-07: "If I hit redo on one segment, it does not keep going"). */
+async function makeShot(node, i) {
+  const n = findSegment().length;
+  if (n !== 1) return status(node, n ? "More than one LC H3 Segment is on: set its index by hand." : "No LC H3 Segment in this workflow.", true);
+  await saveProject(node);
+  await refreshBoard(node);
+  const d = getData(node);
+  const b = (node.__lcst.board?.shots || []).find((s) => s.shot_id === d.shots[i].id);
+  const segs = (b?.segments || []).map((x) => x.index).filter(Boolean);
+  if (!segs.length) return status(node, "Could not find that shot in the saved plan. 💾 Save and try again.", true);
+  status(node, `↻ Making shot ${i + 1} (segment ${segs[0]}${segs.length > 1 ? `-${segs[segs.length - 1]}` : ""}). Nothing after it is touched.`);
+  try {
+    const at = Math.floor(Date.now() / 1000);
+    window.__lcH3Only = { project: d.project, rest: segs.slice(1) }; // the chain stops once these are made
+    await redoSegment(segs[0]);
+    node.__lcst.queued = { ...(node.__lcst.queued || {}), [d.shots[i].id]: at };
+    paintBoard(node);
+  } catch (e) {
+    window.__lcH3Only = null;
+    status(node, e.message, true);
+  }
+}
+
+// ------------------------------------------------------------------ 🎛 shot LoRAs
+let loraList = null; // every file under models/loras, asked once
+function loadLoras(node) {
+  if (loraList) return;
+  loraList = [];
+  api.fetchApi("/models/loras").then((r) => r.json()).then((l) => { loraList = Array.isArray(l) ? l : []; render(node); }).catch(() => {});
+}
+
+const loraBase = (n) => String(n || "").split(/[\\/]/).pop().replace(/\.safetensors$/, "");
+
+/** The shot's own LoRAs: on top of the base LoRAs in the pipe, for this shot only. A keep-rolling shot uses its cut's.
+ * Picked the same way as in the LC LoRA Loader (LC123's folder picker, ◀ strength ▶ and ℹ Info, via window.LC123LoraUI);
+ * the controls are mounted after the card is drawn (mountLoraControls). */
+function loraRows(s, i, rs) {
+  const src = rs ? rs[0] : s;
+  const list = src.loras || [];
+  if (rs) return list.length ? `<div class="lcst-row"><span class="lcst-tip" title="Keep rolling uses the LoRAs of shot ${rs[1]}: a new LoRA mid-roll jumps at the join. Change them on shot ${rs[1]}, or make this a cut.">🎛 ${list.map((x) => `${esc(loraBase(x.lora))} ${x.strength}`).join(" · ")} 🔒</span></div>` : "";
+  const ui = window.LC123LoraUI;
+  return `<div class="lcst-row" style="flex-wrap:wrap;gap:4px">
+    ${list.map((x, k) => `<span class="lcst-lora" style="display:inline-flex;align-items:center;gap:4px">
+      <button class="lcst-b" data-slp="${i}|${k}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.lora ? x.lora.replace(/\\/g, "/") : "Pick a LoRA")}">🎛 ${x.lora ? esc(loraBase(x.lora)) : "pick a LoRA…"}</button>
+      ${ui ? `<span data-slstr="${i}|${k}"></span>` : `<input class="lcst-sec" data-sls="${i}|${k}" value="${esc(x.strength)}" title="Strength">`}
+      ${ui ? `<button class="lcst-b" data-sli="${i}|${k}" title="${x.lora ? "Trigger words (from the file's own metadata)" : "Pick a LoRA first, then ℹ shows its trigger words"}" style="color:#9cf;${x.lora ? "" : "opacity:.5"}">ℹ</button>` : ""}
+      <button class="lcst-b" data-sld="${i}|${k}" title="Take this LoRA off the shot" style="color:#e88">✕</button></span>`).join("")}
+    <button class="lcst-b" data-sla="${i}" title="Add a LoRA to this shot only (character, outfit, backdrop, style, action...). It goes on top of the base LoRAs and comes off for the next cut.">🎛 ${list.length ? "+" : "LoRA for this shot"}</button>
+  </div>`;
+}
+
+/** After render: LC123's folder picker on each 🎛 button, its ◀ strength ▶ control and ℹ Info popover. */
+function mountLoraControls(wrap, d, save) {
+  const ui = window.LC123LoraUI;
+  const at = (v) => v.split("|").map(Number);
+  wrap.querySelectorAll("[data-slp]").forEach((b) => (b.onclick = (e) => {
+    e.stopPropagation();
+    const [i, k] = at(b.dataset.slp);
+    const row = d.shots[i].loras[k];
+    if (ui) ui.pickLora(b, () => row.lora, (full) => { row.lora = full; save(true); });
+  }));
+  if (!ui) return;
+  wrap.querySelectorAll("[data-slstr]").forEach((sp) => {
+    const [i, k] = at(sp.dataset.slstr);
+    const row = d.shots[i].loras[k];
+    const ctl = ui.makeStrength(() => row.strength ?? 1, (v) => { row.strength = v; save(false); });
+    sp.replaceWith(ctl.wrap);
+  });
+  wrap.querySelectorAll("[data-sli]").forEach((b) => (b.onclick = (e) => {
+    e.stopPropagation();
+    const [i, k] = at(b.dataset.sli);
+    const name = d.shots[i].loras[k].lora;
+    if (name) ui.showInfoPopover(b, name); // always shown: the trigger words are what a character LoRA needs
+    else b.parentElement.querySelector("[data-slp]")?.click(); // no LoRA yet: open the picker
+  }));
 }
 
 // ------------------------------------------------------------------ ✨ Write the story
@@ -1141,7 +1272,8 @@ function openWriter(node) {
       <textarea data-pitch style="flex:1;min-height:120px;background:#1e1e1e;color:#ddd;border:1px solid #444;border-radius:4px;padding:6px;font:13px Arial,sans-serif;resize:none"
         placeholder="Nova and Anika meet for coffee in a small French cafe. Anika tells a story that goes too far, Nova laughs it off, then gets up and leaves her sitting there.">${esc(d.pitch || "")}</textarea>
       ${has ? `<span class="lcst-warn">⚠️ This replaces the cast, places and shots. Pictures, voices and 360 panoramas on cards with the same name stay.</span>` : ""}
-      <div class="lcst-row"><span class="lcst-tip" data-wstatus style="flex:1"></span><button class="lcst-b" data-go style="color:#eb4;padding:4px 14px">✨ Write</button></div>
+      <div class="lcst-row"><label class="lcst-tip" title="Off: the writer as always. On: adult scenes are allowed, the same rule as LC Vision's NSFW style tag. Saved with the project."><input type="checkbox" data-nsfw${d.nsfw ? " checked" : ""}> 🔞 NSFW</label>
+        <span class="lcst-tip" data-wstatus style="flex:1"></span><button class="lcst-b" data-go style="color:#eb4;padding:4px 14px">✨ Write</button></div>
     </div>`;
   document.body.appendChild(box);
   const ta = box.querySelector("[data-pitch]");
@@ -1161,10 +1293,11 @@ function openWriter(node) {
       const j = await api.fetchApi("/lc_h3/story/write", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pitch: ta.value, model, story: getData(node), max_shot_seconds: widget(node, "max_shot_seconds")?.value || 20 }),
+        body: JSON.stringify({ pitch: ta.value, model, story: getData(node), max_shot_seconds: widget(node, "max_shot_seconds")?.value || 20,
+                               nsfw: !!box.querySelector("[data-nsfw]")?.checked }),
       }).then((r) => r.json());
       if (j.error) throw new Error(j.error);
-      setData(node, { ...blank(), outfits: getData(node).outfits, props: getData(node).props, ...j.story, pitch: ta.value, model }, true); // the writer doesn't make props: keep yours
+      setData(node, { ...blank(), outfits: getData(node).outfits, props: getData(node).props, ...j.story, pitch: ta.value, model, nsfw: !!box.querySelector("[data-nsfw]")?.checked }, true); // the writer doesn't make props: keep yours
       status(node, `✨ Wrote ${j.story.shots.length} shots in ${Math.round((Date.now() - t0) / 1000)} s. Everything is yours to edit now.`);
       close();
     } catch (e) {
@@ -1267,12 +1400,12 @@ function paintSize(node) {
     const f = i.first;
     const odd = i.shots.filter((s) => s.width !== f.width || s.height !== f.height);
     let text = `📐 ${f.width} × ${f.height} · ${ratioName(f.width, f.height)}${f.guess ? " (from the oldest shot)" : ""}`;
-    let tip = "The size this project was first made at. Set LC H3 Segment's width and height to this and every shot stays the same shape.";
+    let tip = "The size this project is made at (the size of the last Run). Change the size and Run: every shot made at the old size is made again, in order.";
     if (odd.length) {
       const groups = new Map();
       odd.forEach((s) => groups.set(`${s.width} × ${s.height} · ${ratioName(s.width, s.height)}`, [...(groups.get(`${s.width} × ${s.height} · ${ratioName(s.width, s.height)}`) || []), s.index]));
       text += ` ⚠ differs: ${[...groups].map(([k, v]) => `shot${v.length > 1 ? "s" : ""} ${v.join(", ")} ${k}`).join("; ")}`;
-      tip += " Shots made at another size break the anchors and distort the join: redo them at the size above.";
+      tip += " Shots made at another size are made again on the next Run (they break the anchors and distort the joins).";
     }
     el.textContent = text;
     el.title = tip;
@@ -1492,6 +1625,7 @@ function decorateSlot(node, d, el, save) {
 
 // ------------------------------------------------------------------ the form
 function render(node) {
+  loadLoras(node);
   const face = ensureFace(node);
   const d = getData(node);
   const names = d.cast.map((c) => String(c.name || "").trim()).filter(Boolean);
@@ -1598,16 +1732,32 @@ function render(node) {
 
     <section class="lcst-part"><div class="lcst-h"><span>🎞 Shots</span><span class="lcst-tip" style="flex:0;white-space:nowrap;font-weight:400">one shot = one segment</span>
       <button class="lcst-b" data-bmovie title="Play the whole movie (joined after every made shot)">🎬 movie</button>
-      <button class="lcst-b" data-brefresh title="Look for new takes">⟳</button></div><div class="lcst-pb">
+      <button class="lcst-b" data-brefresh title="Look for new takes">⟳</button>
+      <button class="lcst-b" data-minall="1" title="Minimize every shot to one line">▸ all</button>
+      <button class="lcst-b" data-minall="0" title="Show every shot in full">▾ all</button></div><div class="lcst-pb">
     <div class="lcst-board" data-board></div>
-    ${d.shots.map((s, i) => `<div class="lcst-card">
+    ${d.shots.map((s, i) => { const rs = rollSrc(d, i); const src = rs ? rs[0] : s; const lk = rs ? " disabled" : "";
+      if ((node.properties?.lcstMin || []).includes(s.id)) {
+        const sum = `${rs ? "🎞" : "✂"} ${src.framing || "wide shot"} · ${s.subject || "everyone"}${s.line ? ` · ${s.speaker || "?"}: \u201c${s.line}\u201d` : ""}${s.action ? ` · ${s.action}` : ""}`;
+        return `<div class="lcst-card lcst-min"><div class="lcst-row">
+          <span class="lcst-n">${i + 1}</span>
+          <button class="lcst-b" data-min="${i}" title="Show this shot">▸</button>
+          <span class="lcst-sum" title="${esc(sum)}">${esc(sum)}</span>
+          <button class="lcst-b" data-mv="${i}|-1" title="Move up" ${i ? "" : "disabled"}>↑</button>
+          <button class="lcst-b" data-mv="${i}|1" title="Move down" ${i < d.shots.length - 1 ? "" : "disabled"}>↓</button>
+          <button class="lcst-b" data-del="shots|${i}" title="Remove this shot">${TRASH}</button>
+        </div></div>`;
+      }
+      return `<div class="lcst-card">
         <div class="lcst-row">
           <span class="lcst-n">${i + 1}</span>
-          <select data-s="${i}" data-f="framing" title="How the shot is framed">${opts(FRAMINGS, s.framing || "wide shot")}</select>
-          <select data-s="${i}" data-f="subject" title="Who the shot is on">${opts(["everyone", ...names], names.includes(s.subject) ? s.subject : "everyone")}</select>
+          <button class="lcst-b" data-min="${i}" title="Minimize this shot to one line">▾</button>
+          <select data-s="${i}" data-f="framing"${lk} title="How the shot is framed">${opts(FRAMINGS, src.framing || "wide shot")}</select>
+          <select data-s="${i}" data-f="subject" title="Who the shot is on. nobody: no people in it, the place alone (only a voiceover can speak)">${opts(["everyone", "nobody", ...names], names.includes(s.subject) || s.subject === "nobody" ? s.subject : "everyone", { nobody: "nobody (empty)" })}</select>
           <select data-s="${i}" data-f="move" title="Camera move">${opts(MOVES, s.move || "still")}</select>
           ${i ? `<select data-s="${i}" data-f="join" title="cut: a new shot. keep rolling: no cut, the camera carries straight on from the shot before">${opts(["cut", "roll"], s.join === "roll" ? "roll" : "cut", { cut: "✂ cut", roll: "🎞 keep rolling" })}</select>` : ""}
-          <select data-s="${i}" data-f="where" title="Where this shot is">${opts(["", ...places], places.includes(s.where) ? s.where : "", { "": i ? "same place" : places[0] || "place…" })}</select>
+          ${rs ? `<span class="lcst-tip" title="Keep rolling carries the camera straight on: the framing, the place, the 🌐 angle and the clothes come from shot ${rs[1]} (who is in it stays yours: someone can walk in), and the opening frames are the shot before's last moment (no start frame or blocking). Change them on shot ${rs[1]}, or make this a cut.">🔒 from shot ${rs[1]}</span>` : ""}
+          <select data-s="${i}" data-f="where"${lk} title="Where this shot is">${opts(["", ...places], !rs && places.includes(s.where) ? s.where : "", { "": i ? "same place" : places[0] || "place…" })}</select>
           <input class="lcst-sec" data-s="${i}" data-f="seconds" value="${esc(s.seconds)}" placeholder="auto" title="Length in seconds. Empty = auto (fits the line). Your number wins; a line that can't fit stretches it.">
           ${String(s.seconds ?? "").trim() ? `<button class="lcst-b" data-auto="${i}" title="Back to auto: the length fits the line again">auto</button>` : ""}
           <span style="flex:1"></span>
@@ -1618,7 +1768,7 @@ function render(node) {
         <textarea rows="2" data-s="${i}" data-f="action" placeholder="What happens (before the line). Or write timed beats: At 0.00 seconds, ... At 2.40 seconds, ...">${esc(s.action)}</textarea>
         ${Object.entries(robeOf(d)).filter(([, items]) => items.length > 1 || items.some((x) => x.card)).length ? `<div class="lcst-row">
           ${Object.entries(robeOf(d)).filter(([, items]) => items.length > 1 || items.some((x) => x.card)).map(([nm, items]) =>
-            `<span class="lcst-tip">👗 ${esc(nm)}</span><select data-so="${i}|${esc(nm)}" title="${esc(nm)}'s outfit from this shot on (blank = as before)">
+            `<span class="lcst-tip">👗 ${esc(nm)}</span><select data-so="${i}|${esc(nm)}"${lk} title="${esc(nm)}'s outfit from this shot on (blank = as before)">
               <option value="">as before</option>${items.map((x) => `<option value="${esc(x.id)}"${s.outfit?.[nm] === x.id ? " selected" : ""}>${esc(x.label)}${x.card ? "" : " · cast card"}${x.pic ? "" : " (no picture)"}</option>`).join("")}</select>`).join("")}
         </div>` : ""}
         <div class="lcst-row">
@@ -1627,13 +1777,14 @@ function render(node) {
           <span class="lcst-tip" data-wc="${i}">${words(s.line) ? words(s.line) + " words" : ""}</span>
         </div>
         <div class="lcst-row">
-          ${slotHTML(s.start, `data-start="${i}" title="${esc(s.start?.filename ? `Start frame: ${s.start.filename}\nClick to change, or drop a picture here` : "Start frame (cuts only): the first frame, kept exactly. The one way to get a background exactly: e.g. the person in front of this shot's 360 view (saved in the project's views folder).")}"`, "🖼 start").replace('class="lcst-slot"', 'class="lcst-slot sm"').replace('<button class="x" data-clr>×</button>', REDO)}
+          ${slotHTML(s.start, `data-start="${i}" title="${esc(s.start?.filename ? `Start frame: ${s.start.filename}\nClick to change, or drop a picture here` : "Start frame (cuts only): the first frame, kept exactly. The one way to get a background exactly: e.g. the person in front of this shot's 360 view (saved in the project's views folder).")}"`, "🖼 start").replace('class="lcst-slot"', `class="lcst-slot sm${rs ? " lcst-lock" : ""}"`).replace('<button class="x" data-clr>×</button>', REDO)}
           <input data-s="${i}" data-f="after" value="${esc(s.after)}" placeholder="What happens after the line (optional)" style="flex:1">
           ${slotHTML(s.end, `data-end="${i}" title="${esc(s.end?.filename ? `End frame: ${s.end.filename}\nClick to change, or drop a picture here` : "End frame (optional): the shot lands on this picture. Render it with a storyboard module (LC H3 Shot Card) or import one.")}"`, "🏁 end").replace('class="lcst-slot"', 'class="lcst-slot sm"').replace('<button class="x" data-clr>×</button>', REDO)}
-          <button class="lcst-b${node.__lcstBox?.has(s.id) ? " on" : ""}" data-box="${i}" title="Blocking: draw where each person and prop is. The storyboard module (LC H3 Shot Card) places them there.">📐${(s.boxes || []).length ? " " + s.boxes.length : ""}</button>
+          <button class="lcst-b${node.__lcstBox?.has(s.id) ? " on" : ""}" data-box="${i}"${lk} title="Blocking: draw where each person and prop is. The storyboard module (LC H3 Shot Card) places them there.">📐${(s.boxes || []).length ? " " + s.boxes.length : ""}</button>
         </div>
-        ${node.__lcstBox?.has(s.id) ? `<div class="lcst-bk" data-bk="${i}"><canvas data-bkc title="Drag on empty space for a new box, drag a box to move it, its corner to resize."></canvas><div data-bkr></div></div>` : ""}
-        ${shotPlace(d, i)?.panorama?.filename ? `<div class="lcst-row">
+        ${loraRows(s, i, rs)}
+        ${!rs && node.__lcstBox?.has(s.id) ? `<div class="lcst-bk" data-bk="${i}"><canvas data-bkc title="Drag on empty space for a new box, drag a box to move it, its corner to resize."></canvas><div data-bkr></div></div>` : ""}
+        ${!rs && shotPlace(d, i)?.panorama?.filename ? `<div class="lcst-row">
           <button class="lcst-b${s.view?.on ? " on" : ""}" data-von="${i}" title="Aim this shot's camera in the place's 360 panorama. The view becomes the shot's background picture.">🌐 angle${s.view?.on ? "" : "…"}</button>
           ${s.view?.on ? `${[["◀", -90, "the left side of the room"], ["▲", 0, "what the wide shot shows"], ["▶", 90, "the right side of the room"], ["▼", 180, "behind the wide shot's camera"]]
             .map(([t, y, tip]) => `<button class="lcst-b" data-vp="${i}|${y}" title="Look at ${tip} (${y}°)">${t}</button>`).join("")}
@@ -1645,7 +1796,7 @@ function render(node) {
         ${s.view?.on ? `<div class="lcst-vw" data-view="${i}"><canvas data-vv title="Drag to look around. Wheel or Shift + drag zooms."></canvas><canvas data-vs title="Click to jump there"></canvas></div>` : ""}` : ""}
         <div data-warn="${i}"></div>
         <details class="lcst-pv"${node.__lcstOpen?.has(s.id) ? " open" : ""} data-pvd="${esc(s.id)}"><summary>H3 prompt ▾<button class="lcst-b" data-pvedit="${i}" title="Write this shot's prompt by hand. What you save is exactly what H3 gets for this shot; changes to the cards stop changing it until you go back to automatic.">✎ Edit</button><button class="lcst-b" data-pvref="${i}" title="Build it from the cards again now and show exactly what will be sent to the model.">↻</button></summary><div data-pv="${i}">…</div></details>
-      </div>`).join("")}
+      </div>`; }).join("")}
     <button class="lcst-b lcst-add" data-add="shots">➕ Add shot</button>
     </div></section>`;
 
@@ -1724,6 +1875,24 @@ function render(node) {
       });
     });
   });
+  q("[data-sla]").forEach((b) => (b.onclick = () => {
+    const s = d.shots[Number(b.dataset.sla)];
+    s.loras = [...(s.loras || []), { lora: "", strength: 1 }]; // blank until picked: a LoRA you did not choose never goes on
+    save(true);
+  }));
+  mountLoraControls(face.wrap, d, save); // LC123's picker, strength and Info on the 🎛 rows
+  q("[data-sls]").forEach((el) => (el.onchange = () => {
+    const [i, k] = el.dataset.sls.split("|").map(Number);
+    const v = parseFloat(el.value);
+    d.shots[i].loras[k].strength = Number.isFinite(v) ? v : 1;
+    save(true);
+  }));
+  q("[data-sld]").forEach((b) => (b.onclick = () => {
+    const [i, k] = b.dataset.sld.split("|").map(Number);
+    d.shots[i].loras.splice(k, 1);
+    if (!d.shots[i].loras.length) delete d.shots[i].loras;
+    save(true);
+  }));
   q("[data-so]").forEach((el) => (el.onchange = () => {
     const [i, nm] = [Number(el.dataset.so.split("|")[0]), el.dataset.so.slice(el.dataset.so.indexOf("|") + 1)];
     const s = d.shots[i];
@@ -1812,6 +1981,23 @@ function render(node) {
       save(true);
     });
   });
+  // minimized shots: kept with the workflow (node properties), not in the story, so nothing counts as edited
+  q("[data-min]").forEach((b) => (b.onclick = (e) => {
+    e.stopPropagation();
+    const id = d.shots[Number(b.dataset.min)]?.id;
+    node.properties = node.properties || {};
+    const m = new Set(node.properties.lcstMin || []);
+    if (m.has(id)) m.delete(id);
+    else m.add(id);
+    node.properties.lcstMin = [...m];
+    save(true);
+  }));
+  q("[data-minall]").forEach((b) => (b.onclick = (e) => {
+    e.stopPropagation();
+    node.properties = node.properties || {};
+    node.properties.lcstMin = b.dataset.minall === "1" ? d.shots.map((x) => x.id) : [];
+    save(true);
+  }));
   q("[data-box]").forEach((b) => (b.onclick = () => {
     const s = d.shots[Number(b.dataset.box)];
     node.__lcstBox = node.__lcstBox || new Set();
@@ -2055,15 +2241,23 @@ app.registerExtension({
 function applyCard(node, p) {
   const d = getData(node);
   const kind = p.kind === "character" ? "cast card" : p.kind; // saved before the rename
-  const list = kind === "cast card" ? d.cast : kind === "outfit" ? d.outfits : kind === "prop" ? d.props : kind === "shot start" || kind === "shot end" ? d.shots : d.places;
-  const slot = { "cast card": "picture", outfit: "picture", place: "picture", prop: "picture", "360 panorama": "panorama", "shot start": "start", "shot end": "end" }[kind];
+  // "cast outfit" (the cast card's 👗 slot) was missing here: the picture saved, the node never took it, and its next
+  // Run wrote the card back without it (2026-11-07, "Uber run": outfit cards never populated)
+  const list = kind === "cast card" || kind === "cast outfit" ? d.cast : kind === "outfit" ? d.outfits : kind === "prop" ? d.props
+    : kind === "shot start" || kind === "shot end" ? d.shots : d.places;
+  const slot = { "cast card": "picture", "cast outfit": "outfit_picture", outfit: "picture", place: "picture", prop: "picture",
+    "360 panorama": "panorama", "shot start": "start", "shot end": "end" }[kind];
+  if (!slot) return status(node, `A picture was saved to the story as "${kind}", which this Story node doesn't know. 📂 Load the project to see it.`, true);
   const card = list.find((x) => x.id === p.id);
-  if (card) card[slot] = p.pic;
+  if (card) {
+    card[slot] = p.pic;
+    if (p.card?.prev?.[slot]) card.prev = { ...(card.prev || {}), [slot]: p.card.prev[slot] }; // ↶ brings the old one back
+  }
   else if (p.new) list.push(p.card);
   else return status(node, "A picture was saved to the story, but this node has no such card. 📂 Load the project to see it.", true);
   d.saved = p.saved;
   setData(node, d, true);
-  status(node, `🃏 ${p.card?.name || "Shot"}: new ${slot === "panorama" ? "360" : slot === "start" ? "start frame" : slot === "end" ? "end frame" : "picture"} saved.`);
+  status(node, `🃏 ${p.card?.name || "Shot"}: new ${slot === "panorama" ? "360" : slot === "start" ? "start frame" : slot === "end" ? "end frame" : slot === "outfit_picture" ? "👗 outfit picture" : "picture"} saved.`);
 }
 
 /** This copy matches the save on disk from time t (so only a save made elsewhere is "newer"). No redraw. */

@@ -117,11 +117,23 @@ def work_dir(folder: str) -> str:
     return takes
 
 
+def project_size(folder: str):
+    """(width, height) the project is made at now (size.json), or None."""
+    try:
+        with open(os.path.join(folder, "size.json"), encoding="utf-8") as f:
+            j = json.load(f)
+        return int(j["width"]), int(j["height"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def note_first_size(folder: str, width: int, height: int):
-    """The size a project was first made at, kept in <project>/size.json so a later resize or a reloaded
-    workflow can't lose it. Written once; the Story panel shows it."""
+    """The size the project is made at, kept in <project>/size.json so a reloaded workflow can't lose it. Written
+    every run at the size it runs at: a new size makes every shot made at the old one count as changed, so LC H3 Make
+    makes them again on the first Run after the change (Coffee Date take 2: 1312x768 -> 1696x928 left shots 4-6 at
+    the old size). The Story panel shows it."""
     path = os.path.join(folder, "size.json")
-    if os.path.exists(path) or not os.path.isdir(folder):
+    if not os.path.isdir(folder) or project_size(folder) == (int(width), int(height)):
         return
     try:
         with open(path, "w", encoding="utf-8") as f:
@@ -1149,6 +1161,8 @@ def _shot_refs(refs: dict, shot: dict, style: str, genders: dict | None = None, 
             want = {"woman", "girl", "lady"} if she else {"man", "boy", "guy"}
             picked = [n for n in cast if (genders.get(n) or "") in want]
             who = picked or cast
+    if shot.get("subject") == "nobody":  # LC H3 Story: an empty shot, the place only (no faces, outfits or voices)
+        who = []
     settings = sorted({p["name"] for p in pics if p["role"] in ("setting", "view", "layout") and p["name"]})
     place = _norm_words(shot.get("place_name") or "")
     if place:
@@ -1315,6 +1329,23 @@ def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = 
 
 
 _NAMED = re.compile(rf"\b({_NAME}),\s+an?\s+(man|woman|boy|girl|guy|lady)\b")
+
+
+def _brings_people(plan: dict, i: int) -> bool:
+    """Segment i (a CONTINUE) brings people into frames that didn't have them: the segment before was an empty shot
+    (LC H3 Story's "nobody"), or this one names cast members the segment before didn't (someone walks in)."""
+    shots = plan.get("shots") or []
+    if i < 2 or i > len(shots):
+        return False
+    me, prev = shots[i - 1], shots[i - 2]
+    if str(me.get("subject") or "") == "nobody":
+        return False
+    if str(prev.get("subject") or "") == "nobody" or "No people are in this shot" in str(prev.get("style") or ""):
+        return True
+    names = list(_cast_names(plan))
+    said = lambda s: {n for n in names if re.search(rf"\b{re.escape(n)}\b", str(s.get("action") or ""), re.I)}
+    before = said(prev)
+    return bool(before) and bool(said(me) - before)
 
 
 def _cast_names(plan_or_story) -> dict:
@@ -1497,12 +1528,17 @@ class LCH3Segment:
                 focus = (solo, names[solo])
             if mem_clip is not None and mem_clip[1] is not None and not _SPOKEN.search(shot["action"]):
                 mem_clip = (mem_clip[0], None)  # a silent shot gets the face memory without its sound (the sound is played back as speech)
+            if shot.get("subject") == "nobody":  # LC H3 Story: an empty shot, no cast memory (it would put them in)
+                mem_clip, focus = None, None
         if cont:
             mem = None
         # your references (LC H3 Reference Assembler): the ones this shot names, on CUTs and re-anchors by default
         shot_refs = None
-        places_only = cont and refs_on == "cuts + places on continues"
-        if refs and (not cont or places_only or refs_on == "every segment" or (cont and refs_on == "cuts + re-anchors" and (reanchor if memory == "clip" else _needs_reanchor(folder, i, width, height)))):
+        # a keep-rolling segment that brings people in (they walk out of the ship in an empty shot) carries no faces in
+        # its opening frames: it gets their pictures like a cut, or H3 invents them ("Uber run" segment 7, 2026-11-07)
+        brings = cont and _brings_people(plan, i)
+        places_only = cont and refs_on == "cuts + places on continues" and not brings
+        if refs and (not cont or brings or places_only or refs_on == "every segment" or (cont and refs_on == "cuts + re-anchors" and (reanchor if memory == "clip" else _needs_reanchor(folder, i, width, height)))):
             places = {g for g in _place_groups(plan) if g is not None}
             shot_refs = _shot_refs(refs, shot, shot.get("style") or plan.get("style", ""), _cast_names(plan), len(places) <= 1)
             if shot_refs and places_only:

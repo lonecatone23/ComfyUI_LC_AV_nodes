@@ -17,12 +17,40 @@ import comfy.samplers
 from comfy_execution.graph import ExecutionBlocker
 
 from .lc_h3_refs import REFS_TYPE
-from .lc_h3_segment import PLAN_TYPE, LCH3Segment, LCH3SegmentSave, _is_done, _locked, project_dir
+from .lc_h3_segment import PLAN_TYPE, LCH3Segment, LCH3SegmentSave, _is_done, _locked, note_first_size, project_dir
 from .lc_h3_story import changed_since_made
 
 NODE_ID = "LCH3Make"
 NODE_DISPLAY_NAME = "LC H3 Make (BETA) 🎥"
 PIPE_TYPE_V2 = "LC_H3_PIPE_V2"
+
+
+_LORA_CACHE: dict = {}  # path -> state dict: the next shot with the same LoRA doesn't read the file again
+
+
+def with_shot_loras(model, loras: list):
+    """The pipe's model (base LoRAs already on it) plus this shot's own LoRAs, on a patched copy: the base model is
+    left as it is, so the next shot starts without them."""
+    if not loras:
+        return model
+    import comfy.sd
+    import comfy.utils
+    import folder_paths
+
+    for x in loras:
+        path = folder_paths.get_full_path("loras", x["lora"])
+        if not path:
+            print(f"[LC H3] Make: ⚠️ LoRA not found, made without it: {x['lora']}")
+            continue
+        sd = _LORA_CACHE.get(path)
+        if sd is None:
+            sd = comfy.utils.load_torch_file(path, safe_load=True)
+            while len(_LORA_CACHE) >= 3:
+                _LORA_CACHE.pop(next(iter(_LORA_CACHE)))
+            _LORA_CACHE[path] = sd
+        model, _ = comfy.sd.load_lora_for_models(model, None, sd, float(x["strength"]), 0)
+        print(f"[LC H3] Make: shot LoRA {x['lora']} at {float(x['strength']):g}")
+    return model
 
 
 class LCH3Make:
@@ -86,6 +114,8 @@ class LCH3Make:
         # all remaining with every shot made: the shots edited since they were made are made again (Run = "make my
         # changes"), one after another; nothing edited: the finished movie is shown
         more = []
+        # the size this Run makes at, written before anything is checked: shots made at another size count as changed
+        note_first_size(project_dir(plan.get("project", "")), width, height)
         if make == "all remaining":
             folder = project_dir(plan.get("project", ""))
             shots = plan.get("shots") or []
@@ -120,6 +150,8 @@ class LCH3Make:
 
         from comfy_extras import nodes_custom_sampler as cs
 
+        shot = (plan.get("shots") or [{}])[segment["index"] - 1] if segment.get("index") else {}
+        model = with_shot_loras(model, (shot or {}).get("loras") or [])  # this shot's own LoRAs, on top of the base ones
         guider = cs.Guider_Basic(model)
         guider.set_conds(positive)
         sigmas = comfy.samplers.calculate_sigmas(model.get_model_object("model_sampling"), scheduler, steps).cpu()

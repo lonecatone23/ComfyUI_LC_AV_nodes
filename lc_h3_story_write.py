@@ -15,6 +15,7 @@ import gc
 import json
 import os
 import re
+import sys
 import threading
 import uuid
 
@@ -41,9 +42,10 @@ Rules:
 - places: every place a shot happens in. "name" starts with "the". "sound" is only things you can hear: rain on the glass, footsteps, a door, cups clinking. Never write who speaks or does not speak, never "no voices", never music: naming speech makes the video model speak.
 - framing is one of: {", ".join(f for f in FRAMINGS if f != "custom")}.
 - move is one of: {", ".join(MOVES)}. Mostly "still".
-- subject is "everyone" or one cast name.
+- subject is "everyone", one cast name, or "nobody" for a shot with no people in it (the place alone: a ship in space, an empty street). A "nobody" shot names no cast in its action, and its only line can be a voiceover.
 - join: "cut" (a new shot) or "roll" (no cut: the camera carries straight on from the shot before). The first shot is always "cut".
-  Use "roll" only between neighbouring framings (wide shot -> two-shot, medium shot -> close-up). From a wide shot to a close-up always "cut".
+  A "roll" keeps the framing and place of the shot before (they are copied over): the action, the line, the camera move and who is in it (someone can walk in) are its own.
+  A new framing (wide shot -> medium shot, -> close-up) is always a "cut". To get closer without a cut, roll with move "slow push-in".
 - where: one of the place names. Leave it "" when the shot stays in the place of the shot before.
 - action: short and physical, in the present tense, using the cast names ("NAME sets her cup down."). One or two actions per shot.
 - At most ONE spoken line per shot, in "line" (no quote marks), said by "speaker" (a cast name). No line: "speaker" and "line" are "".
@@ -55,6 +57,20 @@ Rules:
 - shots: one card per shot, in order, telling the WHOLE pitch from the first moment to the ending. If the pitch asks for a number of shots or a length, keep to it; otherwise 4 to 8 shots.
 - Follow the pitch: its people, places, mood and ending.
 """
+
+
+# 🔞 NSFW (off by default): the same directive LC Vision Caption / Prompt Enhancer add for their NSFW style tag, read
+# from the Vision pack when it is loaded so the wording never drifts; off = the writer as before
+_NSFW_FALLBACK = ("adult (18+) content in full explicit detail. Describe any sexual acts plainly and precisely, naming the specific "
+                  "act, the positions, the body parts involved and who is doing what to whom, in direct language without euphemism "
+                  "or omission. If anyone appears to be a minor, do not describe any sexual content")
+
+
+def nsfw_rule() -> str:
+    styles = next((m for n, m in list(sys.modules.items()) if n.endswith(".lc_vision_styles") and hasattr(m, "STYLE_TAG_DESCRIPTIONS")), None)
+    text = (getattr(styles, "STYLE_TAG_DESCRIPTIONS", {}) or {}).get("NSFW") or _NSFW_FALLBACK
+    return (f"\n- NSFW is on: the pitch may ask for {text}. Write the cast looks, actions and lines at the level the pitch asks for; "
+            "a nude outfit is written as plainly as any other outfit.")
 
 
 def list_models() -> list:
@@ -189,12 +205,12 @@ def free_llm(llm) -> None:
         pass
 
 
-def _ask(path: str, pitch: str, max_s: float) -> str:
+def _ask(path: str, pitch: str, max_s: float, nsfw: bool = False) -> str:
     print(f"[LC H3] Story: ✨ writing with {os.path.basename(path)}")
     llm = load_llm(path)
     try:
         want = _wanted_shots(pitch)
-        msgs = [{"role": "system", "content": SYSTEM.replace("{max_s:g}", f"{max_s:g}")},
+        msgs = [{"role": "system", "content": SYSTEM.replace("{max_s:g}", f"{max_s:g}") + (nsfw_rule() if nsfw else "")},
                 {"role": "user", "content": f"Pitch: {pitch.strip()}\n\nWrite the cards: the whole story from start to end, "
                                             f"{f'{want} shots' if want else '4 to 8 shots'}. /no_think"}]
         text, best, best_n = "", "", -1
@@ -288,22 +304,27 @@ def _clean(raw: dict, old: dict, max_s: float) -> dict:
         except ValueError:
             sec = ""
         shots.append({"id": uid("s"), "framing": framing if framing in FRAMINGS else "medium shot",
-                      "subject": subject if subject in names else "everyone", "move": move if move in MOVES else "still",
+                      "subject": subject if subject in names or subject == "nobody" else "everyone", "move": move if move in MOVES else "still",
                       "join": "roll" if k and s(sh.get("join")).lower() == "roll" else "cut", "where": where,
                       "action": s(sh.get("action")), "speaker": speaker if speaker in names and line else "",
                       "line": line if speaker in names else "", "after": s(sh.get("after")), "seconds": sec})
     if not shots:
         raise ValueError("[LC H3] Story: the model wrote no shots. Try again with a longer pitch, or a bigger model.")
+    # a roll carries the shot before's framing, subject and place (the Story card greys them out): the model's own
+    # picks on a roll are dropped, so a "roll" into a new framing can't be written
+    for k in range(1, len(shots)):
+        if shots[k]["join"] == "roll":
+            shots[k].update(framing=shots[k - 1]["framing"], where="")
     return {**{k: v for k, v in old.items() if k not in ("cast", "places", "shots", "look", "imported")},
             "version": 1, "look": s(raw.get("look")), "cast": cast, "places": places, "shots": shots}
 
 
-def write_story(pitch: str, model: str, old: dict | None = None, max_s: float = 20.0) -> dict:
+def write_story(pitch: str, model: str, old: dict | None = None, max_s: float = 20.0, nsfw: bool = False) -> dict:
     _not_while_rendering()
     if not str(pitch or "").strip():
         raise ValueError("[LC H3] Story: write a pitch first (a few sentences: who, where, what happens).")
     with _LOCK:  # one writer at a time
-        raw = _ask(_path(model), pitch, max_s)
+        raw = _ask(_path(model), pitch, max_s, nsfw)
     try:
         cards = _json(raw)
     except ValueError as exc:
@@ -329,7 +350,7 @@ try:
             body = await request.json()
             story = await asyncio.get_running_loop().run_in_executor(
                 None, write_story, body.get("pitch", ""), body.get("model", ""), body.get("story") or {},
-                float(body.get("max_shot_seconds") or 20.0))
+                float(body.get("max_shot_seconds") or 20.0), bool(body.get("nsfw")))
             return web.json_response({"story": story})
         except Exception as exc:
             return web.json_response({"error": str(exc)}, status=400)

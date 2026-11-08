@@ -23,8 +23,8 @@ import time
 
 import folder_paths
 
-from .lc_h3_refs import REFS_TYPE, build as _build_refs, frame_look, inside_comfy, strip_clothes
-from .lc_h3_segment import FPS, PLAN_TYPE, _is_done, _seg_path, project_dir, work_dir
+from .lc_h3_refs import REFS_TYPE, build as _build_refs, frame_look, inside_comfy, outfit_name, strip_clothes
+from .lc_h3_segment import FPS, PLAN_TYPE, _is_done, _seg_path, project_dir, project_size, work_dir
 
 NODE_ID = "LCH3Story"
 NODE_DISPLAY_NAME = "LC H3 Story (BETA) 🎬"
@@ -119,6 +119,12 @@ def _line_seconds(line) -> float:
 
 
 VO = " (V.O.)"  # the speaker dropdown's voiceover pick: "Parka (V.O.)"
+# the subject dropdown's empty pick: a shot with no people in it (an establishing shot of the place, a ship in space).
+# No cast line, no faces, camera words say nobody is there; only a voiceover can speak (2026-11-07, "Uber run" shot 1)
+NOBODY = "nobody"
+# body words in a cast look (the look should stop at face and hair when an outfit picture shows the rest)
+_BODY_RE = re.compile(r"\b(breasts?|boobs?|chest|cleavage|curv(?:y|es)|figure|body|hips|waist|butt|ass|legs|thighs|abs|"
+                      r"busty|petite|athletic|muscular|slim|thin|skinny|chubby|toned|nipples?|naked|nude|topless)\b", re.I)
 
 
 def _who_says(speaker) -> tuple:
@@ -261,10 +267,46 @@ def _with_auto_views(story: dict) -> dict:
     return story
 
 
+ROLL_LOCKED = ("framing", "where", "view", "start", "boxes", "outfit", "loras")  # greyed out on a keep-rolling card (who it is on stays open: people can walk in)
+
+
+def inherit_rolls(story: dict) -> dict:
+    """Keep rolling carries the camera straight on from the shot before: the framing, the place, the 🌐 angle and the
+    clothes come from the cut that started the run (who it is on stays the card's own: someone can walk in), and there is no start frame or blocking of its own
+    (the opening frames are the shot before's last 1.6 s). Only the action, the line, the camera move, the length and
+    the end frame are the card's own. Before this, a roll into a new framing was quietly made as a cut, and the story
+    writer kept writing them ("Uber run" shot 2: wide -> medium + tracking, 2026-11-07)."""
+    out, src = [], None
+    for k, s in enumerate(story.get("shots") or []):
+        if isinstance(s, dict) and k and s.get("join") == "roll" and src is not None:
+            s = {**s, "framing": src.get("framing"), "view": src.get("view"),
+                 "where": "", "start": None, "boxes": [], "outfit": {},  # where "" = the place of the shot before
+                 "loras": src.get("loras") or []}  # the cut's LoRAs: a new LoRA mid-roll would jump at the join
+        elif isinstance(s, dict):
+            src = s
+        out.append(s)
+    return {**story, "shots": out}
+
+
+def shot_loras(shot: dict) -> list:
+    """The shot's own LoRAs ([{lora, strength}]), on top of the base LoRAs the pipe's model already has. Only for that
+    shot: the next cut starts from the base model again. Any LoRA (style, motion, character, adult)."""
+    out = []
+    for x in (shot.get("loras") if isinstance(shot, dict) else None) or []:
+        name = str((x or {}).get("lora") or "").strip()
+        try:
+            st = float((x or {}).get("strength", 1.0))
+        except (TypeError, ValueError):
+            st = 1.0
+        if name and st:
+            out.append({"lora": name, "strength": round(st, 3)})
+    return out
+
+
 def cut_views(story: dict) -> list:
     """[(shot, place, view, file)] for every shot with a 🌐 angle; the files land in <project>/views/ (ready for any
     image workflow that makes the shot's start frame)."""
-    story = _with_auto_views(story)
+    story = _with_auto_views(inherit_rolls(story))
     out, where_now = [], ""
     for shot in story.get("shots", []):
         if not isinstance(shot, dict):
@@ -289,6 +331,11 @@ def _view_name(place: dict, shot: dict) -> str:
 def _framing(shot: dict, names: list) -> tuple:
     """(camera words, who the shot is on): 'a close-up of Nova's face and shoulders, ...'."""
     kind = shot.get("framing") or "wide shot"
+    if shot.get("subject") == NOBODY:
+        if kind == "custom":
+            return "", "the scene"
+        size = {"two-shot": "wide shot", "over the shoulder": "wide shot", "from behind": "wide shot"}.get(kind, kind)
+        return f"{'an' if size[:1] in 'aeiou' else 'a'} {size} of the scene, with no people in it", "the scene"
     who = shot.get("subject") if shot.get("subject") in names else "everyone"
     if who == "everyone" and len(names) == 1:
         who = names[0]
@@ -445,7 +492,7 @@ def _seated(shots: list, shot: dict, where: str, story: dict) -> bool:
     """A close cut on one person who sits somewhere in this place's shots, and doesn't stand up in this one: a close-up
     gets no room picture, so without the word H3 stood her up (Coffee Date: Anika, take 5)."""
     who = shot.get("subject")
-    if (shot.get("framing") or "wide shot") not in TIGHT or who not in _names(story):
+    if (shot.get("framing") or "wide shot") not in TIGHT or who not in _names(story):  # NOBODY is never a cast name
         return False
     if _UP_RE.search(str(shot.get("action") or "")):
         return False
@@ -462,7 +509,8 @@ def _same_camera(prev: dict, shot: dict) -> bool:
         return False
     if str(prev.get("where") or "").strip() and str(shot.get("where") or "").strip() and prev.get("where") != shot.get("where"):
         return False
-    return (shot.get("framing") or "wide shot") not in TIGHT or (prev.get("subject") or "everyone") == (shot.get("subject") or "everyone")
+    # who it is on may change (someone walks in): a keep-rolling card locks the framing and place, the people are yours
+    return True
 
 
 def _shot_text(story: dict, shot: dict, place: dict | None, span: float, offset: float, names: list,
@@ -567,8 +615,15 @@ def changed_since_made(folder: str, disk: dict, now: dict | None = None) -> set:
     except OSError:
         plan_t = 0
     out = set()
+    size = project_size(folder)
     for k, s in enumerate(disk.get("shots", []), start=1):
         if not _is_done(folder, k):
+            continue
+        # made at another size than the project is set to now (LC H3 Make writes the pipe's size before it looks):
+        # a mixed-size movie distorts the joins and breaks the anchors, so it is made again
+        meta = _take_meta(folder, k)
+        if size and meta.get("width") and (int(meta["width"]), int(meta.get("height") or 0)) != size:
+            out.add(k)
             continue
         made = s.get("made")
         if os.path.getmtime(_seg_path(folder, k, ".json")) >= plan_t:
@@ -614,11 +669,35 @@ def _one_person(shot: dict, names: list) -> dict:
     """A tight shot left on "everyone" whose text names one person is on that person: the seated words, her own
     pictures and the background all hang on the subject (Coffee Date shot 3: Anika's close-up on "everyone" lost
     "seated at the table" and stood up, the Nova cut set to Nova never did)."""
-    if (shot.get("framing") or "wide shot") not in TIGHT or shot.get("subject") in names:
+    if (shot.get("framing") or "wide shot") not in TIGHT or shot.get("subject") in names or shot.get("subject") == NOBODY:
         return shot
     text = " ".join(str(shot.get(k) or "") for k in ("action", "speaker", "after"))
     here = [n for n in names if re.search(rf"\b{re.escape(n)}\b", text, re.I)]
     return {**shot, "subject": here[0]} if len(here) == 1 else shot
+
+
+_UNDRESS = re.compile(r"\b(naked|nude|topless|bottomless|bare[- ]?(chested|breasted|skinned)?|undressed|unclothed|"
+                      r"wearing nothing|nothing on|in (her|his|their) (underwear|bra and panties|lingerie))\b", re.I)
+
+
+def worn_words(notes: str) -> str:
+    """An outfit's words for the cast line: a state of dress is said as it is ("naked", "topless"), only real clothes get
+    "wearing" ("topless, wearing black jeans"). Before, a "Naked" outfit card read "wearing naked, wearing nothing" and
+    one with a picture "wearing the Naked"."""
+    state, clothes = [], []
+    for part in re.split(r"[,;]", str(notes or "")):
+        p = part.strip().rstrip(".")
+        if not p:
+            continue
+        if re.search(r"\b(wearing nothing|nothing on)\b", p, re.I):
+            state.append("naked")
+        elif _UNDRESS.search(p) or re.match(r"(wrapped|draped|covered|dressed|clad|in)\b", p, re.I):
+            # "wrapped in a white towel", "dressed in black": said as it is, never "wearing wrapped in ..."
+            state.append(re.sub(r"^\s*wearing\s+", "", p, flags=re.I))
+        else:
+            clothes.append(re.sub(r"^\s*wearing\s+", "", p, flags=re.I))
+    state = list(dict.fromkeys(state))
+    return ", ".join(state + (["wearing " + ", ".join(clothes)] if clothes else []))
 
 
 def wardrobe(story: dict) -> dict:
@@ -633,7 +712,8 @@ def wardrobe(story: dict) -> dict:
             continue
         items = out.setdefault(nm, [])
         if _pic_file(c.get("outfit_picture")):
-            items.append({"id": f"{c.get('id')}_dress", "label": "outfit 1", "picture": c["outfit_picture"], "card": None, "notes": ""})
+            items.append({"id": f"{c.get('id')}_dress", "label": outfit_name(c.get("outfit_notes")), "picture": c["outfit_picture"],
+                          "card": None, "notes": ""})
     for o in story.get("outfits", []) or []:
         if not isinstance(o, dict) or not str(o.get("name") or "").strip():
             continue
@@ -668,6 +748,7 @@ def _behind_outfit(story: dict, shot: dict, names: list) -> str:
 
 def build_plan(story: dict, max_s: float = 20.0) -> tuple:
     """story -> (plan for LC H3 Segment, per-shot preview list, warnings)."""
+    story = inherit_rolls(story)  # a keep-rolling card takes the framing and place of the cut before it
     story = {**story, "shots": [_one_person(s, _names(story)) if isinstance(s, dict) else s for s in story.get("shots") or []]}
     story = _with_auto_views(story)
     max_s = max(5.0, float(max_s))  # the node's minimum: a part shorter than the overlap never moves on (endless loop)
@@ -682,24 +763,28 @@ def build_plan(story: dict, max_s: float = 20.0) -> tuple:
     # wore it (Coffee Date)
     look_of = {c["name"]: _one_clause(c.get("look")) for c in cast}
 
-    def style_for(worn: dict, tight: bool = False) -> str:
+    def style_for(worn: dict, tight: bool = False, nobody: bool = False) -> str:
         """The cast line; a person in an outfit gets "wearing <outfit>" after their look. tight: a close-up or medium
-        shot, so the clothes that can't be in frame are left out."""
-        bits = []
-        for c in cast:
+        shot, so the clothes that can't be in frame are left out. nobody: an empty shot, the visual style only (the
+        cast's looks would put them in the frame)."""
+        # never empty for an empty shot: Segment falls back to the story's whole cast line when a shot's style is blank
+        bits = ["No people are in this shot"] if nobody else []
+        for c in ([] if nobody else cast):
             nm = c["name"].strip()
             o = worn.get(nm)
             if o and o["picture"]:
                 # the outfit picture shows the clothes: no clothing words (they beat the picture and pull close-ups wide)
                 look = strip_clothes(look_of[c["name"]])
-                extra = ([look] if look else []) + ["wearing " + o["label"]]
+                state = _UNDRESS.search(o["label"] + " " + (o.get("notes") or ""))
+                # a state of dress ("Topless") is said as it is, never "wearing the Topless"
+                extra = ([look] if look else []) + [worn_words(o.get("notes") or o["label"]) if state else "wearing " + o["label"]]
             else:
                 look = frame_look(look_of[c["name"]], tight)
                 extra = [look] if look else []
                 if o:  # an outfit card with no picture: its words are all there is
-                    worn_look = frame_look(o["notes"], tight)
+                    worn_look = frame_look(o["notes"], tight) or (o["notes"] if _UNDRESS.search(o["notes"] or "") else "")
                     if worn_look:
-                        extra.append("wearing " + worn_look)
+                        extra.append(worn_words(worn_look))
             bits.append(f"{nm}: a {c.get('who') or 'person'}" + (", " + ", ".join(extra) if extra else ""))
         if str(story.get("look") or "").strip():
             bits.append("Visual style: " + str(story["look"]).strip().rstrip("."))
@@ -716,6 +801,12 @@ def build_plan(story: dict, max_s: float = 20.0) -> tuple:
         clothes_said = strip_clothes(str(c.get("look") or "")) != str(c.get("look") or "")
         if nm in pictured and clothes_said:
             warnings.append(f"👗 {nm}'s look names clothes: they are left out, the outfit picture shows them. Keep the look to face and hair.")
+        body = _BODY_RE.findall(str(c.get("look") or ""))
+        if nm in pictured and body:
+            # "medium breasts" in the look + a bare-shouldered headshot: H3 undressed both women ("Uber run", 2026-11-07)
+            warnings.append(f"👗 {nm}'s look names the body ({', '.join(dict.fromkeys(b.lower() for b in body))}): next to a "
+                            "bare-shouldered headshot H3 can leave the clothes off. Keep the look to face and hair; the outfit "
+                            "picture shows the body.")
         elif nm not in pictured and clothes_said:
             warnings.append(f"💡 {nm}: put the clothes in a 👗 outfit picture on the cast card. Clothing words beat the picture "
                             "and pull close-ups wide.")
@@ -776,8 +867,15 @@ def build_plan(story: dict, max_s: float = 20.0) -> tuple:
             o = next((o for o in robe.get(nm, []) if o["id"] == oid), None)
             if o:
                 worn[nm] = o
-        shot_style = style_for(worn, (shot.get("framing") or "wide shot") in TIGHT)
+        empty = shot.get("subject") == NOBODY
+        shot_style = style_for(worn, (shot.get("framing") or "wide shot") in TIGHT, empty)
         line = _clean_line(shot.get("line"))
+        if empty:
+            if line and not _who_says(shot.get("speaker"))[1]:
+                sw.append("🛑 Nobody is in this shot: its line can only be a voiceover. Pick the speaker's (V.O.).")
+            named = [n for n in names if re.search(rf"\b{re.escape(n)}\b", said, re.I)]
+            if named:
+                sw.append(f"⚠️ Nobody is in this shot, but it names {', '.join(named)}: H3 may put them in. Leave them out of the action.")
         if line and not (shot.get("speaker") or len(names) == 1):
             sw.append("🛑 Pick who says the line.")
         elif line and shot.get("speaker") and _who_says(shot.get("speaker"))[0] not in names:
@@ -829,9 +927,15 @@ def build_plan(story: dict, max_s: float = 20.0) -> tuple:
                 seg["tight"] = True  # Segment leaves the clothes out of frame out of the picture notes too
             if (shot.get("framing") or "wide shot") in TIGHT and shot.get("subject") in names:
                 seg["subject"] = shot["subject"]  # Segment sends this one person's pictures only (others named stay words)
+            if empty:
+                seg["subject"] = NOBODY  # Segment sends no faces, voices or memory of the cast
             if _shot_view(shot, place):  # the shot's own angle out of the place's 360 panorama replaces the room picture
                 seg["view_name"] = _view_name(place, shot)
             seg["sig"] = _sig(story, seg, shot, place)
+            loras = shot_loras(shot)
+            if loras:  # LC H3 Make adds them to the model for this shot only; a new LoRA or strength makes the take again
+                seg["loras"] = loras
+                seg["sig"] += "|loras:" + ",".join(f"{x['lora']}@{x['strength']:g}" for x in loras)
             if any(robe.values()):  # only the outfits worn now go to this shot (none = their look)
                 seg["outfits"] = [o["id"] for o in worn.values() if o["picture"]]
                 seg["sig"] += "".join(f"|outfit:{_pic_file(o['picture'])}:{(o['picture'] or {}).get('crop')}" for o in worn.values() if o["picture"])
@@ -839,7 +943,7 @@ def build_plan(story: dict, max_s: float = 20.0) -> tuple:
                 seg["style"] = shot_style
             setup = (str(place.get("name")) if place else "", shot.get("framing") or "wide shot", shot.get("subject") or "everyone")
             subj = shot.get("subject") or "everyone"
-            who = set(names) if subj not in names else {subj}
+            who = set() if subj == NOBODY else set(names) if subj not in names else {subj}
             if subj in names and (shot.get("framing") or "wide shot") not in TIGHT:
                 who |= {n for n in names if re.search(rf"\b{re.escape(n)}\b", said, re.I)}
             now = {"shot": i, "place": setup[0], "wide": (shot.get("framing") or "wide shot") not in TIGHT, "people": who,
@@ -899,9 +1003,9 @@ def build_refs(story: dict):
             items.append({"id": f"{c.get('id')}_face", "kind": "image", "file": f, "role": "face", "name": nm,
                           "note": strip_clothes(look) if pictured else look, "crop": (c.get("picture") or {}).get("crop")})
         wf = _pic_file(c.get("outfit_picture"))
-        if wf:  # the cast card's own outfit: outfit 1
+        if wf:  # the cast card's own outfit, named from its notes ("dark blue jumpsuit"; else "outfit 1")
             items.append({"id": f"{c.get('id')}_dress", "kind": "image", "file": wf, "role": "outfit", "name": nm,
-                          "note": "outfit 1", "crop": (c.get("outfit_picture") or {}).get("crop")})
+                          "note": outfit_name(c.get("outfit_notes")), "crop": (c.get("outfit_picture") or {}).get("crop")})
         v = _pic_file(c.get("voice"))
         if v:
             items.append({"id": f"{c.get('id')}_voice", "kind": "audio", "file": v, "role": "voice", "name": nm,
@@ -1097,8 +1201,9 @@ def list_images(where: str, limit: int = 240) -> list:
 
 # ------------------------------------------------------------------ the board (what is made)
 def _thumb(folder: str, index: int) -> str | None:
-    """takes/seg_###_thumb.jpg, a frame from a third of the way in, made again when the take is newer."""
-    src, out = _seg_path(folder, index, ".mp4"), _seg_path(folder, index, "_thumb.jpg")
+    """takes/seg_###_thumb.jpg, a frame from a third of the way in, made again when the take is newer. From the part
+    the movie uses: a keep-rolling take opens on the shot before's tail, which isn't this shot."""
+    src, out = _seg_path(folder, index, "_part.mp4"), _seg_path(folder, index, "_part_thumb.jpg")
     if not os.path.exists(src):
         return None
     if not os.path.exists(out) or os.path.getmtime(out) < os.path.getmtime(src):
@@ -1138,7 +1243,8 @@ def board(project: str, now: dict | None = None) -> dict:
         th = _thumb(folder, k) if made else None
         seg = {"index": k, "part": s.get("part", 1), "made": made, "changed": changed, "locked": bool(s.get("locked")),
                "seconds": round(s.get("frames", 0) / FPS, 2), "thumb": rel(th) if th else None,
-               "video": rel(_seg_path(folder, k, ".mp4")) if made else None}
+               # the part the movie uses: a keep-rolling take's file opens on the shot before's last 1.6 s
+               "video": rel(_seg_path(folder, k, "_part.mp4")) if made else None}
         shots.setdefault(s.get("shot_id") or f"s{k}", {"shot_id": s.get("shot_id"), "shot": s.get("shot", k), "segments": []})["segments"].append(seg)
     full = os.path.join(folder, f"{os.path.basename(folder)}.mp4")
     return {"shots": list(shots.values()), "movie": rel(full) if os.path.exists(full) else None}
@@ -1199,7 +1305,8 @@ class LCH3Story:
 
 
 def project_sizes(project: str) -> dict:
-    """The size the project was first made at, and the size of each made shot (from its seg_NNN.json)."""
+    """The size the project is made at (size.json: LC H3 Make / Segment write the size they run at), and the size of
+    each made shot (from its seg_NNN.json)."""
     folder = project_dir(project)
     takes = os.path.join(folder, "takes")
     made = []

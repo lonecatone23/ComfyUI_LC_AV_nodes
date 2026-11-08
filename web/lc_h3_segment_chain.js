@@ -65,6 +65,27 @@ api.addEventListener("lc_h3_join_failed", (e) => {
 
 api.addEventListener("lc_h3_segment_saved", async (e) => {
   const s = e.detail || {};
+  // ↻ on one shot (LC H3 Story): make its own parts, then stop. The shots after it stay as they are; the save joined
+  // the movie again with the new take (user rule 2026-11-07: "If I hit redo on one segment, it does not keep going")
+  const only = window.__lcH3Only;
+  if (only && only.project === s.project) {
+    lastMade = 0;
+    if (only.rest.length) {
+      const nxt = only.rest.shift();
+      try {
+        await window.__lcH3RedoSegment?.(nxt);
+        toast(`Segment ${s.made} saved. Part ${nxt} of this shot is next.`);
+      } catch (err) {
+        window.__lcH3Only = null;
+        toast(`The rest of the shot wasn't queued: ${err.message || err}`, "warn");
+      }
+      return;
+    }
+    window.__lcH3Only = null;
+    window.__lcH3ChainNext = false;
+    toast(`Segment ${s.made} remade and joined into the movie. Nothing after it was touched.`, "success");
+    return;
+  }
   if (!chainNodes().length) return;
   const waiting = await pendingIds();
   if (!s.left) {
@@ -107,6 +128,7 @@ for (const ev of ["execution_interrupted", "execution_error"]) {
     const had = !!ahead;
     await takeBack();
     lastMade = 0;
+    window.__lcH3Only = null; // a stopped ↻ leaves nothing behind for the next run
     if (had && ev === "execution_interrupted") toast("Stopped. The next segment was taken back out of the queue. Run again to carry on.");
   });
 }

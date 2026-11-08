@@ -365,6 +365,8 @@ def _pick_shot(story: dict, shot: str, slot: str):
 def _present(story: dict, shot: dict) -> list:
     """Cast cards in this frame: named in the shot, in a box, or its subject. Nobody named and one cast = that one.
     Only these get their look (Kinburg: the whole cast in every frame grows strangers)."""
+    if shot.get("subject") == "nobody":  # an empty shot: the place only
+        return []
     names = _names(story)
     text = " ".join(str(shot.get(k) or "") for k in ("action", "speaker", "line", "after"))
     here = {n for n in names if re.search(rf"\b{re.escape(n)}\b", text, re.I)}
