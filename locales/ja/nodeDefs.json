@@ -554,7 +554,7 @@
         "tooltip": "LC H3 Story 🎬 から：キャストと場所の画像。"
       },
       "redo_after": {
-        "tooltip": "index で保存済みのセグメントを作り直すとき。古いテイクは常にプロジェクトの takes フォルダーに残ります。this + the CONTINUE ones after it：このセグメントから直接続くセグメントはつながらなくなるため、それらも脇に置かれます。index を 0 に戻してキューに入れると作り直せます。後ろの CUT はそのまま残ります。"
+        "tooltip": "index で保存済みのセグメントを作り直すとき。古いテイクは必ずプロジェクトの takes フォルダに残ります。\njust this segment：新しい終わり方。後のセグメントは残りますが、次のセグメントは作り直すまでつながりません（古い終わりから作られたと表示）。\nrepair (keep its ending)：終わりを古い終わりに固定するので、次のセグメントはつながったまま、ほかは何も変わりません。\n悪いセグメントが続くとき（5 と 6 が悪く、7 は良い）：5 を just this segment で、6 を repair で作り直します。\nthis + the CONTINUE ones after it：このセグメントからそのまま続くセグメントも脇に置かれます。index を 0 に戻してキューに入れると作り直します。後の CUT は残ります。"
       },
       "refs_on": {
         "tooltip": "参照をいつ送るか。cuts only：CUT セグメントのみ。すべての CONTINUE は直前のフレームからそのまま続きます（つなぎが最もなめらか）。cuts + re-anchors：CUT セグメントと、顔を失った CONTINUE（テストでは、普通の CONTINUE に参照を付けると、冒頭が引き継いだフレームから離れてしまいました）。cuts + places on continues：CUT セグメントにはすべてを送り、CONTINUE には場所、レイアウト、小道具の画像だけを送ります（誰がどこに立つか、ドアがどちらに開くか）。顔は送らず、直前のフレームから引き継ぎます。クローズアップではない CONTINUE には場所の部屋（あなたの部屋の画像、またはその場所の最初のワイドなセグメント）も送るので、カメラが引いても同じ部屋になります。every segment：常に送ります。"
@@ -575,7 +575,7 @@
         "tooltip": "CONTINUE セグメント：冒頭が直前の瞬間のそのままの続きだと H3 に伝える1行を加えます。"
       },
       "prompt_format": {
-        "tooltip": "sections：H3 が学習したレイアウト（description / soundscape / non_diegetic_music: none、セリフは <d>[English] ... </d>、memory 用の参照ブロック）。plain：スタイル + アクションのテキスト。"
+        "tooltip": "sections：H3 が学習したレイアウト（description / soundscape / non_diegetic_music: N/A、セリフは <d>[English] ... </d>、そして記憶用の参照ブロック）。plain：スタイル + アクションの文章。"
       }
     },
     "outputs": {
@@ -600,7 +600,7 @@
         "tooltip": "画像モデルの VAE：空の latent をこれに合わせて作ります。"
       },
       "kind": {
-        "tooltip": "cast card：見た目から作る正面向きの顔写真、無地のグレー背景（服は outfit カードから）。outfit：見えないマネキンに着せた服、無地のグレー背景。place：空の部屋。360 panorama：部屋をぐるりと一周（2:1）、🌐 スロット用。prop：物だけ、無地のグレー背景。"
+        "tooltip": "cast card：look から作る正面の顔写真、無地のグレー背景。cast card + outfit：顔写真と、衣装を着た全身（カードの outfit notes から）を1回で作り、cast card の両方の枠を埋めます。cast outfit：👗 衣装の画像だけ。outfit：見えないマネキンに着せた着替え、無地のグレー背景。place：誰もいない部屋。360 panorama：部屋をぐるりと一周（2:1）、🌐 枠用。prop：物だけ、無地のグレー背景。"
       },
       "name": {
         "tooltip": "キャスト、衣装、場所、小道具のカード。空欄 = 最初のもの。"
@@ -634,7 +634,7 @@
         "tooltip": "画像（バッチの最初の1枚）。"
       },
       "kind": {
-        "tooltip": "どのスロットに入れるか。from card：Card Prompt が作っていたもの。cast card、outfit、prop の画像は切り抜かれて無地のグレー背景に置かれます。shot start / end：ショットの 🖼 開始フレームまたは 🏁 終了フレーム。"
+        "tooltip": "どの枠に入れるか。from card：Card Prompt が作っていたもの。cast card：顔写真。cast outfit：cast card の 👗 衣装。人物、衣装、小道具の画像は無地のグレーに切り抜かれます。shot start / end：ショットの 🖼 開始フレームまたは 🏁 終了フレーム。"
       },
       "name": {
         "tooltip": "空欄 = Card Prompt のカード。まだカードのないキャスト、衣装、場所、小道具の名前を入れると新しいカードが作られます。shot start / end の場合：ショット番号。"

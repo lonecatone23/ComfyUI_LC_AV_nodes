@@ -1331,21 +1331,23 @@ def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = 
 _NAMED = re.compile(rf"\b({_NAME}),\s+an?\s+(man|woman|boy|girl|guy|lady)\b")
 
 
-def _brings_people(plan: dict, i: int) -> bool:
-    """Segment i (a CONTINUE) brings people into frames that didn't have them: the segment before was an empty shot
-    (LC H3 Story's "nobody"), or this one names cast members the segment before didn't (someone walks in)."""
+def _brings_people(plan: dict, i: int):
+    """Who segment i (a CONTINUE) brings into frames that didn't have them. "all": the segment before was an empty shot
+    (LC H3 Story's "nobody"), everyone gets their pictures. A set of names: this one names cast members the segment
+    before didn't (someone walks in), only they get pictures. None: nobody new."""
     shots = plan.get("shots") or []
     if i < 2 or i > len(shots):
-        return False
+        return None
     me, prev = shots[i - 1], shots[i - 2]
     if str(me.get("subject") or "") == "nobody":
-        return False
+        return None
     if str(prev.get("subject") or "") == "nobody" or "No people are in this shot" in str(prev.get("style") or ""):
-        return True
+        return "all"
     names = list(_cast_names(plan))
     said = lambda s: {n for n in names if re.search(rf"\b{re.escape(n)}\b", str(s.get("action") or ""), re.I)}
     before = said(prev)
-    return bool(before) and bool(said(me) - before)
+    new = said(me) - before
+    return new if before and new else None
 
 
 def _cast_names(plan_or_story) -> dict:
@@ -1536,7 +1538,8 @@ class LCH3Segment:
         shot_refs = None
         # a keep-rolling segment that brings people in (they walk out of the ship in an empty shot) carries no faces in
         # its opening frames: it gets their pictures like a cut, or H3 invents them ("Uber run" segment 7, 2026-11-07)
-        brings = cont and _brings_people(plan, i)
+        newcomers = _brings_people(plan, i) if cont else None
+        brings = newcomers is not None
         places_only = cont and refs_on == "cuts + places on continues" and not brings
         if refs and (not cont or brings or places_only or refs_on == "every segment" or (cont and refs_on == "cuts + re-anchors" and (reanchor if memory == "clip" else _needs_reanchor(folder, i, width, height)))):
             places = {g for g in _place_groups(plan) if g is not None}
@@ -1548,6 +1551,17 @@ class LCH3Segment:
                 shot_refs = {**shot_refs, "pictures": [{**p, "n": k + 1} for k, p in enumerate(pics)], "audios": []}
                 shot_refs["text"] = _ref_sentences(shot_refs)
                 if not pics and not shot_refs.get("lock"):
+                    shot_refs = None
+            if shot_refs and isinstance(newcomers, set):
+                # someone walks into a rolling shot: only their face and outfit. The place, the props and the people
+                # already in frame come from the carried frames; sending them too makes H3 restage the shot instead of
+                # carrying on ("parka girl street fight" shot 3, 6 takes, 2026-11-08)
+                from .lc_h3_refs import sentences as _ref_sentences
+                pics = [p for p in shot_refs["pictures"] if p["role"] in ("face", "full body", "outfit") and p.get("name") in newcomers]
+                shot_refs = {**shot_refs, "pictures": [{**p, "n": k + 1} for k, p in enumerate(pics)],
+                             "audios": [a for a in shot_refs.get("audios", []) if a.get("name") in newcomers]}
+                shot_refs["text"] = _ref_sentences(shot_refs)
+                if not pics:
                     shot_refs = None
             if shot_refs and not places_only:
                 # a person whose face picture goes in and who speaks here: their saved voice too (from their first line),

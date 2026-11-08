@@ -554,7 +554,7 @@
         "tooltip": "来自 LC H3 Story 🎬：演员和地点图片。"
       },
       "redo_after": {
-        "tooltip": "当 index 重做一个已保存的片段时。旧版本始终保留在项目的 takes 文件夹中。this + the CONTINUE ones after it：紧接着它继续的片段无法再衔接，因此也会被放到一边；把 index 设回 0 并加入队列即可重新制作它们。它之后的 CUT 会保留。"
+        "tooltip": "index 重做一个已保存的片段时。旧的 take 总会保留在项目的 takes 文件夹里。\njust this segment：新的结尾。后面的片段保留，但下一个不再衔接（显示为用旧结尾做的），直到你重做它。\nrepair (keep its ending)：结尾固定为旧的结尾，所以后面的片段仍然衔接，其他都不变。\n连续几个坏片段（5 和 6 坏，7 好）：用 just this segment 重做 5，再用 repair 重做 6。\nthis + the CONTINUE ones after it：紧接着这个片段的那些片段也会被放到一边；把 index 设回 0 再排队重新生成。后面的 CUT 保留。"
       },
       "refs_on": {
         "tooltip": "何时发送参考图。cuts only：只在 CUT 片段发送，因此每个 CONTINUE 都直接接着之前的帧继续（衔接最平滑）。cuts + re-anchors：CUT 片段，以及丢失了人脸的 CONTINUE（测试中，在普通 CONTINUE 上加参考图会把开头从接续的帧拉开）。cuts + places on continues：CUT 片段获得全部参考；CONTINUE 只获得地点、布局和道具图片（谁站在哪、门往哪边开），从不发送人脸，人脸接着之前的帧继续。不是特写的 CONTINUE 还会获得该地点的房间（你的房间图片，或该地点第一个远景片段），这样镜头拉远时能找到同一个房间。every segment：始终发送。"
@@ -575,7 +575,7 @@
         "tooltip": "CONTINUE 片段：添加一行，告诉 H3 开头是上一刻的直接延续。"
       },
       "prompt_format": {
-        "tooltip": "sections：H3 训练时使用的布局（description / soundscape / non_diegetic_music: none，对白写成 <d>[English] ... </d>，以及 memory 的参考块）。plain：风格 + 动作文本。"
+        "tooltip": "sections：H3 训练时用的布局（description / soundscape / non_diegetic_music: N/A，对白写成 <d>[English] ... </d>，以及记忆用的参考块）。plain：风格 + 动作文字。"
       }
     },
     "outputs": {
@@ -600,7 +600,7 @@
         "tooltip": "图像模型的 VAE：空 latent 会按它来生成。"
       },
       "kind": {
-        "tooltip": "cast card：根据外貌生成的正面头像，纯灰背景（服装来自 outfit 卡片）。outfit：穿在隐形人台上的服装，纯灰背景。place：空房间。360 panorama：房间的一整圈全景（2:1），用于 🌐 槽位。prop：单独的物件，纯灰背景。"
+        "tooltip": "cast card：根据 look 生成的正面头像，纯灰背景。cast card + outfit：头像加上穿着服装的全身像（来自卡片的 outfit notes），一次运行填满 cast card 的两个格子。cast outfit：只生成 👗 服装图。outfit：隐形人台上的一套换装，纯灰背景。place：空房间。360 panorama：整个房间的全景（2:1），用于 🌐 格子。prop：单独的物件，纯灰背景。"
       },
       "name": {
         "tooltip": "演员、服装、地点或道具卡片。留空 = 第一张。"
@@ -634,7 +634,7 @@
         "tooltip": "图片（一批中的第一张）。"
       },
       "kind": {
-        "tooltip": "放入哪个槽位。from card：Card Prompt 正在生成的内容。cast card、outfit 和 prop 图片会被抠出并放到纯灰背景上。shot start / end：镜头的 🖼 开始帧或 🏁 结束帧。"
+        "tooltip": "放进哪个格子。from card：Card Prompt 正在生成的内容。cast card：头像。cast outfit：cast card 的 👗 服装。人物、服装和道具图会被抠到纯灰背景上。shot start / end：镜头的 🖼 起始帧或 🏁 结束帧。"
       },
       "name": {
         "tooltip": "留空 = Card Prompt 的卡片。填写还没有卡片的演员、服装、地点或道具名称会新建一张卡片。对于 shot start / end：镜头编号。"

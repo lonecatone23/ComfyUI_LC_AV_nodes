@@ -138,6 +138,7 @@ Everything you write lives on one big node: **LC H3 Story**. It has five lists (
 - **look**: one line, head and hair only: age, face, eyes, skin, hair and its length. "mid twenties, a soft oval face, green eyes, light freckles, long wavy blonde hair".
     - ✋ No clothes (they go in the outfit picture) and no body words. The Story warns you (👗).
 - **headshot** (the top square): head and hair, neutral face, on plain grey. Made with ✨ or your own picture.
+    - ⚠️ **Your own picture? Rewrite the look to match it.** ✨ makes the headshot from the look, so the two agree. A picture you drop in keeps the old look, and H3 follows the words over the picture: "short dark hair" on a blonde headshot gives you short dark hair in every shot.
 - **👗 outfit picture** (the square under it): the person head to toe in their outfit, from the **outfit notes** line.
     - **outfit notes**: the whole outfit in detail, with a color for every item. Start with the main piece: its first piece of clothing becomes the outfit's name for H3 ("dark blue jumpsuit").
 - **🎤 voice** (optional): a 2 to 15 second clip of how they sound. H3 copies the voice, not the words.
@@ -406,6 +407,7 @@ Play a shot (▶) and pause on a frame. Two buttons at the top:
 - **A stranger's face:** the person has no headshot, or the action names someone with no cast card.
 - **Faces change in a keep rolling shot where people walk in:** fixed in LC AV 0.5.17 (they now get their pictures). Remake the shot with ↻.
 - **face match under 0.40:** ↻ the shot. If it keeps failing, it's the headshot or the look words.
+- **Wrong hair or face on everyone's shots:** the look doesn't match the headshot (usually your own picture dropped on a card ✨ wrote). Rewrite the look to describe the picture.
 - **Faces garbled in a wide shot:** a face there is tiny. Use a medium, two-shot or over-the-shoulder shot for anything with a face or a line.
 
 **Clothes**

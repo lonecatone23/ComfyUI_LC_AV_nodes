@@ -554,7 +554,7 @@
         "tooltip": "LC H3 Story 🎬에서: 캐스트와 장소 그림."
       },
       "redo_after": {
-        "tooltip": "index로 이미 저장된 세그먼트를 다시 만들 때. 이전 테이크는 항상 프로젝트의 takes 폴더에 보관됩니다. this + the CONTINUE ones after it: 이 세그먼트에서 바로 이어지는 세그먼트들은 더 이상 맞물리지 않으므로 함께 따로 치워 둡니다. index를 0으로 되돌리고 큐에 넣으면 다시 만들어집니다. 뒤에 있는 CUT은 그대로 남습니다."
+        "tooltip": "index로 이미 저장된 세그먼트를 다시 만들 때. 예전 테이크는 항상 프로젝트의 takes 폴더에 남습니다.\njust this segment: 새 결말. 뒤의 세그먼트는 남지만, 다음 세그먼트는 다시 만들 때까지 이어지지 않습니다(예전 결말로 만든 것으로 표시).\nrepair (keep its ending): 결말을 예전 결말에 고정하므로 다음 세그먼트는 그대로 이어지고 다른 것은 바뀌지 않습니다.\n나쁜 세그먼트가 연달아 있을 때(5와 6이 나쁘고 7은 좋음): 5는 just this segment로, 6은 repair로 다시 만듭니다.\nthis + the CONTINUE ones after it: 이 세그먼트에서 바로 이어지는 세그먼트도 따로 치워 둡니다. index를 0으로 되돌리고 큐에 넣으면 다시 만듭니다. 뒤의 CUT은 남습니다."
       },
       "refs_on": {
         "tooltip": "레퍼런스를 언제 보낼지. cuts only: CUT 세그먼트에만 보내므로 모든 CONTINUE가 앞 프레임에서 그대로 이어집니다(가장 매끄러운 연결). cuts + re-anchors: CUT 세그먼트와, 얼굴을 잃은 CONTINUE(테스트에서 일반 CONTINUE에 레퍼런스를 주면 시작 부분이 이어받은 프레임에서 멀어졌습니다). cuts + places on continues: CUT 세그먼트는 전부 받고, CONTINUE는 장소, 레이아웃, 소품 그림만 받습니다(누가 어디 서는지, 문이 어느 쪽으로 열리는지). 얼굴은 보내지 않고 앞 프레임에서 이어받습니다. 클로즈업이 아닌 CONTINUE는 장소의 방(당신의 방 그림, 또는 그 장소의 첫 와이드 세그먼트)도 받아서 카메라가 뒤로 빠져도 같은 방이 나옵니다. every segment: 항상 보냅니다."
@@ -575,7 +575,7 @@
         "tooltip": "CONTINUE 세그먼트: 시작 부분이 이전 순간에서 그대로 이어진다고 H3에 알려 주는 줄을 추가합니다."
       },
       "prompt_format": {
-        "tooltip": "sections: H3가 학습한 구성(description / soundscape / non_diegetic_music: none, 대사는 <d>[English] ... </d>, memory용 레퍼런스 블록). plain: 스타일 + 동작 텍스트."
+        "tooltip": "sections: H3가 학습한 레이아웃(description / soundscape / non_diegetic_music: N/A, 대사는 <d>[English] ... </d>, 그리고 기억용 참조 블록). plain: 스타일 + 동작 문장."
       }
     },
     "outputs": {
@@ -600,7 +600,7 @@
         "tooltip": "이미지 모델의 VAE: 빈 latent를 여기에 맞춰 만듭니다."
       },
       "kind": {
-        "tooltip": "cast card: 외모 설명으로 만든 정면 얼굴 사진, 단색 회색 배경(옷은 outfit 카드에서). outfit: 보이지 않는 마네킹에 입힌 옷, 단색 회색 배경. place: 빈 방. 360 panorama: 방 전체를 한 바퀴(2:1), 🌐 슬롯용. prop: 물건만, 단색 회색 배경."
+        "tooltip": "cast card: look으로 만드는 정면 얼굴 사진, 단색 회색 배경. cast card + outfit: 얼굴 사진과 의상을 입은 전신(카드의 outfit notes 기준)을 한 번에 만들어 cast card의 두 칸을 모두 채웁니다. cast outfit: 👗 의상 사진만. outfit: 보이지 않는 마네킹에 입힌 갈아입을 옷, 단색 회색 배경. place: 사람 없는 방. 360 panorama: 방 전체를 한 바퀴(2:1), 🌐 칸용. prop: 물건만, 단색 회색 배경."
       },
       "name": {
         "tooltip": "캐스트, 의상, 장소, 소품 카드. 빈칸 = 첫 번째 카드."
@@ -634,7 +634,7 @@
         "tooltip": "그림(배치의 첫 번째 장)."
       },
       "kind": {
-        "tooltip": "어느 슬롯에 넣을지. from card: Card Prompt가 만들던 것. cast card, outfit, prop 그림은 잘라내어 단색 회색 배경에 놓입니다. shot start / end: 샷의 🖼 시작 프레임 또는 🏁 끝 프레임."
+        "tooltip": "어느 칸에 넣을지. from card: Card Prompt가 만들던 것. cast card: 얼굴 사진. cast outfit: cast card의 👗 의상. 인물, 의상, 소품 사진은 단색 회색 위로 잘라냅니다. shot start / end: 샷의 🖼 시작 프레임 또는 🏁 끝 프레임."
       },
       "name": {
         "tooltip": "빈칸 = Card Prompt의 카드. 아직 카드가 없는 캐스트, 의상, 장소, 소품 이름을 넣으면 새 카드가 만들어집니다. shot start / end일 때: 샷 번호."

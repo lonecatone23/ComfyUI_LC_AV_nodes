@@ -6,7 +6,7 @@ Custom nodes for ComfyUI by lonecatone23.
 * **Image companion:** https://github.com/lonecatone23/ComfyUI_LC123_nodes
 * **CivitAI:** lonecatone23
 * **Support:** https://ko-fi.com/lonecatone
-* **Version:** 0.5.17 · **27 nodes**
+* **Version:** 0.5.18 · **27 nodes**
 
 > Small tools that remove friction: frames, soundtrack, metadata, fewer extra packs.
 

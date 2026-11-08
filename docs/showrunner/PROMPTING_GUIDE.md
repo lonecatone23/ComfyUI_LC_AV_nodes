@@ -44,6 +44,7 @@ You never write a prompt by hand. The Story builds one per shot, and that text i
 - **Head and hair, on plain grey, neutral face.** No shoulders, no clothes: clothes in a headshot beat every outfit picture.
 - **Neutral face.** A smiling card gives you a smiling actor in every shot. It pulls, it's not a hard lock.
 - **Your own photo works**, even seated or turned a little. Drop it on the card: the background comes off and it goes on grey. ✂ crop it to the head. A sharp, well-lit face matters more than the pose.
+- ⚠️ **Then rewrite the look to describe your picture.** ✨ makes a headshot from the look, so they match. Your own picture keeps whatever look was there, and the words win: a blonde headshot with "short dark hair" in the look comes out short and dark in every shot.
 
 ### ✋ Everyone needs an outfit from somewhere
 - The headshot carries none. Give every person a **👗 outfit picture** on their cast card: that's what they wear from their first shot.
@@ -208,6 +209,7 @@ You never write a prompt by hand. The Story builds one per shot, and that text i
 ## 🔧 When something goes wrong
 
 - **A stranger's face in a shot:** the person has no headshot, or the action names someone with no card.
+- **The right face, wrong hair (in every shot):** the look doesn't match the headshot. Rewrite the look to describe the picture.
 - **Faces change when people walk into a keep rolling shot:** fixed in LC AV 0.5.17. ↻ the shot.
 - **A close-up turns into the other person halfway:** the action names them. Write "across the table" instead.
 - **A second copy of someone walks in:** the start frame already shows them where the action has them arriving.
