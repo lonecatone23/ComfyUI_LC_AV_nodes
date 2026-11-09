@@ -117,13 +117,15 @@ Everything you write lives on one big node: **LC H3 Story**. It has five lists (
 
 - A few words for the style of the whole movie: "cinematic, soft natural light, shallow depth of field". It goes into every shot.
 
-### The H3 prompt: what H3 actually gets
+### The H3 prompt: the shot's lines
 
 ![A shot's H3 prompt](images/13_h3_prompt.jpg)
 
-- ✋ **The text a shot builds is exactly what H3 gets.** Open **H3 prompt** under any shot to read it.
-- **↻** builds it again right now, so you can check it before you spend time rendering.
-- **✎ Edit** lets you write it yourself. Your text is sent as written until you go back to automatic.
+- ✋ **H3 prompt shows the shot's lines:** Place, Camera and the timed action. Open it under any shot to read them.
+    - When the shot is made, Make wraps the rest around them: who each person is and which picture is theirs, what to keep from each picture, the look and the sound.
+    - The full prompt of a made take is saved in `takes/seg_NNN.json` in the project folder.
+- **↻** builds the lines again right now.
+- **✎ Edit** lets you write the lines yourself. They go in as written until you go back to automatic.
 - **Warnings** sit under each shot: 🛑 must fix, ⚠️ worth a look.
 
 ---

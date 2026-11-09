@@ -18,7 +18,7 @@ For what every button does, see the [User Guide](USER_GUIDE.md).
 
 ## How H3 reads your cards
 
-You never write a prompt by hand. The Story builds one per shot, and that text is **exactly** what H3 gets (open a shot's **H3 prompt**; **↻** refreshes it, **✎ Edit** lets you rewrite it):
+You never write a prompt by hand. The Story builds each shot's lines (open a shot's **H3 prompt**; **↻** refreshes them, **✎ Edit** lets you rewrite them), and Make wraps them into the full prompt when the shot is made. Together, H3 gets:
 
 - **The cast line:** each person in the shot, who they are, their look, and "wearing <outfit>". Plus the movie's look. (An empty shot gets "No people are in this shot" instead.)
 - **Place:** the place card's description.
