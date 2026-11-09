@@ -47,8 +47,8 @@ const CSS = `
 .lcst-b:hover{background:#12384a;border-color:#2a7aa0;color:#fff}
 .lcst-b.pri{background:#1a5a7a;border-color:#2a7aa0;color:#fff}
 .lcst-b.pri:hover{background:#23759c}
-.lcst-b[data-del]{color:#ff5c5c}
-.lcst-b[data-del] svg{width:12px;height:12px;vertical-align:middle}
+.lcst-b[data-del],.lcst-b[data-bx]{color:#ff5c5c}
+.lcst-b[data-del] svg,.lcst-b[data-bx] svg{width:12px;height:12px;vertical-align:middle}
 .lcst-b:disabled{opacity:.3;cursor:default}
 .lcst-add{width:100%;padding:5px;background:transparent;border:1px dashed #1a5a7a;color:#6cc4e6}
 .lcst-add:hover{background:#0d2f3f}
@@ -1003,19 +1003,21 @@ function paintBoard(node) {
     const made = segs.length && segs.every((g) => g.made);
     const some = segs.some((g) => g.made);
     const changed = segs.some((g) => g.changed);
+    const broken = segs.some((g) => g.broken);
     const locked = segs.some((g) => g.locked);
     const thumb = segs.find((g) => g.thumb)?.thumb;
     // ↻ queued it: queued until its first segment has a take newer than the click
     const qd = node.__lcst.queued?.[s.id];
     if (qd && (segs[0]?.video?.t || 0) >= qd) delete node.__lcst.queued[s.id];
     const queued = !!node.__lcst.queued?.[s.id];
-    const st = queued ? "⏳ queued" : locked ? "🔒 locked" : changed ? "✏️ changed since made" : made ? `✅ made${segs.length > 1 ? ` · ${segs.length} parts` : ""}` : some ? "◐ part made" : "⬜ not made";
-    return `<div class="lcst-tile${changed ? " chg" : ""}${locked ? " lck" : ""}">
+    const st = queued ? "⏳ queued" : locked ? "🔒 locked" : broken ? "⚠ join broken: ↻ it" : changed ? "✏️ changed since made" : made ? `✅ made${segs.length > 1 ? ` · ${segs.length} parts` : ""}` : some ? "◐ part made" : "⬜ not made";
+    return `<div class="lcst-tile${changed || broken ? " chg" : ""}${locked ? " lck" : ""}"${broken ? ` title="This shot rolls on from shot ${i}, which was remade after this take: the join jumps. ↻ this shot to make it carry on from the new ending."` : ""}>
       <div class="th" data-bplay="${i}" style="${thumb ? `background-image:url('${fileURL(thumb)}')` : ""}" title="${some ? "▶ Play" : "Not made yet"}">
         <b>${i + 1}</b>${thumb ? "" : "not made"}<span class="st">${st}</span></div>
       <div class="lcst-row">
         <button class="lcst-b" data-bplay="${i}" ${some ? "" : "disabled"} title="Play this shot (📌 grab a frame as an anchor from the player)">▶</button>
-        <button class="lcst-b" data-bredo="${i}" ${locked ? "disabled" : ""} title="${made ? "Make this shot again (the old take is kept in takes/)" : "Make this shot"}">↻</button>
+        <button class="lcst-b" data-brepair="${i}" ${locked || !made || segs.length > 1 ? "disabled" : ""} title="${segs.length > 1 ? "Repair works on one-part shots: this one is made in parts" : "Repair: a new take of this shot that keeps its last moment, so a keep-rolling shot after it still joins (the old take is kept in takes/)"}">🩹</button>
+        <button class="lcst-b" data-bredo="${i}" ${locked ? "disabled" : ""} title="${made ? "Redo: a whole new take, new ending too. A keep-rolling shot after it then needs ↻ as well (the old take is kept in takes/)" : "Make this shot"}">↻</button>
         <button class="lcst-b" data-block="${i}" ${some ? "" : "disabled"} title="${locked ? "Unlock" : "Lock: ↻ and redo leave it alone"}">${locked ? "🔓" : "🔒"}</button>
       </div></div>`;
   }).join("") || `<span class="lcst-tip">Add a shot to start.</span>`;
@@ -1026,7 +1028,8 @@ function paintBoard(node) {
     const segs = (by[s.id]?.segments || []).filter((g) => g.made);
     if (segs.length) openPlayer(node, segs, s, Number(b.dataset.bplay));
   }));
-  el.querySelectorAll("[data-bredo]").forEach((b) => (b.onclick = () => makeShot(node, Number(b.dataset.bredo))));
+  el.querySelectorAll("[data-bredo]").forEach((b) => (b.onclick = () => makeShot(node, Number(b.dataset.bredo), "redo")));
+  el.querySelectorAll("[data-brepair]").forEach((b) => (b.onclick = () => makeShot(node, Number(b.dataset.brepair), "repair")));
   el.querySelectorAll("[data-block]").forEach((b) => (b.onclick = async () => {
     const s = d.shots[Number(b.dataset.block)];
     const locked = (by[s.id]?.segments || []).some((g) => g.locked);
@@ -1141,7 +1144,7 @@ function findSegment() {
 
 /** One run of the Segment / Make node on segment `index` as a redo of that segment only (redo_after = just this
  * segment); every widget goes back right after the run is queued. */
-async function redoSegment(index) {
+async function redoSegment(index, redoAfter = "just this segment") {
   const segNodes = findSegment();
   if (segNodes.length !== 1) throw new Error(segNodes.length ? "More than one LC H3 Segment is on: set its index by hand." : "No LC H3 Segment in this workflow.");
   const seg = segNodes[0];
@@ -1153,7 +1156,7 @@ async function redoSegment(index) {
   const before = { index: get("index"), make: get("make"), redo_after: get("redo_after") };
   set("index", index);
   set("make", "redo");
-  set("redo_after", "just this segment");
+  set("redo_after", redoAfter);
   try {
     await app.queuePrompt(0, 1);
   } finally {
@@ -1168,20 +1171,25 @@ window.__lcH3RedoSegment = redoSegment; // the segment chain makes a long shot's
 /** ↻: remakes this shot and nothing after it (its own parts, when it is longer than max_shot_seconds). The shots after
  * it are kept as they are and the movie is joined again with the new take; a keep-rolling shot after it no longer
  * joins smoothly until it is remade too (user rule 2026-11-07: "If I hit redo on one segment, it does not keep going"). */
-async function makeShot(node, i) {
+async function makeShot(node, i, how = "redo") {
   const n = findSegment().length;
   if (n !== 1) return status(node, n ? "More than one LC H3 Segment is on: set its index by hand." : "No LC H3 Segment in this workflow.", true);
   await saveProject(node);
   await refreshBoard(node);
   const d = getData(node);
-  const b = (node.__lcst.board?.shots || []).find((s) => s.shot_id === d.shots[i].id);
+  const shotsB = node.__lcst.board?.shots || [];
+  const b = shotsB.find((s) => s.shot_id === d.shots[i].id);
   const segs = (b?.segments || []).map((x) => x.index).filter(Boolean);
   if (!segs.length) return status(node, "Could not find that shot in the saved plan. 💾 Save and try again.", true);
-  status(node, `↻ Making shot ${i + 1} (segment ${segs[0]}${segs.length > 1 ? `-${segs[segs.length - 1]}` : ""}). Nothing after it is touched.`);
+  const nb = d.shots[i + 1] && shotsB.find((s) => s.shot_id === d.shots[i + 1].id);
+  const rollsOn = !!(nb?.segments?.[0]?.made && nb.segments[0].mode === "CONTINUE");
+  const repair = how === "repair" && segs.length === 1 && (b?.segments || []).every((g) => g.made);
+  status(node, repair ? `🩹 Repairing shot ${i + 1}: new take, same ending${rollsOn ? `, so shot ${i + 2} still joins` : ""}.`
+    : `↻ Making shot ${i + 1} (segment ${segs[0]}${segs.length > 1 ? `-${segs[segs.length - 1]}` : ""}).${rollsOn ? ` ⚠ Shot ${i + 2} will need ↻ too.` : " Nothing after it is touched."}`);
   try {
     const at = Math.floor(Date.now() / 1000);
     window.__lcH3Only = { project: d.project, rest: segs.slice(1) }; // the chain stops once these are made
-    await redoSegment(segs[0]);
+    await redoSegment(segs[0], repair ? "repair (keep its ending)" : "just this segment");
     node.__lcst.queued = { ...(node.__lcst.queued || {}), [d.shots[i].id]: at };
     paintBoard(node);
   } catch (e) {
@@ -1433,6 +1441,44 @@ async function openProject(node, name) {
   }
 }
 
+/** 🆕 New: clears the board. When the board differs from the project's last save, the first click only warns (toast)
+ * and a second click within 6 s clears anyway. Nothing on disk is touched. */
+const boardSig = (d) => JSON.stringify(["look", "cast", "outfits", "places", "props", "shots"].map((k) => d[k] ?? null));
+const hasContent = (d) => !!(String(d.look || "").trim() || d.cast.length || d.outfits.length || d.places.length || d.props.length || d.shots.length);
+function toast(severity, detail, life = 6000) {
+  try {
+    app.extensionManager?.toast?.add({ severity, summary: "LC H3 Story", detail, life });
+  } catch (_) {}
+}
+async function newProject(node) {
+  const d = getData(node);
+  if (hasContent(d) && !(node.__lcstNewArmed > Date.now())) {
+    let saved = null;
+    try {
+      const j = await api.fetchApi(`/lc_h3/story/load?project=${encodeURIComponent(d.project || "")}&t=${Date.now()}`).then((r) => r.json());
+      if (j?.story) saved = { ...blank(), ...j.story };
+    } catch (_) {}
+    if (!saved || boardSig(saved) !== boardSig(d)) {
+      node.__lcstNewArmed = Date.now() + 6000;
+      toast("warn", `Progress on "${d.project || "this project"}" has not been saved yet. 💾 Save first, or click 🆕 New again to clear the board anyway.`);
+      status(node, "⚠ Not saved yet: 🆕 New again clears the board anyway.", true);
+      return;
+    }
+  }
+  node.__lcstNewArmed = 0;
+  // exactly what a brand-new Story node starts with (only the ✨ writer's model is kept: it is a setting, not the story)
+  if (node.properties) node.properties.lcstMin = [];
+  node.__lcstBox?.clear?.();
+  setData(node, { ...blank(), model: d.model }, true);
+  toast("info", "Board cleared. Name the project and 💾 Save it.", 5000);
+  status(node, "New board. ✋ Name the project, then 💾 Save.");
+  const name = node.__lcst?.wrap?.querySelector('[data-k="project"]');
+  if (name) {
+    name.focus();
+    name.select();
+  }
+}
+
 async function saveProject(node) {
   const d = getData(node);
   try {
@@ -1594,6 +1640,45 @@ async function makeThis(node, info) {
   status(node, now && now !== before ? `✨ New ${info.what} for ${who}. The old one is kept: ↶ brings it back.` : `✨ ${who}'s ${info.what} did not change: check the run for an error.`, !(now && now !== before));
 }
 
+/** 🌐 360 from card: LC Vision reads the room picture and writes the whole place out (pano_prompt on the place card), then the
+ * Card Prompt's ✨ 360 draws from that. */
+async function pano360FromRoom(node, i) {
+  if (node.__lcstMaking) return status(node, "Still making the last picture: wait for it to finish.", true);
+  const d = getData(node);
+  const p = d.places[i];
+  if (!p?.picture?.filename) return status(node, "Put a room picture on the card first.", true);
+  if (!String(p.name || "").trim()) return status(node, "Name the place first.", true);
+  if (p.panorama?.filename && !window.confirm("Make a new 360 from the room picture?\nThe 360 on the card now is kept: ↶ brings it back.")) return;
+  try {
+    status(node, "🌐 LC Vision is reading the room picture...");
+    const m = await api.fetchApi("/lc_vision/boxes/models").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (!m) throw new Error("🌐 360 from card needs the LC Vision pack (ComfyUI_LC_Vision_nodes).");
+    const q = new URLSearchParams({ filename: p.picture.filename, subfolder: p.picture.subfolder || "", type: p.picture.type || "input" });
+    const blob = await api.fetchApi(`/view?${q}`).then((r) => {
+      if (!r.ok) throw new Error("Could not open the room picture.");
+      return r.blob();
+    });
+    const picture = await new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(fr.result);
+      fr.onerror = () => rej(new Error("Could not read the room picture."));
+      fr.readAsDataURL(blob);
+    });
+    const j = await api.fetchApi("/lc_vision/place/describe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: m.default || "", picture }),
+    }).then((r) => r.json());
+    if (j.error) throw new Error(j.error);
+    const now = getData(node);
+    now.places[i].pano_prompt = j.text;
+    setData(node, now, true);
+  } catch (e) {
+    return status(node, e.message || String(e), true);
+  }
+  makeThis(node, { find: (x) => x.places[i], slot: "panorama", kind: "360 panorama", what: "360 panorama" });
+}
+
 /** The two small buttons on a picture slot (shown on hover): ✨ make this picture, ↶ the picture before. */
 function decorateSlot(node, d, el, save) {
   const info = slotInfo(d, el);
@@ -1641,6 +1726,7 @@ function render(node) {
       <button class="lcst-b" data-load title="Open a saved project (an old Shot List project is imported)">📂 Load</button>
       <button class="lcst-b" data-save title="Save story.json and plan.json now (Run saves too)">💾 Save</button>
       <button class="lcst-b" data-saveas title="Save a variant under a new name: the made shots come along, the original stays as it is">💾 Save as</button>
+      <button class="lcst-b" data-new title="Clear the board for a new project. Saved projects stay on disk (📂 Load brings them back)">🆕 New</button>
       <span class="lcst-status" data-status></span>
     </div>
     <div class="lcst-row"><span class="lcst-tip" data-size style="flex:1"></span></div>
@@ -1694,6 +1780,7 @@ function render(node) {
         <div class="lcst-col" style="flex:0 0 84px">
           ${slotHTML(p.picture, `data-pic="p|${i}"`, "room picture", true)}
           ${slotHTML(p.panorama, `data-pano="${i}" title="A 360 panorama of this place (2:1, e.g. 2048 x 1024). Each shot then aims its own camera angle in it."`, "🌐 360").replace('class="lcst-slot"', 'class="lcst-slot pano"')}
+          ${p.picture?.filename ? `<button class="lcst-b" data-p360="${i}" style="padding:2px 4px;font-size:11px" title="Make the 🌐 360 from the room picture: LC Vision reads the picture and writes the whole place out, then the Card Prompt draws the 360 from that. The 360 on the card now is kept (↶).">🌐 360 from card</button>` : ""}
         </div>
         <div class="lcst-col">
           <div class="lcst-row">
@@ -2140,6 +2227,8 @@ function render(node) {
   q("[data-load]").forEach((b) => (b.onclick = () => loadProject(node, b)));
   q("[data-save]").forEach((b) => (b.onclick = () => saveProject(node)));
   q("[data-saveas]").forEach((b) => (b.onclick = () => saveProjectAs(node, b)));
+  q("[data-new]").forEach((b) => (b.onclick = () => newProject(node)));
+  q("[data-p360]").forEach((b) => (b.onclick = () => pano360FromRoom(node, Number(b.dataset.p360))));
 
   q("[data-pic],[data-pano],[data-start],[data-end]").forEach((el) => decorateSlot(node, d, el, save));
 

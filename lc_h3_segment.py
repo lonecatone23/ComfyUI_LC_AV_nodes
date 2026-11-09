@@ -1274,7 +1274,7 @@ def _unsay_looks(style: str, story: str, cast: dict, tight: bool = False) -> str
 
 
 def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = None, people: int = 1, auds: list | None = None, story: str = "",
-                      tight: bool = False) -> str:
+                      tight: bool = False, carried: list | None = None) -> str:
     """H3's trained reference layout for the Reference Assembler's pictures: one <Subject k> per named person (their
     face / full body pictures), and retention lines for each setting, prop and style picture. memory: "video" or
     "video_audio" when segment 1's memory clip rides along (no cast pictures in this shot), as <Video 1> / <Audio 1>."""
@@ -1301,7 +1301,22 @@ def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = 
     people_pics = {n: r for n, r in cast.items() if r.get("face") or r.get("full body")}
     defs, kept, subjects = [], [], []
     subject_of = {}
-    for k, (name, r) in enumerate(cast.items(), 1):
+    # a keep-rolling shot someone walks into: the people already on screen are defined first, from the opening frames
+    # (no pictures), so the newcomer's pictures are never read as the person H3 can see ("street fight" 2026-11-08:
+    # Anika got Jake's outfit, name tag and all, when only Jake was defined)
+    carried = [n for n in (carried or []) if n not in cast]
+    for name in carried:  # their clothes are on screen already; "wearing outfit 1" would match the newcomer's outfit label
+        style = re.sub(rf"(\b{re.escape(name)}:[^;]*?),\s*wearing [^;]*", r"\1", style)
+    if carried:
+        desc = (style + NL + NL + body).strip()
+    for k, name in enumerate(carried, 1):
+        subj = f"<Subject {k}>"
+        subjects.append(subj)
+        subject_of[name] = subj
+        defs.append(f"{subj} is {name}, the person already in the opening frames.")
+        kept.append(f"{subj} (the opening frames): fully_preserved - the face, hair and clothing of {name} stay exactly as in the "
+                    "opening frames; nothing from the pictures is used for them.")
+    for k, (name, r) in enumerate(cast.items(), len(carried) + 1):
         subj = f"<Subject {k}>"
         subjects.append(subj)
         subject_of[name] = subj
@@ -1318,7 +1333,8 @@ def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = 
                     "Only the people come from <Video 1>; the place, the poses and the framing are new.")
         if memory == "video_audio":
             kept.append(f"<Audio 1>: reference - the voice{'s' if people > 1 else ''} of {subj}.")
-    follow = join(subjects) if subjects else "the scene"
+    # the shot stays on whoever the opening frames show; the newcomer only comes in
+    follow = join(subjects[:len(carried)]) if carried else join(subjects) if subjects else "the scene"
     kinds = ["reference generation"]
     if auds or (memory == "video_audio" and not people_pics):
         kinds.append("audio reuse" if any(a["role"] == "line" for a in auds) else "audio reference")
@@ -1329,6 +1345,15 @@ def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = 
 
 
 _NAMED = re.compile(rf"\b({_NAME}),\s+an?\s+(man|woman|boy|girl|guy|lady)\b")
+
+
+def _on_screen(plan: dict, i: int) -> list:
+    """The cast the shot before segment i names: who is in the frames a keep-rolling segment opens on."""
+    shots = plan.get("shots") or []
+    if i < 2 or i > len(shots):
+        return []
+    prev = str(shots[i - 2].get("action") or "")
+    return [n for n in _cast_names(plan) if re.search(rf"\b{re.escape(n)}\b", prev, re.I)]
 
 
 def _brings_people(plan: dict, i: int):
@@ -1666,7 +1691,8 @@ class LCH3Segment:
             ref_kind = ("video_audio" if mem_clip[1] is not None else "video") if mem_clip is not None else "picture" if mem is not None else None
             if shot_refs:
                 prompt = _h3_sections_refs(style, action, shot_refs["pictures"], ref_kind if mem_clip is not None else None, cast,
-                                           shot_refs.get("audios"), plan.get("story", ""), bool(shot.get("tight")))
+                                           shot_refs.get("audios"), plan.get("story", ""), bool(shot.get("tight")),
+                                           _on_screen(plan, i) if isinstance(newcomers, set) else None)
             else:
                 prompt = _h3_sections(style, action, ref_kind, cast, focus if cast > 1 else None)
             prompt = _line_edges(prompt, frame_count / FPS, plan, i)

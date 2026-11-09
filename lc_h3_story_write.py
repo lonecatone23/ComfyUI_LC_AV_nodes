@@ -285,7 +285,7 @@ def _clean(raw: dict, old: dict, max_s: float) -> dict:
         if not name:
             continue
         o = old_places.get(name.lower(), {})
-        places.append({**{k: o[k] for k in ("picture", "panorama", "front", "anchors", "close_view") if k in o},
+        places.append({**{k: o[k] for k in ("picture", "panorama", "front", "anchors", "close_view", "pano_prompt") if k in o},
                        "id": o.get("id") or uid("p"), "name": name, "description": s(p.get("description")),
                        "sound": s(p.get("sound")), "picture": o.get("picture"), "anchors": o.get("anchors") or []})
     pnames = {p["name"].lower(): p["name"] for p in places}

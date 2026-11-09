@@ -1241,7 +1241,19 @@ def board(project: str, now: dict | None = None) -> dict:
         if now is not None and (s.get("shot_id"), s.get("part")) not in cur:
             continue  # a shot taken out on screen, not saved yet
         th = _thumb(folder, k) if made else None
+        # a made keep-rolling take whose opening came from an older ending of the segment before (that one was remade
+        # since): the join jumps until this one is remade too. The take records the tail it started from.
+        broken = False
+        if made and s.get("mode") == "CONTINUE" and k > 1:
+            try:
+                with open(_seg_path(folder, k, ".json"), encoding="utf-8") as f:
+                    from_t = float(json.load(f).get("from_tail_mtime") or 0)
+                tail = _seg_path(folder, k - 1, "_tail.mp4")
+                broken = bool(from_t) and os.path.exists(tail) and os.path.getmtime(tail) > from_t + 1.0
+            except (OSError, ValueError, TypeError):
+                broken = False
         seg = {"index": k, "part": s.get("part", 1), "made": made, "changed": changed, "locked": bool(s.get("locked")),
+               "mode": s.get("mode"), "broken": broken,
                "seconds": round(s.get("frames", 0) / FPS, 2), "thumb": rel(th) if th else None,
                # the part the movie uses: a keep-rolling take's file opens on the shot before's last 1.6 s
                "video": rel(_seg_path(folder, k, "_part.mp4")) if made else None}

@@ -11207,7 +11207,7 @@
           },
           {
             "title": "LC H3 Story 🎬",
-            "text": "The whole movie on one node: cast, outfits, places, props and shots. Name the project first: everything is saved in its folder. The project bar (📂 open, 💾 save) stays pinned at the top.\n\n💡 Open a shot's H3 prompt to see exactly what H3 gets. ↻ builds it again now, ✎ Edit lets you write it yourself. Warnings (🛑 must fix, ⚠️ look at) sit under each shot.\n\n🔞 NSFW (in the ✨ Write box, off by default) lets the writer write adult scenes.",
+            "text": "The whole movie on one node: cast, outfits, places, props and shots. Name the project first: everything is saved in its folder. The project bar (📂 open, 💾 save, 🆕 new) stays pinned at the top.\n\n💡 A shot's H3 prompt shows its lines: Place, Camera and the timed action. The people, pictures and sound are added around them when the shot is made. ↻ builds the lines again, ✎ Edit lets you write them yourself. Warnings (🛑 must fix, ⚠️ look at) sit under each shot.\n\n🔞 NSFW (in the ✨ Write box, off by default) lets the writer write adult scenes.",
             "groups": [],
             "nodes": [
               "150"
@@ -11222,8 +11222,8 @@
             "i18n": {
               "zh": {
                 "title": "LC H3 Story 🎬",
-                "text": "整部影片都在一个节点上：角色、服装、地点、道具和镜头。先给项目起名：所有东西都存在它的文件夹里。项目栏（📂 打开、💾 保存）固定在顶部。\n\n💡 打开一个镜头的 H3 prompt，看 H3 到底收到什么。↻ 立刻重新生成，✎ Edit 让你自己写。警告（🛑 必须改、⚠️ 看一下）在每个镜头下面。\n\n🔞 NSFW（在 ✨ Write 框里，默认关闭）让写作模型可以写成人场景。",
-                "src": "910d334b",
+                "text": "整部影片都在一个节点上：角色、服装、地点、道具和镜头。先给项目命名：所有东西都保存在它的文件夹里。项目栏（📂 打开、💾 保存、🆕 新建）固定在顶部。\n\n💡 镜头的 H3 prompt 显示它的台词行：Place、Camera 和按时间排的动作。人物、图片和声音会在生成镜头时加在它们周围。↻ 重新生成这些行，✎ Edit 让你自己写。警告（🛑 必须修、⚠️ 看一下）在每个镜头下面。\n\n🔞 NSFW（在 ✨ Write 框里，默认关闭）允许编写器写成人场景。",
+                "src": "c7c1296c",
                 "why": {
                   "150|max_shot_seconds": {
                     "text": "一次做出的最长镜头。更长的镜头会分段做，每段接着上一段。",
@@ -11233,8 +11233,8 @@
               },
               "ja": {
                 "title": "LC H3 Story 🎬",
-                "text": "映画全体が 1 つのノードに：キャスト、衣装、場所、小道具、ショット。最初にプロジェクトに名前を付けます。すべてそのフォルダに保存されます。プロジェクトバー（📂 開く、💾 保存）は上に固定されます。\n\n💡 ショットの H3 prompt を開くと、H3 に送られる内容がそのまま見えます。↻ で今すぐ作り直し、✎ Edit で自分で書けます。警告（🛑 必ず直す、⚠️ 確認）は各ショットの下にあります。\n\n🔞 NSFW（✨ Write の画面内、既定はオフ）でライターが大人向けのシーンを書けます。",
-                "src": "910d334b",
+                "text": "ムービー全体が 1 つのノードに：キャスト、衣装、場所、小道具、ショット。まずプロジェクトに名前を付けます。すべてそのフォルダに保存されます。プロジェクトバー（📂 開く、💾 保存、🆕 新規）は上に固定されています。\n\n💡 ショットの H3 prompt はその行を表示します：Place、Camera、時間付きのアクション。人物、画像、音はショットを作るときにその周りに加えられます。↻ で行を作り直し、✎ Edit で自分で書けます。警告（🛑 必ず直す、⚠️ 確認）は各ショットの下にあります。\n\n🔞 NSFW（✨ Write の欄、既定はオフ）で、ライターが成人向けの場面を書けます。",
+                "src": "c7c1296c",
                 "why": {
                   "150|max_shot_seconds": {
                     "text": "一度に作る最長のショット。それより長いショットはパートに分けて作り、前のパートから続けます。",
@@ -11244,8 +11244,8 @@
               },
               "ko": {
                 "title": "LC H3 Story 🎬",
-                "text": "영화 전체가 노드 하나에: 출연진, 의상, 장소, 소품, 샷. 먼저 프로젝트 이름을 정하세요. 모든 것이 그 폴더에 저장돼요. 프로젝트 바(📂 열기, 💾 저장)는 위에 고정돼요.\n\n💡 샷의 H3 prompt를 열면 H3가 받는 내용을 그대로 볼 수 있어요. ↻는 지금 다시 만들고, ✎ Edit로 직접 쓸 수 있어요. 경고(🛑 꼭 고치기, ⚠️ 확인)는 각 샷 아래에 있어요.\n\n🔞 NSFW(✨ Write 창 안, 기본은 꺼짐)를 켜면 작가 모델이 성인 장면을 쓸 수 있어요.",
-                "src": "910d334b",
+                "text": "영상 전체가 노드 하나에: 캐스트, 의상, 장소, 소품, 샷. 먼저 프로젝트 이름을 정하세요. 모든 것이 그 폴더에 저장됩니다. 프로젝트 바(📂 열기, 💾 저장, 🆕 새로 만들기)는 위에 고정됩니다.\n\n💡 샷의 H3 prompt는 그 줄들을 보여 줍니다: Place, Camera, 시간별 동작. 인물, 사진, 소리는 샷을 만들 때 그 주위에 더해집니다. ↻는 줄을 다시 만들고, ✎ Edit로 직접 쓸 수 있습니다. 경고(🛑 꼭 고치기, ⚠️ 확인)는 각 샷 아래에 있습니다.\n\n🔞 NSFW(✨ Write 칸, 기본 꺼짐)를 켜면 작성기가 성인 장면을 쓸 수 있습니다.",
+                "src": "c7c1296c",
                 "why": {
                   "150|max_shot_seconds": {
                     "text": "한 번에 만드는 가장 긴 샷이에요. 더 긴 샷은 여러 부분으로 나눠 앞부분에서 이어서 만들어요.",
@@ -11257,7 +11257,7 @@
           },
           {
             "title": "🎭 Cast & 👗 Outfits",
-            "text": "One cast card per person. The look is head and hair only: age, face, eyes, skin, hair and its length. No clothes and no body words, or H3 gets it wrong.\n\n👗 Everyone needs clothes from somewhere: the cast card's outfit picture, or an outfit card. Give an outfit a simple name (\"red cocktail dress\"); the details go in its description, a color for every item.\n\n💡 Neutral faces on the cards. A smiling card gives you a smiling actor in every shot.",
+            "text": "One cast card per person. The look is head and hair only: age, face, eyes, skin, hair and its length. No clothes and no body words, or H3 gets it wrong.\n\n👗 Everyone needs an outfit from somewhere: the cast card's outfit picture, or an outfit card. Give an outfit a simple name (\"red cocktail dress\"); the details go in its description, a color for every item.\n\n⚠️ Your own headshot? Rewrite the look to match it. H3 follows the words over the picture.\n\n💡 Neutral faces on the cards. A smiling card gives you a smiling actor in every shot.",
             "groups": [],
             "nodes": [
               "150"
@@ -11265,28 +11265,28 @@
             "settings": [],
             "i18n": {
               "zh": {
-                "title": "🎭 角色和 👗 服装",
-                "text": "每人一张角色卡。外貌只写头和头发：年龄、脸、眼睛、皮肤、头发和长度。不写衣服，也不写身材词，否则 H3 会出错。\n\n👗 每个人都需要从某处得到衣服：角色卡的服装图，或一张服装卡。服装起个简单的名字（“red cocktail dress”）；细节写在描述里，每件都写颜色。\n\n💡 卡片上用中性表情。笑着的卡会让演员在每个镜头里都在笑。",
-                "src": "37625036",
+                "title": "🎭 角色 & 👗 服装",
+                "text": "每个人一张角色卡。look 只写头部和头发：年龄、脸、眼睛、皮肤、头发和长度。不写衣服，也不写身体词，否则 H3 会弄错。\n\n👗 每个人都需要一套服装：角色卡上的服装图，或一张服装卡。给服装起个简单的名字（\"red cocktail dress\"）；细节写在描述里，每件都写上颜色。\n\n⚠️ 用你自己的头像？把 look 改写成和它一致。H3 优先听文字而不是图片。\n\n💡 卡片上用中性表情。微笑的卡片会让每个镜头里的演员都在笑。",
+                "src": "a1d21f2e",
                 "why": {}
               },
               "ja": {
-                "title": "🎭 キャストと 👗 衣装",
-                "text": "1 人につき 1 枚のキャストカード。外見は頭と髪だけ：年齢、顔、目、肌、髪とその長さ。服も体の言葉も書かないでください。H3 が間違えます。\n\n👗 誰でも服をどこかから得る必要があります：キャストカードの衣装画像か、衣装カード。衣装にはシンプルな名前を（\"red cocktail dress\"）。細かい部分は説明に書き、すべてのアイテムに色を付けます。\n\n💡 カードの顔はニュートラルに。笑顔のカードだと、どのショットでも笑った俳優になります。",
-                "src": "37625036",
+                "title": "🎭 キャスト & 👗 衣装",
+                "text": "1 人につき 1 枚のキャストカード。look は頭と髪だけ：年齢、顔、目、肌、髪とその長さ。服や体の言葉は書かないでください。H3 が間違えます。\n\n👗 誰にでもどこかから衣装が必要です：キャストカードの衣装画像か、衣装カード。衣装にはシンプルな名前を（\"red cocktail dress\"）。細かいことは説明に、どのアイテムにも色を。\n\n⚠️ 自分の顔写真を使う？ look をそれに合わせて書き直してください。H3 は画像より言葉に従います。\n\n💡 カードの表情はニュートラルに。笑顔のカードだと、どのショットでも笑った役者になります。",
+                "src": "a1d21f2e",
                 "why": {}
               },
               "ko": {
-                "title": "🎭 출연진과 👗 의상",
-                "text": "한 사람당 출연진 카드 한 장. 외모는 머리와 머리카락만: 나이, 얼굴, 눈, 피부, 머리와 길이. 옷도, 몸매 단어도 쓰지 마세요. H3가 잘못 그려요.\n\n👗 모든 사람은 어딘가에서 옷을 받아야 해요: 출연진 카드의 의상 사진, 또는 의상 카드. 의상에는 간단한 이름을 붙이고(\"red cocktail dress\"), 자세한 건 설명에 아이템마다 색을 넣어 쓰세요.\n\n💡 카드 얼굴은 무표정으로. 웃는 카드는 모든 샷에서 웃는 배우를 만들어요.",
-                "src": "37625036",
+                "title": "🎭 캐스트 & 👗 의상",
+                "text": "한 사람당 캐스트 카드 하나. look은 머리와 머리카락만: 나이, 얼굴, 눈, 피부, 머리카락과 길이. 옷이나 몸에 관한 단어는 쓰지 마세요. H3가 틀리게 만듭니다.\n\n👗 모두 어디선가 의상이 필요합니다: 캐스트 카드의 의상 사진이나 의상 카드. 의상에는 간단한 이름을(\"red cocktail dress\"). 자세한 건 설명에, 모든 아이템에 색을 쓰세요.\n\n⚠️ 직접 찍은 얼굴 사진인가요? look을 사진에 맞게 다시 쓰세요. H3는 사진보다 글을 따릅니다.\n\n💡 카드에는 무표정한 얼굴을. 웃는 카드면 모든 샷에서 배우가 웃습니다.",
+                "src": "a1d21f2e",
                 "why": {}
               }
             }
           },
           {
             "title": "📍 Places, 🌐 360 & 👜 Props",
-            "text": "One place card per location: the room empty, and what you can hear (never who speaks). One 🌐 360 panorama per place gives every shot its own angle: close-ups across a table get the reverse angle by themselves.\n\n👜 A prop card is only for an object that must look the same in every shot. Use the card's exact name in the action.",
+            "text": "One place card per location: the room empty, and what you can hear (never who speaks). One 🌐 360 panorama per place gives every shot its own angle: close-ups across a table get the reverse angle by themselves.\n\n💡 🌐 360 from card (under the room picture): LC Vision reads the room picture and the 360 is drawn from that.\n\n👜 A prop card is only for an object that must look the same in every shot. Use the card's exact name in the action.",
             "groups": [],
             "nodes": [
               "150"
@@ -11294,21 +11294,21 @@
             "settings": [],
             "i18n": {
               "zh": {
-                "title": "📍 地点、🌐 360 和 👜 道具",
-                "text": "每个地点一张卡：空房间，以及能听到的声音（永远不要写谁说话）。每个地点一张 🌐 360 全景图，让每个镜头有自己的角度：隔着桌子的特写会自动得到反向角度。\n\n👜 道具卡只用于每个镜头都必须一样的东西。在动作里用卡上完全一样的名字。",
-                "src": "d40ca58",
+                "title": "📍 地点、🌐 360 & 👜 道具",
+                "text": "每个地点一张地点卡：空房间，以及能听到的声音（从不写谁在说话）。每个地点一张 🌐 360 全景图，让每个镜头都有自己的角度：桌子两边的特写会自动得到反打角度。\n\n💡 🌐 360 from card（在房间图下面）：LC Vision 读取房间图，再据此画出 360。\n\n👜 道具卡只用于每个镜头里都必须一样的物件。在动作里写出卡片的准确名字。",
+                "src": "665207c4",
                 "why": {}
               },
               "ja": {
-                "title": "📍 場所、🌐 360、👜 小道具",
-                "text": "場所ごとに 1 枚のカード：誰もいない部屋と、聞こえる音（誰が話すかは絶対に書かない）。場所ごとに 🌐 360 パノラマを 1 枚作ると、各ショットに専用のアングルが付きます。テーブル越しのクローズアップは自動で逆アングルになります。\n\n👜 小道具カードは、どのショットでも同じに見えなければならない物だけ。アクションではカードと同じ名前を使ってください。",
-                "src": "d40ca58",
+                "title": "📍 場所、🌐 360 & 👜 小道具",
+                "text": "場所ごとに 1 枚の場所カード：誰もいない部屋と、聞こえる音（誰が話すかは書かない）。場所ごとに 1 枚の 🌐 360 パノラマで、どのショットにも自分の角度ができます。テーブル越しのクローズアップは自動で切り返しになります。\n\n💡 🌐 360 from card（部屋の画像の下）：LC Vision が部屋の画像を読み、そこから 360 を描きます。\n\n👜 小道具カードは、どのショットでも同じに見えなければならない物だけ。アクションにはカードの名前をそのまま使います。",
+                "src": "665207c4",
                 "why": {}
               },
               "ko": {
-                "title": "📍 장소, 🌐 360, 👜 소품",
-                "text": "장소마다 카드 한 장: 빈 방과 들리는 소리(누가 말하는지는 절대 쓰지 마세요). 장소마다 🌐 360 파노라마 한 장이면 샷마다 자기 각도가 생겨요. 테이블 건너 클로즈업은 자동으로 반대 각도가 돼요.\n\n👜 소품 카드는 모든 샷에서 똑같아야 하는 물건에만 쓰세요. 액션에는 카드와 똑같은 이름을 쓰세요.",
-                "src": "d40ca58",
+                "title": "📍 장소, 🌐 360 & 👜 소품",
+                "text": "장소마다 장소 카드 하나: 사람 없는 방과 들리는 소리(누가 말하는지는 절대 쓰지 않기). 장소마다 🌐 360 파노라마 하나로 모든 샷이 자기 각도를 갖습니다. 테이블을 사이에 둔 클로즈업은 알아서 역방향 각도가 됩니다.\n\n💡 🌐 360 from card(방 사진 아래): LC Vision이 방 사진을 읽고 그 글로 360을 그립니다.\n\n👜 소품 카드는 모든 샷에서 똑같아 보여야 하는 물건에만. 동작에 카드 이름을 그대로 쓰세요.",
+                "src": "665207c4",
                 "why": {}
               }
             }
@@ -11343,8 +11343,8 @@
             }
           },
           {
-            "title": "The board: ▶ ↻ 🔒",
-            "text": "Under the shots: ✅ made, ✏️ changed since it was made, 🔒 locked. ▶ plays a shot. ↻ makes that one shot again and stops: nothing after it is touched.\n\n💡 In the player: 📌 Room anchor remembers the room for later cuts. 🖼 Start shot N here makes this frame the next shot's first frame. ▾ next to a shot's number folds it to one line.",
+            "title": "The board: ▶ 🩹 ↻ 🔒",
+            "text": "Under the shots: ✅ made, ✏️ changed since it was made, ⚠ join broken, 🔒 locked. ▶ plays a shot. 🩹 Repair makes a new take that keeps its last moment, so a keep rolling shot after it still joins. ↻ Redo makes a whole new take: a keep rolling shot after it then shows ⚠ and needs ↻ too.\n\n💡 In the player: 📌 Room anchor remembers the room for later cuts. 🖼 Start shot N here makes this frame the next shot's first frame. ▾ next to a shot's number folds it to one line.",
             "groups": [],
             "nodes": [
               "150"
@@ -11352,21 +11352,21 @@
             "settings": [],
             "i18n": {
               "zh": {
-                "title": "看板：▶ ↻ 🔒",
-                "text": "镜头下面：✅ 已做好，✏️ 做好后改过，🔒 已锁定。▶ 播放一个镜头。↻ 只把那一个镜头重做一遍然后停下：后面的都不动。\n\n💡 在播放器里：📌 Room anchor 为之后的 cut 记住房间。🖼 Start shot N here 把这一帧变成下一个镜头的第一帧。镜头编号旁的 ▾ 把它折成一行。",
-                "src": "84ebb732",
+                "title": "看板：▶ 🩹 ↻ 🔒",
+                "text": "镜头下面：✅ 已做好，✏️ 做好后改过，⚠ 衔接断了，🔒 已锁定。▶ 播放一个镜头。🩹 Repair 生成一个保留最后一刻的新 take，所以之后的 keep rolling 镜头仍然衔接。↻ Redo 生成全新的 take：之后的 keep rolling 镜头会显示 ⚠，也需要 ↻。\n\n💡 在播放器里：📌 Room anchor 为之后的 cut 记住房间。🖼 Start shot N here 把这一帧变成下一个镜头的第一帧。镜头编号旁的 ▾ 把它折成一行。",
+                "src": "bbd3040f",
                 "why": {}
               },
               "ja": {
-                "title": "ボード：▶ ↻ 🔒",
-                "text": "ショットの下：✅ 作成済み、✏️ 作った後に変更、🔒 ロック。▶ でショットを再生。↻ はそのショットだけを作り直して止まります。後ろのショットには触れません。\n\n💡 プレイヤーで：📌 Room anchor は後の cut のために部屋を覚えます。🖼 Start shot N here はこのフレームを次のショットの最初のフレームにします。ショット番号の横の ▾ で 1 行にたたみます。",
-                "src": "84ebb732",
+                "title": "ボード：▶ 🩹 ↻ 🔒",
+                "text": "ショットの下：✅ 作成済み、✏️ 作った後に変更、⚠ つなぎ目が切れている、🔒 ロック。▶ でショットを再生。🩹 Repair は最後の瞬間を残した新しいテイクを作るので、後に続く keep rolling のショットはつながったままです。↻ Redo はまったく新しいテイク：後に続く keep rolling のショットに ⚠ が出て、↻ も必要になります。\n\n💡 プレイヤーで：📌 Room anchor は後の cut のために部屋を覚えます。🖼 Start shot N here はこのフレームを次のショットの最初のフレームにします。ショット番号の横の ▾ で 1 行にたたみます。",
+                "src": "bbd3040f",
                 "why": {}
               },
               "ko": {
-                "title": "보드: ▶ ↻ 🔒",
-                "text": "샷 아래: ✅ 만듦, ✏️ 만든 뒤 바뀜, 🔒 잠김. ▶는 샷을 재생해요. ↻는 그 샷 하나만 다시 만들고 멈춰요. 그 뒤는 건드리지 않아요.\n\n💡 플레이어에서: 📌 Room anchor는 나중의 cut을 위해 방을 기억해요. 🖼 Start shot N here는 이 프레임을 다음 샷의 첫 프레임으로 만들어요. 샷 번호 옆 ▾는 한 줄로 접어요.",
-                "src": "84ebb732",
+                "title": "보드: ▶ 🩹 ↻ 🔒",
+                "text": "샷 아래: ✅ 만들어짐, ✏️ 만든 뒤 바뀜, ⚠ 이음새 끊김, 🔒 잠김. ▶는 샷을 재생합니다. 🩹 Repair는 마지막 순간을 유지한 새 테이크를 만들어, 뒤에 이어지는 keep rolling 샷이 계속 이어집니다. ↻ Redo는 완전히 새 테이크: 뒤에 이어지는 keep rolling 샷에 ⚠가 뜨고 ↻도 해야 합니다.\n\n💡 플레이어에서: 📌 Room anchor는 이후 cut을 위해 방을 기억합니다. 🖼 Start shot N here는 이 프레임을 다음 샷의 첫 프레임으로 만듭니다. 샷 번호 옆 ▾로 한 줄로 접습니다.",
+                "src": "bbd3040f",
                 "why": {}
               }
             }

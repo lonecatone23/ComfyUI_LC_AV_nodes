@@ -148,6 +148,10 @@ def card_prompt(story: dict, kind: str, name: str, style: str = "") -> tuple:
         raise ValueError(f"[LC H3] No place card named '{name}'. Add it on the Story node first.")
     desc = str(p.get("description") or p.get("name") or "").strip().rstrip(".")
     if kind == "360 panorama":
+        read = " ".join(str(p.get("pano_prompt") or "").split())
+        if read:  # 🌐 360 from the room picture: LC Vision's reading of it, the whole place all the way round
+            return (f"A 360 degree equirectangular panorama photo, taken from the middle of the place at seated eye level. "
+                    f"{read} No people.{extra} Seamless 360 panorama, horizon level in the middle."), p.get("name", "")
         return _sentences(f"A 360 degree equirectangular panorama photo, taken from the middle of {desc} at seated eye level. "
                           f"No people.{extra} Seamless 360 panorama, horizon level in the middle."), p.get("name", "")
     return _sentences(f"A wide establishing photo of {desc}, with nobody in it. Eye level, 35mm lens, the whole space in "
