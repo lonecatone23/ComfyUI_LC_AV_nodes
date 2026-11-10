@@ -1300,8 +1300,9 @@ class LCH3Story:
                        "The project folder name.", "What to fix. Empty when it all looks good.")
     FUNCTION = "run"
     CATEGORY = "LC AV/H3 Long Video"
-    DESCRIPTION = ("The whole movie on one node: cast, places and shots. The text each shot builds is exactly what H3 gets; "
-                   "nothing rewrites it. Saves story.json and plan.json in output/LC_H3/<project>/.")
+    DESCRIPTION = ("The whole movie on one node: cast, places and shots. Each shot shows its lines to read and edit; LC H3 Make "
+                   "wraps the people, pictures and sound around them when the shot is made. Saves story.json and plan.json in "
+                   "output/LC_H3/<project>/.")
 
     def run(self, story, max_shot_seconds=20.0):
         data = _parse(story)

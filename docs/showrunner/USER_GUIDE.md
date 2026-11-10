@@ -59,6 +59,11 @@ This guide walks through the whole workflow, button by button. For how to *word*
 - **ComfyUI_LC123_nodes** (Optimizer, settings, post processing)
 - **ComfyUI_LC_Vision_nodes** (✨ Write the story, the guided tour). Optional, but recommended.
 - **comfyui-krea2edit** (Krea 2 Identity Edit, for the storyboard)
+- **ComfyUI-KJNodes** (the Get / Set nodes)
+- **ComfyUI-MiniMax-H3-Turbo** (the turbo LoRA loader)
+- **ComfyUI-MiniMaxH3-Director** (the live preview while a shot renders)
+- **ComfyLiterals** (one number node)
+- **ComfyUI_LC_MaskMaker_nodes** (MOSS Box Edit on the storyboard)
 
 **Models**
 - 💡 The **LC Optimizer** nodes pick the right files for your card (**★ Recommended**). You only need to download them. The links are in the workflow's main note.

@@ -1882,7 +1882,7 @@ function render(node) {
         </div>
         ${s.view?.on ? `<div class="lcst-vw" data-view="${i}"><canvas data-vv title="Drag to look around. Wheel or Shift + drag zooms."></canvas><canvas data-vs title="Click to jump there"></canvas></div>` : ""}` : ""}
         <div data-warn="${i}"></div>
-        <details class="lcst-pv"${node.__lcstOpen?.has(s.id) ? " open" : ""} data-pvd="${esc(s.id)}"><summary>H3 prompt ▾<button class="lcst-b" data-pvedit="${i}" title="Write this shot's prompt by hand. What you save is exactly what H3 gets for this shot; changes to the cards stop changing it until you go back to automatic.">✎ Edit</button><button class="lcst-b" data-pvref="${i}" title="Build it from the cards again now and show exactly what will be sent to the model.">↻</button></summary><div data-pv="${i}">…</div></details>
+        <details class="lcst-pv"${node.__lcstOpen?.has(s.id) ? " open" : ""} data-pvd="${esc(s.id)}"><summary>H3 prompt ▾<button class="lcst-b" data-pvedit="${i}" title="Write this shot's lines by hand. What you save replaces the lines the cards build (Make still adds the people, pictures and sound); changes to the cards stop changing it until you go back to automatic.">✎ Edit</button><button class="lcst-b" data-pvref="${i}" title="Build it from the cards again now and show exactly what will be sent to the model.">↻</button></summary><div data-pv="${i}">…</div></details>
       </div>`; }).join("")}
     <button class="lcst-b lcst-add" data-add="shots">➕ Add shot</button>
     </div></section>`;

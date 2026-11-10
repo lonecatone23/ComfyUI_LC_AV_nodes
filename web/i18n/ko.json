@@ -62,7 +62,7 @@
  "Who says the line. (V.O.) = voiceover: heard off screen, lips closed": "누가 대사를 말하는지. (V.O.) = 보이스오버: 화면 밖에서 들리고 입술은 닫혀 있음",
  "Who the shot is on. nobody: no people in it, the place alone (only a voiceover can speak)": "샷이 누구를 비추는지. nobody: 사람 없이 장소만(보이스오버만 말할 수 있음)",
  "Who wears it": "누가 입는지",
- "Write this shot's prompt by hand. What you save is exactly what H3 gets for this shot; changes to the cards stop changing it until you go back to automatic.": "이 샷의 프롬프트를 직접 씁니다. 저장한 내용이 그대로 H3에 전달되며, 자동으로 되돌릴 때까지 카드를 바꿔도 이것은 바뀌지 않습니다.",
+ "Write this shot's lines by hand. What you save replaces the lines the cards build (Make still adds the people, pictures and sound); changes to the cards stop changing it until you go back to automatic.": "이 샷의 문장을 직접 써요. 저장한 내용이 카드가 만드는 문장을 대신해요 (인물, 그림, 소리는 Make가 계속 더해요). 자동으로 돌아가기 전까지 카드를 바꿔도 이 문장은 바뀌지 않아요.",
  "cut: a new shot. keep rolling: no cut, the camera carries straight on from the shot before": "cut: 새 샷. keep rolling: 컷 없이 카메라가 앞 샷에서 그대로 이어집니다",
  "▶ Play": "▶ 재생",
  "Not made yet": "아직 만들어지지 않음",

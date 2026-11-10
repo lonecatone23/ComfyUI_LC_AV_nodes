@@ -135,6 +135,9 @@
       },
       "metadata": {
         "tooltip": "LC123 Save Metadata 또는 LC Save Video Metadata (LC_SAVE_META)."
+      },
+      "relay": {
+        "tooltip": "LC Relay VSR Upscale의 relay 출력: 업스케일된 영상을 몇 프레임씩 저장하므로 RAM에 올라가지 않습니다. 들어오면 항상 사용합니다. Relay를 바이패스하면 images를 대신 저장합니다. relay 영상에는 pingpong과 loop_count가 적용되지 않습니다."
       }
     }
   },
@@ -508,7 +511,7 @@
     }
   },
   "LCH3Story": {
-    "description": "영화 전체를 노드 하나에: 캐스트, 장소, 샷. 각 샷이 만드는 텍스트가 그대로 H3에 전달되며, 아무것도 다시 쓰지 않습니다. output/LC_H3/<project>/에 story.json과 plan.json을 저장합니다.",
+    "description": "영화 전체를 노드 하나에: 캐스트, 장소, 샷. 각 샷의 문장을 읽고 고칠 수 있고, 샷을 만들 때 LC H3 Make가 인물, 그림, 소리를 그 둘레에 더합니다. output/LC_H3/<project>/에 story.json과 plan.json을 저장합니다.",
     "inputs": {
       "story": {
         "tooltip": "캐스트, 장소, 샷을 담은 JSON. 노드에서 채우세요."

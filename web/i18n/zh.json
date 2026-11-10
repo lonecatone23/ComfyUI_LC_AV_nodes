@@ -62,7 +62,7 @@
  "Who says the line. (V.O.) = voiceover: heard off screen, lips closed": "谁说这句台词。(V.O.) = 画外音：在画面外听到，嘴唇闭着",
  "Who the shot is on. nobody: no people in it, the place alone (only a voiceover can speak)": "镜头对着谁。nobody：画面里没有人，只有地点（只有画外音可以说话）",
  "Who wears it": "谁穿它",
- "Write this shot's prompt by hand. What you save is exactly what H3 gets for this shot; changes to the cards stop changing it until you go back to automatic.": "手写这个镜头的提示词。你保存的内容就是 H3 收到的内容；在你切回自动之前，卡片的改动不会再影响它。",
+ "Write this shot's lines by hand. What you save replaces the lines the cards build (Make still adds the people, pictures and sound); changes to the cards stop changing it until you go back to automatic.": "手写这个镜头的文本。你保存的内容会替换卡片生成的文本（Make 仍会加上人物、图片和声音）；在你回到自动之前，修改卡片不会再改变它。",
  "cut: a new shot. keep rolling: no cut, the camera carries straight on from the shot before": "cut：一个新镜头。keep rolling：不剪切，镜头直接接着上一个镜头继续",
  "▶ Play": "▶ 播放",
  "Not made yet": "还没生成",

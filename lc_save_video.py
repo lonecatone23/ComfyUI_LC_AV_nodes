@@ -458,7 +458,8 @@ def _remove_partial(path):
         print(f"[LC Save Video] could not remove unfinished {path}: {e}")
 
 
-def _encode_ffmpeg(src, order, dest, fps, fmt_key, crf, pix_fmt, audio=None, comment="", audio_bitrate="192k", tags=None):
+def _encode_ffmpeg(src, order, dest, fps, fmt_key, crf, pix_fmt, audio=None, comment="", audio_bitrate="192k", tags=None,
+                   stream=None):
     """Frames go to ffmpeg one at a time through a pipe (no raw dump on disk), with a progress bar; Cancel stops ffmpeg
     and removes the unfinished file. `tags` (prompt, workflow) go on the file as metadata tags."""
     import comfy.model_management
@@ -468,7 +469,14 @@ def _encode_ffmpeg(src, order, dest, fps, fmt_key, crf, pix_fmt, audio=None, com
     if not ff:
         raise RuntimeError("ffmpeg not on PATH")
     spec = _FORMATS[fmt_key]
-    h, w = _frame_u8(src, order[0]).shape[:2]
+    # stream = LC Relay VSR Upscale's relay output: the upscaled video arrives a few frames at a time and is never held
+    if stream is not None:
+        w, h = stream["size"]
+        total = int(stream["count"])
+    else:
+        h, w = _frame_u8(src, order[0]).shape[:2]
+        total = len(order)
+    first = [None]
     tmpdir = tempfile.mkdtemp(prefix="lc_av_")
     try:
         vcodec = [x if x != "PIX" else pix_fmt for x in spec["vcodec"]]
@@ -497,17 +505,26 @@ def _encode_ffmpeg(src, order, dest, fps, fmt_key, crf, pix_fmt, audio=None, com
             cmd += ["-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2"]
         cmd += _with_tag_flag(vcodec) + ["-crf", str(int(crf))]
         if wav_path:
-            cmd += spec["acodec"] + ["-b:a", str(audio_bitrate), "-shortest"]
+            cmd += spec["acodec"] + ["-b:a", str(audio_bitrate)]
+            # cut the sound at the last frame (-shortest drops the last frame when the sound is a hair shorter)
+            cmd += ["-t", f"{total / float(fps):.4f}"]
         cmd.append(dest)
         log_path = os.path.join(tmpdir, "ffmpeg.log")
         with open(log_path, "wb") as log:
             proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=log)
-            pbar = comfy.utils.ProgressBar(len(order))
+            pbar = comfy.utils.ProgressBar(total)
             try:
-                for i in order:
-                    comfy.model_management.throw_exception_if_processing_interrupted()
-                    proc.stdin.write(_frame_u8(src, i).tobytes())
-                    pbar.update(1)
+                if stream is not None:
+                    for chunk in stream["frames"]():
+                        comfy.model_management.throw_exception_if_processing_interrupted()
+                        if first[0] is None:
+                            first[0] = chunk[0].copy()
+                        proc.stdin.write(chunk.tobytes())
+                else:
+                    for i in order:
+                        comfy.model_management.throw_exception_if_processing_interrupted()
+                        proc.stdin.write(_frame_u8(src, i).tobytes())
+                        pbar.update(1)
                 proc.stdin.close()
             except OSError:
                 # ffmpeg stopped early (a broken pipe; Windows can say EINVAL): its log says why
@@ -528,6 +545,7 @@ def _encode_ffmpeg(src, order, dest, fps, fmt_key, crf, pix_fmt, audio=None, com
             raise RuntimeError(f"[LC Save Video] ffmpeg failed ({code}):\n{tail}")
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
+    return first[0]
 
 
 class LCSaveVideo:
@@ -638,6 +656,12 @@ class LCSaveVideo:
                     meta_in,
                     {"tooltip": "LC123 Save Metadata or LC Save Video Metadata (LC_SAVE_META)."},
                 ),
+                "relay": (
+                    "LC_RELAY",
+                    {"tooltip": "LC Relay VSR Upscale's relay output: the upscaled video is saved a few frames at a time, so it "
+                                "never sits in RAM. Used whenever it arrives. With Relay bypassed, images is saved instead. "
+                                "pingpong and loop_count don't apply to it."},
+                ),
             },
             "hidden": {
                 "prompt": "PROMPT",
@@ -674,31 +698,38 @@ class LCSaveVideo:
         metadata=None,
         prompt=None,
         extra_pnginfo=None,
+        relay=None,
     ):
         pipe = av_pipe if isinstance(av_pipe, dict) else {}
+        stream = relay if isinstance(relay, dict) and callable(relay.get("frames")) else None
 
         from .lc_av_media import frames_from_any
 
-        frames_src = frames_from_any(images)
-        if frames_src is None and isinstance(pipe, dict):
-            frames_src = frames_from_any(pipe)
-        if frames_src is None:
-            raise ValueError(
-                "LC Save Video: no frames. Wire the IMAGE batch from VAE Decode "
-                "(or Create Video images) into images, or an LC_AV_PIPE that holds video. "
-                "A Comfy VIDEO object also works. Metadata/pipe-only is not enough."
-            )
+        if stream is not None:
+            src, order, first = None, None, None
+            n = int(stream["count"])
+            w, h = stream["size"]
+        else:
+            frames_src = frames_from_any(images)
+            if frames_src is None and isinstance(pipe, dict):
+                frames_src = frames_from_any(pipe)
+            if frames_src is None:
+                raise ValueError(
+                    "LC Save Video: no frames. Wire the IMAGE batch from VAE Decode "
+                    "(or Create Video images) into images, or an LC_AV_PIPE that holds video. "
+                    "A Comfy VIDEO object also works, or the relay output of LC Relay VSR Upscale. Metadata/pipe-only is not enough."
+                )
 
-        src = frames_from_any(frames_src)
-        if hasattr(src, "dim") and src.dim() == 3:
-            src = src[None]
-        elif isinstance(src, np.ndarray) and src.ndim == 3:
-            src = src[None]
-        if len(src) == 0:
-            raise ValueError("LC Save Video: the frame batch is empty (0 frames).")
-        order = _frame_order(len(src), pingpong, loop_count)
-        first = _frame_u8(src, 0)
-        n, (h, w) = len(order), first.shape[:2]
+            src = frames_from_any(frames_src)
+            if hasattr(src, "dim") and src.dim() == 3:
+                src = src[None]
+            elif isinstance(src, np.ndarray) and src.ndim == 3:
+                src = src[None]
+            if len(src) == 0:
+                raise ValueError("LC Save Video: the frame batch is empty (0 frames).")
+            order = _frame_order(len(src), pingpong, loop_count)
+            first = _frame_u8(src, 0)
+            n, (h, w) = len(order), first.shape[:2]
 
         fps_f = float(frame_rate or 0.0)
         if fps_f <= 0 and isinstance(pipe, dict):
@@ -747,13 +778,15 @@ class LCSaveVideo:
             dest = os.path.join(full_dir, fname)
 
         comment = params if save_metadata else ""
-        _encode_ffmpeg(
-            src, order, dest, fps_f, fmt_key, crf, pix_fmt,
+        got = _encode_ffmpeg(
+            src, order, dest, fps_f, fmt_key, crf, pix_fmt, stream=stream,
             audio=aud, comment=comment, audio_bitrate="192k",
             tags=comfy_tags(prompt, extra_pnginfo) if save_metadata else None,
         )
 
-        if save_metadata and civitai_still:
+        if first is None:
+            first = got
+        if save_metadata and civitai_still and first is not None:
             still = os.path.splitext(dest)[0] + ".png"
             try:
                 _write_civitai_png(still, first, meta, params)

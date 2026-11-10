@@ -6,7 +6,7 @@ Custom nodes for ComfyUI by lonecatone23.
 * **Image companion:** https://github.com/lonecatone23/ComfyUI_LC123_nodes
 * **CivitAI:** lonecatone23
 * **Support:** https://ko-fi.com/lonecatone
-* **Version:** 0.5.20 · **27 nodes**
+* **Version:** 0.5.21 · **27 nodes**
 
 > Small tools that remove friction: frames, soundtrack, metadata, fewer extra packs.
 
@@ -45,7 +45,7 @@ Optional example graph: `workflows/LC_AV Node Examples.json`
 | LC AV Pipe Out 🎬 | `LCAvPipeOut` | Unpack. In: `pipe` + `av_pipe`. No `LC_PIPE` on the output side. |
 | LC Pipe → AV Pipe 🔌 | `LCPipeToAvPipe` | One `LC_PIPE` in, one `LC_AV_PIPE` out. Shared keys only. |
 | LC Create Video 🎬 | `LCCreateVideo` | IMAGE batch + fps (+ optional AUDIO) → `LC_AV_PIPE`. Does not encode a file. |
-| LC Save Video 💾 | `LCSaveVideo` | ffmpeg encode. Inputs: images, audio, av_pipe, metadata. No `LC_PIPE` socket. |
+| LC Save Video 💾 | `LCSaveVideo` | ffmpeg encode. Inputs: images, audio, av_pipe, metadata, relay. No `LC_PIPE` socket. **relay** (from LC Relay VSR Upscale, MaskMaker) saves the upscaled video a few frames at a time so it never fills your RAM (5 s at 4x: 0.3 GB instead of about 12 GB); with Relay bypassed, images is saved instead. Writes the ComfyUI prompt + workflow into the mp4 for CivitAI. |
 | LC Load Video 🎞️ | `LCLoadVideo` | A video file in, its frames, sound and frame rate out, exactly as the file has them. Streams with a progress bar; Cancel works. |
 | LC Preview Video 📺 | `LCPreviewVideo` | Plays a video file, or frames with their sound, on the node. Nothing saved to output. |
 | LC Save Video Metadata 🏷️ | `LCSaveVideoMetadata` | `LC_SAVE_META` + A1111 `parameters`. Works with Save Video or LC123 Save Image. |
@@ -136,7 +136,7 @@ Minute-long MiniMax H3 videos made in short pieces, one shot at a time, on the s
 
 **LC H3 Story (BETA) 🎬**
 - The whole movie on one node: **cast**, **outfits**, **places**, **props** and **shots**, each on its own card.
-- ✋ **The text a shot builds is exactly what H3 gets.** Open the shot's **H3 prompt** to read it. One thing is left out quietly: a place's sound line loses any clause about speech ("nobody speaks"), because naming speech makes H3 speak. You see the result in the H3 prompt.
+- ✋ **The H3 prompt shows the shot's lines.** Make wraps the people, pictures and sound around them when the shot is made (the full prompt is saved in `takes/seg_NNN.json`). Open the shot's **H3 prompt** to read it. One thing is left out quietly: a place's sound line loses any clause about speech ("nobody speaks"), because naming speech makes H3 speak. You see the result in the H3 prompt.
 - **Cast card:** a name, who they are (woman, man, cat, etc.), their look, a headshot (head and hair only), a 👗 outfit picture and a voice.
     - 💡 Use a neutral face on a plain grey background. A card's background, props and expression leak into every shot it's in.
 - **Outfit card:** a change of clothes, with a simple name ("red cocktail dress"), who wears it, a head-to-toe description and a picture. A state of dress works too ("naked", "topless, black jeans", "wrapped in a white towel"): H3 gets it as written.

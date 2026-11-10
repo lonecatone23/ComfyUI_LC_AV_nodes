@@ -135,6 +135,9 @@
       },
       "metadata": {
         "tooltip": "LC123 Save Metadata または LC Save Video Metadata（LC_SAVE_META）。"
+      },
+      "relay": {
+        "tooltip": "LC Relay VSR Upscale の relay 出力：アップスケールした動画を数フレームずつ保存するので、RAM に載りません。来ていれば必ず使います。Relay をバイパスすると images を保存します。relay の動画では pingpong と loop_count は使われません。"
       }
     }
   },
@@ -508,7 +511,7 @@
     }
   },
   "LCH3Story": {
-    "description": "映画全体を1つのノードで：キャスト、場所、ショット。各ショットが作るテキストがそのまま H3 に渡され、書き換えられることはありません。output/LC_H3/<project>/ に story.json と plan.json を保存します。",
+    "description": "映画全体を1つのノードで：キャスト、場所、ショット。各ショットの文章を読んで編集でき、ショットを作るときに LC H3 Make が人物、画像、音をその周りに加えます。output/LC_H3/<project>/ に story.json と plan.json を保存します。",
     "inputs": {
       "story": {
         "tooltip": "キャスト、場所、ショットの JSON。ノード上で記入します。"

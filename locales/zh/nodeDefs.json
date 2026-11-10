@@ -135,6 +135,9 @@
       },
       "metadata": {
         "tooltip": "LC123 Save Metadata 或 LC Save Video Metadata (LC_SAVE_META)。"
+      },
+      "relay": {
+        "tooltip": "LC Relay VSR Upscale 的 relay 输出：放大后的视频一次几帧地保存，不会全部占用内存。只要有就会使用。旁路 Relay 时改为保存 images。relay 视频不使用 pingpong 和 loop_count。"
       }
     }
   },
@@ -508,7 +511,7 @@
     }
   },
   "LCH3Story": {
-    "description": "整部影片都在一个节点上：演员、地点和镜头。每个镜头生成的文本就是 H3 收到的内容，不会被改写。在 output/LC_H3/<project>/ 中保存 story.json 和 plan.json。",
+    "description": "整部影片都在一个节点上：演员、地点和镜头。每个镜头显示它的文本，可以阅读和修改；制作镜头时，LC H3 Make 会在外面加上人物、图片和声音。在 output/LC_H3/<project>/ 中保存 story.json 和 plan.json。",
     "inputs": {
       "story": {
         "tooltip": "演员、地点和镜头的 JSON。在节点上填写即可。"

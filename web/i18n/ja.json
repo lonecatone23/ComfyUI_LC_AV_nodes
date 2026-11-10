@@ -62,7 +62,7 @@
  "Who says the line. (V.O.) = voiceover: heard off screen, lips closed": "誰がセリフを言うか。(V.O.) = ボイスオーバー：画面の外から聞こえ、唇は閉じたまま",
  "Who the shot is on. nobody: no people in it, the place alone (only a voiceover can speak)": "ショットが誰を映すか。nobody：人物なし、場所だけ（話せるのはボイスオーバーだけ）",
  "Who wears it": "誰が着るか",
- "Write this shot's prompt by hand. What you save is exactly what H3 gets for this shot; changes to the cards stop changing it until you go back to automatic.": "このショットのプロンプトを手で書きます。保存した内容がそのまま H3 に渡ります。自動に戻すまで、カードを変えてもこれは変わりません。",
+ "Write this shot's lines by hand. What you save replaces the lines the cards build (Make still adds the people, pictures and sound); changes to the cards stop changing it until you go back to automatic.": "このショットの文章を手で書きます。保存した内容がカードの作る文章に置き換わります（人物、画像、音は Make が引き続き加えます）。自動に戻すまで、カードを変えてもこの文章は変わりません。",
  "cut: a new shot. keep rolling: no cut, the camera carries straight on from the shot before": "cut：新しいショット。keep rolling：カットなしで、前のショットからそのままカメラが続きます",
  "▶ Play": "▶ 再生",
  "Not made yet": "まだ作られていません",
