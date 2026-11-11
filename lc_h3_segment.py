@@ -42,7 +42,7 @@ from comfy_extras.nodes_minimax_h3 import _empty_av_latent, _encode_ref_audio, _
 
 from .lc_av_media import audio_parts
 from .lc_h3_refs import REFS_TYPE, frame_look, strip_clothes, subset as _refs_subset
-from .lc_save_video import _ffmpeg_bin, _write_wav, comfy_tags, metadata_args
+from .lc_save_video import BT709_TAGS, _ffmpeg_bin, _write_wav, bt709_vf, comfy_tags, metadata_args
 
 PLAN_TYPE = "LC_H3_PLAN"
 NL = chr(10)
@@ -372,7 +372,7 @@ def _encode(frames_u8, dest, crf, pix_fmt="yuv420p", audio=None):
             wav = os.path.join(tmp, "a.wav")
             _write_wav(wav, wave, sr)
             cmd += ["-i", wav, "-c:a", "aac", "-b:a", "192k"]
-        cmd += ["-c:v", "libx264", "-crf", str(int(crf)), "-pix_fmt", pix_fmt, "-movflags", "+faststart", dest]
+        cmd += ["-vf", bt709_vf(), "-c:v", "libx264", "-crf", str(int(crf)), "-pix_fmt", pix_fmt] + BT709_TAGS + ["-movflags", "+faststart", dest]
         res = subprocess.run(cmd, capture_output=True)
         if res.returncode:  # say why (e.g. the old file is open in a player), not just "exit status 1"
             err = res.stderr.decode("utf-8", "replace").strip()[-400:]
@@ -2256,7 +2256,8 @@ class LCH3Assemble:
         tmp = tempfile.mkdtemp(prefix="lc_h3_")
         video = os.path.join(tmp, "v.mp4")
         enc = subprocess.Popen([ff, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "-r", str(FPS), "-i", "-",
-                                "-c:v", "libx264", "-crf", str(int(crf)), "-pix_fmt", "yuv420p", video], stdin=subprocess.PIPE)
+                                "-vf", bt709_vf(), "-c:v", "libx264", "-crf", str(int(crf)), "-pix_fmt", "yuv420p"] + BT709_TAGS + [video],
+                               stdin=subprocess.PIPE)
         audio_out, steps, joins = [], [], []
         state = {"written": 0, "prev": None}
 

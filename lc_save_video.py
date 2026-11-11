@@ -329,6 +329,29 @@ def _ffmpeg_bin():
         return None
 
 
+_ENCODERS = {}
+
+
+def _has_encoder(ff, name):
+    """True when this ffmpeg build has the encoder (essentials builds have no libsvtav1)."""
+    if ff not in _ENCODERS:
+        try:
+            out = subprocess.run([ff, "-hide_banner", "-encoders"], capture_output=True, text=True, timeout=20).stdout
+        except (OSError, subprocess.SubprocessError):
+            out = ""
+        _ENCODERS[ff] = {line.split()[1] for line in out.splitlines() if len(line.split()) > 1 and line.startswith(" ")}
+    return name in _ENCODERS[ff]
+
+
+def _av1_fallback(ff, vcodec):
+    """libsvtav1 missing: libaom-av1 at a usable speed (row threads, crf as constant quality)."""
+    if "libsvtav1" not in vcodec or _has_encoder(ff, "libsvtav1") or not _has_encoder(ff, "libaom-av1"):
+        return vcodec
+    print("[LC Save Video] this ffmpeg has no libsvtav1: using libaom-av1 (slower)")
+    i = vcodec.index("libsvtav1")
+    return vcodec[:i] + ["libaom-av1", "-cpu-used", "6", "-row-mt", "1", "-b:v", "0"] + vcodec[i + 1:]
+
+
 def _write_wav(path, wave, sr):
     import wave as wavmod
 
@@ -378,6 +401,18 @@ _FORMATS = {
         "acodec": ["-c:a", "libopus"],
     },
 }
+
+
+# RGB -> YUV with the BT.709 matrix, and the file says so. ffmpeg's own default is BT.601 with no tag, and players
+# read untagged HD video as BT.709: the colours shift (reds and greens most). Same flags VHS uses.
+BT709_FILTER = ("scale=out_color_matrix=bt709:out_range=tv,"
+                "setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709")
+BT709_TAGS = ["-color_range", "tv", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"]
+
+
+def bt709_vf(extra=None):
+    """The -vf value: an optional filter (e.g. the even-size pad) then the BT.709 conversion."""
+    return ",".join([f for f in (extra, BT709_FILTER) if f])
 
 
 def _frame_u8(src, i):
@@ -479,7 +514,7 @@ def _encode_ffmpeg(src, order, dest, fps, fmt_key, crf, pix_fmt, audio=None, com
     first = [None]
     tmpdir = tempfile.mkdtemp(prefix="lc_av_")
     try:
-        vcodec = [x if x != "PIX" else pix_fmt for x in spec["vcodec"]]
+        vcodec = _av1_fallback(ff, [x if x != "PIX" else pix_fmt for x in spec["vcodec"]])
         cmd = [
             ff, "-y",
             "-f", "rawvideo",
@@ -500,10 +535,12 @@ def _encode_ffmpeg(src, order, dest, fps, fmt_key, crf, pix_fmt, audio=None, com
             all_tags.update({"comment": clip, "description": clip, "comment_lang": "eng"})
         meta_in, meta_map = metadata_args(all_tags, tmpdir, 2 if wav_path else 1)
         cmd += meta_in + ["-map", "0:v"] + (["-map", "1:a"] if wav_path else []) + meta_map
+        pad = None
         if pix_fmt.startswith("yuv420") and (w % 2 or h % 2):
             # 4:2:0 needs an even size (x264 refuses 65x49): pad one edge pixel
-            cmd += ["-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2"]
-        cmd += _with_tag_flag(vcodec) + ["-crf", str(int(crf))]
+            pad = "pad=ceil(iw/2)*2:ceil(ih/2)*2"
+        cmd += ["-vf", bt709_vf(pad)]
+        cmd += _with_tag_flag(vcodec) + ["-crf", str(int(crf))] + BT709_TAGS
         if wav_path:
             cmd += spec["acodec"] + ["-b:a", str(audio_bitrate)]
             # cut the sound at the last frame (-shortest drops the last frame when the sound is a hair shorter)
