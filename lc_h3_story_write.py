@@ -38,7 +38,7 @@ Shape:
 
 Rules:
 - cast: every person who appears, with the names the pitch gives them (NAME above is only a placeholder). Make up a short first name only for someone the pitch does not name. "name" starts with a capital letter. "who" is one of {", ".join(WHO)}.
-- cast look: ONE clause, no full stops: age, hair, clothes (what they wear in the whole film). These words are what the video model follows for the person, so be concrete. Never write "detailed skin" or quality words.
+- cast look: ONE clause, no full stops: age, hair, clothes (what they wear in the whole film). These words are what the video model follows for the person, so be concrete. Never write skin, complexion or quality words ("detailed skin", "glowing skin"): skin words make the skin glossy.
 - places: every place a shot happens in. "name" starts with "the". "sound" is only things you can hear: rain on the glass, footsteps, a door, cups clinking. Never write who speaks or does not speak, never "no voices", never music: naming speech makes the video model speak.
 - framing is one of: {", ".join(f for f in FRAMINGS if f != "custom")}.
 - move is one of: {", ".join(MOVES)}. Mostly "still".
@@ -50,6 +50,7 @@ Rules:
 - action: short and physical, in the present tense, using the cast names ("NAME sets her cup down."). One or two actions per shot.
 - At most ONE spoken line per shot, in "line" (no quote marks), said by "speaker" (a cast name). No line: "speaker" and "line" are "".
   Keep lines natural and short (under 20 words). Never describe mouth movement, eating or drinking in the same shot as a line.
+  A shot with a line is a medium shot or closer: in a wide shot the face is too small and the words come out garbled.
 - after: optional, a short reaction after the line, or "".
 - seconds: "" (the length is worked out from the line) unless the shot needs a long silent action: then a number of seconds as a string.
   A line takes about {WORDS_PER_SECOND:g} words a second. No shot longer than {{max_s:g}} seconds.

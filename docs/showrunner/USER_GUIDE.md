@@ -271,6 +271,7 @@ Top to bottom is the movie. One card per shot.
 - Press **✨** on any picture slot. The Story switches on the part of **Cards & Storyboard 🃏** that makes it, keeps **Make** off, runs once and puts everything back. The picture lands on its card by itself.
 - ✋ **Name the card first.** A blank name never writes over a picture.
 - If the slot has a picture already, ✨ asks first, and the old one is kept (**↶**).
+- 💡 **✨ while the movie renders:** the picture is queued after the shot rendering now, and the movie carries on after it.
 - What each slot makes:
     - **cast headshot**: head and hair, neutral face, plain grey (1024 x 1024).
     - **cast 👗 outfit**: the person head to toe in the outfit notes (896 x 1152).
@@ -399,7 +400,8 @@ Play a shot (▶) and pause on a frame. Two buttons at the top:
 
 **Errors and basics**
 - **Post processing fails or runs out of memory:** it runs on the whole movie at once. Turn on only what you need, one part at a time, and only when every shot is made.
-- **✨ on a slot (or ✨ Write) does nothing, or waits:** something else is running. Let the movie finish, or Stop it, then press ✨ again. Only one job runs at a time.
+- **✨ on a slot says "queued, after the shot rendering now":** that's normal. The picture runs after the current shot, then the movie carries on.
+- **✨ Write does nothing, or waits:** something else is running. Let it finish, or Stop it, then press ✨ Write again.
 - **Red node or "value not in list":** a model or LoRA file is missing or has a different name. Pick it again in the loader, or download it (the main notes have the links).
 - **Out of memory on Make:** lower the size in ⚙️ Settings (960 x 544 is the low VRAM size) or shorten **max_shot_seconds**.
 

@@ -7,6 +7,7 @@
  */
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
+import { withQueueLock, submitChecked, makesShots, waitForJob, runningIds } from "./lc_h3_queue.js";
 
 const NODE = "LCH3Story";
 const MIN_W = 620;
@@ -1153,18 +1154,21 @@ async function redoSegment(index, redoAfter = "just this segment") {
     const w = seg.widgets?.find((x) => x.name === name);
     if (w && val !== undefined) (w.value = val), w.callback?.(val);
   };
-  const before = { index: get("index"), make: get("make"), redo_after: get("redo_after") };
-  set("index", index);
-  set("make", "redo");
-  set("redo_after", redoAfter);
-  try {
-    await app.queuePrompt(0, 1);
-  } finally {
-    // the queued run keeps redo; the node goes back, so the next Run makes all remaining / your changes again
-    set("make", before.make === "redo" ? "all remaining" : before.make);
-    set("index", before.index);
-    set("redo_after", before.redo_after);
-  }
+  // under the LC queue lock: a card picture or the chain's next shot can't be read off the graph while it's switched
+  return withQueueLock(async () => {
+    const before = { index: get("index"), make: get("make"), redo_after: get("redo_after") };
+    set("index", index);
+    set("make", "redo");
+    set("redo_after", redoAfter);
+    try {
+      return await submitChecked((out) => (makesShots(out) ? null : "The shot wasn't queued: Make is switched off in the workflow."));
+    } finally {
+      // the queued run keeps redo; the node goes back, so the next Run makes all remaining / your changes again
+      set("make", before.make === "redo" ? "all remaining" : before.make);
+      set("index", before.index);
+      set("redo_after", before.redo_after);
+    }
+  });
 }
 window.__lcH3RedoSegment = redoSegment; // the segment chain makes a long shot's later parts with it
 
@@ -1570,6 +1574,11 @@ function sectionNodes(maker, re) {
   return (g._nodes || []).filter((n) => boxes.some(([x, y, w, h]) => n.pos[0] >= x && n.pos[0] <= x + w && n.pos[1] >= y && n.pos[1] <= y + h));
 }
 
+/** true when something is running ahead of job `id` (a shot, usually), so the picture comes after it */
+async function queueAhead(id) {
+  return (await runningIds()).some((x) => x !== String(id));
+}
+
 async function makeThis(node, info) {
   if (node.__lcstMaking) return status(node, "Still making the last picture: wait for it to finish.", true);
   const card = info.find(getData(node));
@@ -1605,6 +1614,10 @@ async function makeThis(node, info) {
   const who = isShot ? `shot ${info.shot}` : aim.name;
   const before = card?.[info.slot]?.filename || "";
   const sidx = (n, nm) => n.widgets.find((w) => w.name === nm);
+  node.__lcstMaking = true; // taken now: a second ✨ while this one waits for the lock is refused
+  let job = null;
+  // under the LC queue lock, so a shot the chain queues meanwhile is read off the movie graph, never this one
+  await withQueueLock(async () => {
   try {
     for (const [k, v] of Object.entries(aim)) if (mw(k)) setW(maker, mw(k), v);
     for (const n of savers) {
@@ -1615,9 +1628,8 @@ async function makeThis(node, info) {
     for (const [n] of was.modes) n.mode = 0;
     for (const [n] of was.make) n.mode = 4;
     await sleep(300); // the section switch settles before the graph is read
-    node.__lcstMaking = true;
     status(node, `✨ Making ${who}'s ${info.what}...`);
-    await app.queuePrompt(0, 1);
+    job = await submitChecked((out) => (makesShots(out) ? "✨ Not queued: Make was still on, so the run would also have rendered the movie." : null));
   } catch (e) {
     node.__lcstMaking = false;
     status(node, `✨ ${e.message || e}`, true);
@@ -1629,12 +1641,10 @@ async function makeThis(node, info) {
     for (const [n, m] of was.modes) n.mode = m;
     for (const [n, m] of was.make) n.mode = m;
   }
-  if (!node.__lcstMaking) return;
-  for (let i = 0; i < 900; i++) {
-    await sleep(2000);
-    const q = await api.fetchApi("/queue").then((r) => r.json()).catch(() => null);
-    if (q && !q.queue_running?.length && !q.queue_pending?.length) break;
-  }
+  });
+  if (!node.__lcstMaking || !job) return void (node.__lcstMaking = false);
+  status(node, `✨ Making ${who}'s ${info.what}... (queued${(await queueAhead(job)) ? ", after the shot rendering now" : ""})`);
+  await waitForJob(job); // this picture's own job: shots rendering before or after it don't keep it waiting
   node.__lcstMaking = false;
   const now = info.find(getData(node))?.[info.slot]?.filename || "";
   status(node, now && now !== before ? `✨ New ${info.what} for ${who}. The old one is kept: ↶ brings it back.` : `✨ ${who}'s ${info.what} did not change: check the run for an error.`, !(now && now !== before));

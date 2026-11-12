@@ -3,9 +3,12 @@
  * The moment Segment Save reports a segment saved, the next one is queued (while this run is still finishing), so
  * the queue never sits empty between segments and "on empty queue" sounds ring once, at the end.
  * Stop (or an error) ends the chain: the segment queued ahead is taken back out, nothing carries on.
+ * Only shot jobs count: a ✨ card picture queued (or failing, or stopped) mid-movie leaves the chain alone, and the
+ * queue-ahead goes through the LC queue lock, so it can't pick up a card's half-switched graph (lc_h3_queue.js).
  */
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
+import { withQueueLock, submitChecked, makesShots, pendingShotIds, isShotJob } from "./lc_h3_queue.js";
 
 let ahead = null; // prompt id of the segment queued ahead of time
 let lastMade = 0; // the segment the chain saved last: the same one twice means index isn't moving, so stop
@@ -24,14 +27,7 @@ function chainNodes() {
   );
 }
 
-async function pendingIds() {
-  try {
-    const q = await api.getQueue();
-    return (q?.Pending || []).map((p) => p.prompt?.[1] ?? p[1]).filter(Boolean);
-  } catch (_e) {
-    return [];
-  }
-}
+const pendingIds = pendingShotIds; // waiting shot jobs only: a card picture in the queue doesn't hold the chain up
 
 // segments still to make, read fresh from the project (null when it can't be read: then the message decides)
 async function leftNow(project) {
@@ -107,10 +103,17 @@ api.addEventListener("lc_h3_segment_saved", async (e) => {
     if (left === 0 || (await pendingIds()).length) return;
     lastMade = s.made;
     window.__lcH3ChainNext = true;
-    await app.queuePrompt(0, 1); // all remaining ignores index: this is always the next one not made yet
-    const now = await pendingIds();
-    ahead = now.find((id) => !waiting.includes(id)) || now[now.length - 1] || null;
-    toast(`Segment ${s.made} saved. Segment ${s.next} is next (${s.left} left). Stop ends the chain.`);
+    // all remaining ignores index: this is always the next one not made yet
+    ahead = await withQueueLock(async () => {
+      if ((await pendingIds()).length) return null; // a redo got in while we waited for the lock
+      return submitChecked((out) => (makesShots(out) ? null : "The next segment wasn't queued: Make is switched off in the workflow."));
+    });
+    if (ahead) toast(`Segment ${s.made} saved. Segment ${s.next} is next (${s.left} left). Stop ends the chain.`);
+    else window.__lcH3ChainNext = false;
+  } catch (err) {
+    window.__lcH3ChainNext = false;
+    lastMade = 0;
+    toast(`The chain stopped: ${err.message || err}`, "warn");
   } finally {
     queuing = false;
   }
@@ -124,7 +127,9 @@ api.addEventListener("execution_start", (e) => {
 });
 
 for (const ev of ["execution_interrupted", "execution_error"]) {
-  api.addEventListener(ev, async () => {
+  api.addEventListener(ev, async (e) => {
+    // a card picture (or another workflow) stopped or failed: the movie carries on
+    if ((await isShotJob(e.detail?.prompt_id)) === false) return;
     const had = !!ahead;
     await takeBack();
     lastMade = 0;
