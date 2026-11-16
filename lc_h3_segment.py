@@ -1054,6 +1054,53 @@ def _mentions(text: str, name: str) -> bool:
     return len(core.split()) > 1 and len(head) > 3 and bool(re.search(rf"\bthe\s+{re.escape(head)}\b", text, re.I))
 
 
+_PROP_TOKEN = re.compile(r"\b(?=\w*[A-Za-z])(?:[A-Z]{2,}\w*|\w*\d\w*)\b")  # model names in a prop note: BMW, 751i, F150
+
+
+def _prop_named(text: str, p: dict) -> bool:
+    """A prop is in a shot when its name is ("the Car") or a model word from its note is ("the black BMW" for a prop
+    named "Car" with the note "Black BMW 751i ..."): the Story writer names the thing, not our label for it."""
+    if _mentions(text, p.get("name") or ""):
+        return True
+    toks = {t for t in _PROP_TOKEN.findall(str(p.get("note") or "")) if len(t) >= 2}
+    return any(re.search(rf"\b{re.escape(t)}\b", text, re.I) for t in toks)
+
+
+def _brings_props(plan: dict, i: int, refs: dict | None) -> set:
+    """Props (with a picture) that CONTINUE segment i names and the segment before didn't: something drives or is carried
+    in. Lower-case names; empty when nothing new."""
+    shots = plan.get("shots") or []
+    if not refs or i < 2 or i > len(shots):
+        return set()
+    props = [p for p in refs.get("pictures") or [] if p.get("role") == "prop" and p.get("name")]
+    me, prev = str(shots[i - 1].get("action") or ""), str(shots[i - 2].get("action") or "")
+    return {p["name"].strip().lower() for p in props if _prop_named(me, p) and not _prop_named(prev, p)}
+
+
+def _pic_key(p: dict) -> str:
+    return str(p.get("id") or f"{p.get('name')}|{p.get('note')}")
+
+
+def _brings_outfits(plan: dict, i: int, refs: dict | None) -> set:
+    """Outfit pictures for people already on screen whose clothes change in CONTINUE segment i: the Story's per-shot
+    outfit list differs from the shot before, or (Assembler references) the shot names a garment the shot before
+    didn't. -> keys (_pic_key) of those outfit pictures; empty when nobody changes."""
+    shots = plan.get("shots") or []
+    if not refs or i < 2 or i > len(shots):
+        return set()
+    me, prev = shots[i - 1], shots[i - 2]
+    on = set(_on_screen(plan, i))
+    outfits = [p for p in refs.get("pictures") or [] if p.get("role") == "outfit" and p.get("name") in on]
+    if not outfits:
+        return set()
+    if "outfits" in me and "outfits" in prev:
+        new = set(me.get("outfits") or []) - set(prev.get("outfits") or [])
+        return {_pic_key(p) for p in outfits if p.get("id") in new}
+    a_me, a_prev = str(me.get("action") or ""), str(prev.get("action") or "")
+    return {_pic_key(p) for p in outfits if (p.get("note") or "").strip()
+            and _mentions(a_me, p["note"]) and not _mentions(a_prev, p["note"])}
+
+
 _PEOPLE = re.compile(r"\b(she|he|her|him|his|they|them|their|couple|both|everyone|people|man|woman|girl|boy|friends|crowd)\b", re.I)
 
 
@@ -1177,7 +1224,7 @@ def _shot_refs(refs: dict, shot: dict, style: str, genders: dict | None = None, 
     if view:
         # LC H3 Story: the angle picked for this shot in the place's 360 panorama is its only background picture
         where = [n for n in settings if n.strip().lower() == view] or where
-    props = [p["name"] for p in pics if p["role"] == "prop" and _mentions(text, p["name"])]
+    props = [p["name"] for p in pics if p["role"] == "prop" and _prop_named(text, p)]
     keep = {n.strip().lower() for n in who + where + props}
     quotes = _SPOKEN.findall(action)
     lines = {a["id"] for a in auds if a["role"] == "line" and a["name"] in who and _says_line(a.get("text", ""), quotes)}
@@ -1304,9 +1351,14 @@ def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = 
     # a keep-rolling shot someone walks into: the people already on screen are defined first, from the opening frames
     # (no pictures), so the newcomer's pictures are never read as the person H3 can see ("street fight" 2026-11-08:
     # Anika got Jake's outfit, name tag and all, when only Jake was defined)
-    carried = [n for n in (carried or []) if n not in cast]
+    # someone on screen who only has an outfit picture here changes clothes in this rolling shot: still the person from
+    # the opening frames (face and hair), dressed from the outfit picture (its line comes from the retention lines)
+    changing = [n for n in (carried or []) if n in cast and not (cast[n].get("face") or cast[n].get("full body"))
+                and cast[n].get("outfit")]
+    carried = [n for n in (carried or []) if n not in cast or n in changing]
     for name in carried:  # their clothes are on screen already; "wearing outfit 1" would match the newcomer's outfit label
-        style = re.sub(rf"(\b{re.escape(name)}:[^;]*?),\s*wearing [^;]*", r"\1", style)
+        if name not in changing:
+            style = re.sub(rf"(\b{re.escape(name)}:[^;]*?),\s*wearing [^;]*", r"\1", style)
     if carried:
         desc = (style + NL + NL + body).strip()
     for k, name in enumerate(carried, 1):
@@ -1314,9 +1366,13 @@ def _h3_sections_refs(style: str, action: str, pics: list, memory: str | None = 
         subjects.append(subj)
         subject_of[name] = subj
         defs.append(f"{subj} is {name}, the person already in the opening frames.")
-        kept.append(f"{subj} (the opening frames): fully_preserved - the face, hair and clothing of {name} stay exactly as in the "
-                    "opening frames; nothing from the pictures is used for them.")
-    for k, (name, r) in enumerate(cast.items(), len(carried) + 1):
+        if name in changing:
+            kept.append(f"{subj} (the opening frames): fully_preserved - the face and hair of {name} stay exactly as in the opening "
+                        "frames; only the clothes change, to the outfit picture below.")
+        else:
+            kept.append(f"{subj} (the opening frames): fully_preserved - the face, hair and clothing of {name} stay exactly as in "
+                        "the opening frames; nothing from the pictures is used for them.")
+    for k, (name, r) in enumerate([(n, r) for n, r in cast.items() if n not in changing], len(carried) + 1):
         subj = f"<Subject {k}>"
         subjects.append(subj)
         subject_of[name] = subj
@@ -1564,6 +1620,14 @@ class LCH3Segment:
         # a keep-rolling segment that brings people in (they walk out of the ship in an empty shot) carries no faces in
         # its opening frames: it gets their pictures like a cut, or H3 invents them ("Uber run" segment 7, 2026-11-07)
         newcomers = _brings_people(plan, i) if cont else None
+        # a prop that arrives during a rolling shot (the black BMW pulls up: "parka girl street fight" shot 2, no picture
+        # sent, H3 invented the car every take) gets its picture like a newcomer; nothing else is added
+        new_props = _brings_props(plan, i, refs) if cont else set()
+        # someone already in the rolling shot changes clothes (Story outfit list or a newly named garment): only that
+        # outfit picture; the person still comes from the opening frames (face and hair), the clothes from the picture
+        new_outfits = _brings_outfits(plan, i, refs) if cont else set()
+        if (new_props or new_outfits) and newcomers is None:
+            newcomers = set()
         brings = newcomers is not None
         places_only = cont and refs_on == "cuts + places on continues" and not brings
         if refs and (not cont or brings or places_only or refs_on == "every segment" or (cont and refs_on == "cuts + re-anchors" and (reanchor if memory == "clip" else _needs_reanchor(folder, i, width, height)))):
@@ -1582,7 +1646,10 @@ class LCH3Segment:
                 # already in frame come from the carried frames; sending them too makes H3 restage the shot instead of
                 # carrying on ("parka girl street fight" shot 3, 6 takes, 2026-11-08)
                 from .lc_h3_refs import sentences as _ref_sentences
-                pics = [p for p in shot_refs["pictures"] if p["role"] in ("face", "full body", "outfit") and p.get("name") in newcomers]
+                pics = [p for p in shot_refs["pictures"]
+                        if (p["role"] in ("face", "full body", "outfit") and p.get("name") in newcomers)
+                        or (p["role"] == "prop" and (p.get("name") or "").strip().lower() in new_props)
+                        or (p["role"] == "outfit" and _pic_key(p) in new_outfits)]
                 shot_refs = {**shot_refs, "pictures": [{**p, "n": k + 1} for k, p in enumerate(pics)],
                              "audios": [a for a in shot_refs.get("audios", []) if a.get("name") in newcomers]}
                 shot_refs["text"] = _ref_sentences(shot_refs)

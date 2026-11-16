@@ -231,6 +231,24 @@ def _view_path(story: dict, shot: dict, place: dict, v: dict) -> str:
     return out
 
 
+def _is_pano_pic(place: dict) -> bool:
+    """The place's own picture is a 360 panorama (no picture, the panorama file itself, or a 2:1 image)."""
+    pic = place.get("picture")
+    f = _pic_file(pic)
+    if not f:
+        return True
+    if f == _pic_file(place.get("panorama")):
+        return True
+    try:
+        from PIL import Image
+
+        with Image.open(_pic_abs(pic)) as im:
+            w, h = im.size
+        return h > 0 and abs(w / h - 2.0) < 0.05
+    except Exception:
+        return False
+
+
 def _with_auto_views(story: dict) -> dict:
     """Every cut gets a background: a close cut with no 🌐 angle of its own, in a place with a 360 panorama, gets one.
     Across from a person who already has an angle (two people at a table) it is the reverse angle (+180), else the way
@@ -248,12 +266,24 @@ def _with_auto_views(story: dict) -> dict:
         wheres.append(where_now)
     for i, s in enumerate(shots):
         place = _place(story, wheres[i])
-        if (s.get("framing") or "wide shot") not in TIGHT or _shot_view(s, place) or not (place and _pic_file(place.get("panorama"))):
+        if _shot_view(s, place) or not (place and _pic_file(place.get("panorama"))):
+            continue
+        if (s.get("framing") or "wide shot") not in TIGHT:
+            # a wide cut whose place picture is itself a 360 panorama gets the front view, flat: H3 copied the panorama's
+            # curve and only the feel of the place ("parka girl street fight" 2026-11-16, fisheye street)
+            if _is_pano_pic(place) and not (i > 0 and s.get("join") == "roll" and _same_camera(shots[i - 1], s)):
+                fr = place.get("front") or {}
+                try:
+                    fov = min(90.0, float(fr.get("fov") or 80))
+                    pitch = float(fr.get("pitch") if fr.get("pitch") not in (None, "") else -1)
+                except (TypeError, ValueError):
+                    fov, pitch = 80.0, -1.0
+                s["view"] = {"yaw": 0, "pitch": pitch, "fov": fov, "on": True, "behind": "", "auto": True, "wide": True}
             continue
         if i > 0 and s.get("join") == "roll" and _same_camera(shots[i - 1], s):
             continue  # a roll carries on from the frames before it
         other = next((o for k, o in enumerate(shots) if wheres[k] == wheres[i] and (o.get("subject") or "everyone") != (s.get("subject") or "everyone")
-                      and isinstance(o.get("view"), dict) and o["view"].get("on")), None)
+                      and isinstance(o.get("view"), dict) and o["view"].get("on") and not o["view"].get("wide")), None)
         if other:
             v = other["view"]
             try:
