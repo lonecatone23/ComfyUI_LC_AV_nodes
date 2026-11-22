@@ -97,10 +97,19 @@ def _self_tiling_progress(vae, samples):
 
 def _call_decode(cls, **kwargs):
     obj = cls()
-    if hasattr(obj, "decode"):
-        return obj.decode(**kwargs)
-    if hasattr(obj, "execute"):
-        return obj.execute(**kwargs)
+    try:
+        if hasattr(obj, "decode"):
+            return obj.decode(**kwargs)
+        if hasattr(obj, "execute"):
+            return obj.execute(**kwargs)
+    except ValueError as e:
+        if "single-frame image latents" in str(e):
+            raise ValueError(
+                "LC VAE Decode: the VAE loaded here is the MiniMax H3 IMAGE VAE (minimax_h3_image_vae), which only "
+                "decodes still pictures. This is a video latent: pick minimax_h3_video_vae_fp16 in the VAE loader and "
+                "run again (the sampling is cached)."
+            ) from None
+        raise
     raise RuntimeError(f"LC VAE Decode: {cls.__name__} has no decode/execute")
 
 

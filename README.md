@@ -6,7 +6,7 @@ Custom nodes for ComfyUI by lonecatone23.
 * **Image companion:** https://github.com/lonecatone23/ComfyUI_LC123_nodes
 * **CivitAI:** lonecatone23
 * **Support:** https://ko-fi.com/lonecatone
-* **Version:** 0.5.25 · **27 nodes**
+* **Version:** 0.5.28 · **27 nodes**
 
 > Small tools that remove friction: frames, soundtrack, metadata, fewer extra packs.
 
@@ -160,6 +160,9 @@ Minute-long MiniMax H3 videos made in short pieces, one shot at a time, on the s
 - **H3 prompt** (under each shot): the shot's lines (Place, Camera, the timed action). The people, picture and sound sections are added around them when the shot is made. **↻** builds it from the cards again right now. **✎ Edit** lets you write the lines by hand: they go in as written, and changes to the cards stop changing it until you press **↶ Back to automatic**.
 - **✨ on a picture slot** (cast, outfit, place, 🌐 360, prop, 🖼 start, 🏁 end) makes that picture. The Story switches on the part of the workflow that makes it, keeps Make off, runs once and puts everything back. A blank card name never writes over a picture, and **↶** brings back the picture before (the last 8 are kept). Press it while the movie renders and the picture is queued after the shot rendering now; the movie carries on after it.
 - **📐 size** (under the project name) shows the size the project is made at. Change it and the next Run makes every shot made at the old size again. **💾 Save as** keeps a variant under a new name. **🆕 New** clears the board (it warns first when there is unsaved progress).
+- **📦 Export / 📥 Import:** take a project to another computer. Export packs the story, plan and every picture it uses (they live in the input folder) into one zip; Import puts them back there and opens the project.
+    - Renders stay out unless you tick them in (every take plus the movie gets big).
+    - A name that's taken: import it under a new name, or replace it (the old folder moves to `output/LC_H3/_replaced`, nothing is deleted). A different picture with the same name is kept, the imported one gets `_imported` added.
 - The 🌐 shot angle is also the background of the 📐 boxes, so you place people on the view the shot will use.
 - **🌐 360 from card** (under a place's room picture): LC Vision reads the room picture and writes the whole place out, then ✨ draws the 360 from that. Needs LC Vision.
 - Everything saves to `output/LC_H3/<project>/` (story.json, plan.json, the takes and the movie). Pictures go in `input/lc_h3_refs/<project>/`.

@@ -6,7 +6,8 @@ The model is any text GGUF under models/LLM (the LC Vision models work; the visi
 on the node. It loads for the one answer and unloads right after, so the video model gets the card back.
 
   GET  /lc_h3/story/models                         -> {"models": [...], "default": name}
-  POST /lc_h3/story/write {pitch, model, story, max_shot_seconds} -> {"story": {...}} (pictures and voices of cast
+  POST /lc_h3/story/write {pitch, model, story, max_shot_seconds} -> {"job": id}, returns at once
+  GET  /lc_h3/story/write/{job} -> {"done": false} or {"done": true, "story" or "error"} (pictures and voices of cast
        and places with the same name are kept)
 """
 from __future__ import annotations
@@ -345,16 +346,42 @@ try:
         models = list_models()
         return web.json_response({"models": models, "default": default_model(models)})
 
+    # A long pitch on a slow model can take minutes: a proxy, tunnel or desktop wrapper cuts one open request off long
+    # before that (the answer was lost while the model kept writing). So the POST starts a job and returns at once,
+    # and the button asks GET /lc_h3/story/write/{job} every couple of seconds until it is done.
+    _JOBS: dict = {}
+
+    def _run_job(job: str, body: dict):
+        try:
+            story = write_story(body.get("pitch", ""), body.get("model", ""), body.get("story") or {},
+                                float(body.get("max_shot_seconds") or 20.0), bool(body.get("nsfw")))
+            _JOBS[job] = {"done": True, "story": story}
+        except Exception as exc:
+            _JOBS[job] = {"done": True, "error": str(exc)}
+
     @PromptServer.instance.routes.post("/lc_h3/story/write")
     async def _write_route(request):
         try:
             body = await request.json()
-            story = await asyncio.get_running_loop().run_in_executor(
-                None, write_story, body.get("pitch", ""), body.get("model", ""), body.get("story") or {},
-                float(body.get("max_shot_seconds") or 20.0), bool(body.get("nsfw")))
-            return web.json_response({"story": story})
+            for k in [k for k, v in _JOBS.items() if v.get("done")]:  # answers nobody picked up
+                _JOBS.pop(k, None)
+            job = uuid.uuid4().hex
+            _JOBS[job] = {"done": False}
+            asyncio.get_running_loop().run_in_executor(None, _run_job, job, body)
+            return web.json_response({"job": job})
         except Exception as exc:
             return web.json_response({"error": str(exc)}, status=400)
+
+    @PromptServer.instance.routes.get("/lc_h3/story/write/{job}")
+    async def _write_job_route(request):
+        job = request.match_info["job"]
+        st = _JOBS.get(job)
+        if st is None:
+            return web.json_response({"done": True, "error": "[LC H3] Story: that writing job is gone (ComfyUI restarted?). "
+                                                              "Press ✨ again."})
+        if st.get("done"):
+            _JOBS.pop(job, None)
+        return web.json_response(st)
 except Exception as e:  # outside ComfyUI
     print(f"[LC AV] story write routes not registered: {e}")
 

@@ -1212,17 +1212,48 @@ function loadLoras(node) {
 
 const loraBase = (n) => String(n || "").split(/[\\/]/).pop().replace(/\.safetensors$/, "");
 
+// ⚠️ wrong base model on a shot LoRA: LC123's check (window.LC123LoraFit, when LC123 is installed) against the model
+// LC H3 Make gets. Asked again only when that model or the set of shot LoRAs changes.
+let loraFits = {}; // lora name -> {warn, tip}
+let loraFitSig = "";
+function pollLoraFits() {
+  const fit = window.LC123LoraFit;
+  if (!fit) return;
+  const stories = (app.graph?._nodes || []).filter((n) => n.type === NODE && n.__lcst);
+  const loras = [...new Set(stories.flatMap((n) => (getData(n).shots || []).flatMap((s) => (s.loras || []).map((x) => x.lora))).filter(Boolean))];
+  const make = findSegment().find((n) => n.type === "LCH3Make") || findSegment()[0];
+  let model = null;
+  try {
+    model = make ? fit.modelFor(make) : null;
+  } catch (_) {}
+  const sig = model && loras.length ? JSON.stringify(model) + "|" + loras.join("|") : "";
+  if (sig === loraFitSig) return;
+  loraFitSig = sig;
+  const done = (f) => {
+    if (loraFitSig !== sig) return; // something changed while it was asked
+    const before = JSON.stringify(loraFits);
+    loraFits = f || {};
+    if (JSON.stringify(loraFits) !== before) stories.forEach((n) => render(n));
+  };
+  if (!sig) return done({});
+  fit.fits(model, loras).then(done).catch(() => {});
+}
+const loraWarn = (name) => {
+  const f = name ? loraFits[name] : null;
+  return f?.warn ? `<span title="${esc(f.tip)}" style="cursor:help">⚠️</span>` : "";
+};
+
 /** The shot's own LoRAs: on top of the base LoRAs in the pipe, for this shot only. A keep-rolling shot uses its cut's.
  * Picked the same way as in the LC LoRA Loader (LC123's folder picker, ◀ strength ▶ and ℹ Info, via window.LC123LoraUI);
  * the controls are mounted after the card is drawn (mountLoraControls). */
 function loraRows(s, i, rs) {
   const src = rs ? rs[0] : s;
   const list = src.loras || [];
-  if (rs) return list.length ? `<div class="lcst-row"><span class="lcst-tip" title="Keep rolling uses the LoRAs of shot ${rs[1]}: a new LoRA mid-roll jumps at the join. Change them on shot ${rs[1]}, or make this a cut.">🎛 ${list.map((x) => `${esc(loraBase(x.lora))} ${x.strength}`).join(" · ")} 🔒</span></div>` : "";
+  if (rs) return list.length ? `<div class="lcst-row"><span class="lcst-tip" title="Keep rolling uses the LoRAs of shot ${rs[1]}: a new LoRA mid-roll jumps at the join. Change them on shot ${rs[1]}, or make this a cut.">🎛 ${list.map((x) => `${loraWarn(x.lora)}${esc(loraBase(x.lora))} ${x.strength}`).join(" · ")} 🔒</span></div>` : "";
   const ui = window.LC123LoraUI;
   return `<div class="lcst-row" style="flex-wrap:wrap;gap:4px">
     ${list.map((x, k) => `<span class="lcst-lora" style="display:inline-flex;align-items:center;gap:4px">
-      <button class="lcst-b" data-slp="${i}|${k}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.lora ? x.lora.replace(/\\/g, "/") : "Pick a LoRA")}">🎛 ${x.lora ? esc(loraBase(x.lora)) : "pick a LoRA…"}</button>
+      ${loraWarn(x.lora)}<button class="lcst-b" data-slp="${i}|${k}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(x.lora ? x.lora.replace(/\\/g, "/") : "Pick a LoRA")}">🎛 ${x.lora ? esc(loraBase(x.lora)) : "pick a LoRA…"}</button>
       ${ui ? `<span data-slstr="${i}|${k}"></span>` : `<input class="lcst-sec" data-sls="${i}|${k}" value="${esc(x.strength)}" title="Strength">`}
       ${ui ? `<button class="lcst-b" data-sli="${i}|${k}" title="${x.lora ? "Trigger words (from the file's own metadata)" : "Pick a LoRA first, then ℹ shows its trigger words"}" style="color:#9cf;${x.lora ? "" : "opacity:.5"}">ℹ</button>` : ""}
       <button class="lcst-b" data-sld="${i}|${k}" title="Take this LoRA off the shot" style="color:#e88">✕</button></span>`).join("")}
@@ -1302,12 +1333,24 @@ function openWriter(node) {
     const t0 = Date.now();
     const tick = setInterval(() => (st.textContent = `✨ Writing with ${model.split("/").pop()}… ${Math.round((Date.now() - t0) / 1000)} s`), 500);
     try {
-      const j = await api.fetchApi("/lc_h3/story/write", {
+      const start = await api.fetchApi("/lc_h3/story/write", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pitch: ta.value, model, story: getData(node), max_shot_seconds: widget(node, "max_shot_seconds")?.value || 20,
                                nsfw: !!box.querySelector("[data-nsfw]")?.checked }),
       }).then((r) => r.json());
+      if (start.error) throw new Error(start.error);
+      // the model writes in the background: ask every 2 s (short requests, so no proxy or wrapper can time them out)
+      let j = { done: false }, misses = 0;
+      while (!j.done) {
+        await sleep(2000);
+        try {
+          j = await api.fetchApi(`/lc_h3/story/write/${start.job}`).then((r) => r.json());
+          misses = 0;
+        } catch (err) {
+          if (++misses > 15) throw new Error("Lost touch with ComfyUI while the story was being written. Is it still running?");
+        }
+      }
       if (j.error) throw new Error(j.error);
       setData(node, { ...blank(), outfits: getData(node).outfits, props: getData(node).props, ...j.story, pitch: ta.value, model, nsfw: !!box.querySelector("[data-nsfw]")?.checked }, true); // the writer doesn't make props: keep yours
       status(node, `✨ Wrote ${j.story.shots.length} shots in ${Math.round((Date.now() - t0) / 1000)} s. Everything is yours to edit now.`);
@@ -1384,6 +1427,81 @@ function saveProjectAs(node, anchor) {
   };
   menu.querySelector("[data-asgo]").onclick = go;
   input.addEventListener("keydown", (e) => e.key === "Enter" && go());
+}
+
+/** 📦 Export: the whole project as one zip for another computer (story, plan, settings and every picture it uses,
+ * which live in ComfyUI's input folder). Saves first, so the zip has what is on the board. */
+function exportProject(node, anchor) {
+  const d = getData(node);
+  if (!String(d.project || "").trim()) return status(node, "✋ Name the project and 💾 Save it first.", true);
+  const { menu, close } = openMenu(anchor, `<div class="lcst-tip" style="max-width:300px">One zip with the story, plan and every picture
+      the project uses. 📥 Import it on the other computer.</div>
+    <label class="lcst-row" style="gap:6px"><input type="checkbox" data-r> Include the renders (every take and the movie: much bigger)</label>
+    <div class="lcst-row"><button class="lcst-b pri" data-go>📦 Export</button></div>`);
+  menu.querySelector("[data-go]").onclick = async () => {
+    const renders = menu.querySelector("[data-r]").checked;
+    close();
+    await saveProject(node);
+    const project = getData(node).project;
+    status(node, `Packing "${project}"${renders ? " with its renders" : ""}…`);
+    try {
+      const r = await api.fetchApi(`/lc_h3/story/export?project=${encodeURIComponent(project)}&renders=${renders ? 1 : 0}&t=${Date.now()}`);
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+      const blob = await r.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${project}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+      status(node, `"${project}.zip" is in your downloads (${(blob.size / 2 ** 20).toFixed(1)} MB).`);
+    } catch (e) {
+      status(node, `Not exported: ${e.message}`, true);
+    }
+  };
+}
+
+/** 📥 Import: a zip from 📦 Export. Its pictures go back into the input folder, the project into output/LC_H3, and
+ * this node opens it. A taken name asks: import under a new name, or replace (the old folder is kept in _replaced). */
+function importProject(node, anchor) {
+  const pick = document.createElement("input");
+  pick.type = "file";
+  pick.accept = ".zip";
+  pick.onchange = async () => {
+    const file = pick.files?.[0];
+    if (!file) return;
+    const send = (name = "", overwrite = false) => {
+      const fd = new FormData();
+      fd.append("name", name);
+      fd.append("overwrite", overwrite ? "1" : "0");
+      fd.append("file", file);
+      return api.fetchApi("/lc_h3/story/import", { method: "POST", body: fd })
+        .then(async (r) => ({ status: r.status, ...(await r.json().catch(() => ({ error: r.statusText }))) }))
+        .catch((e) => ({ status: 0, error: String(e) }));
+    };
+    const done = async (r) => {
+      if (r.error) return status(node, `Not imported: ${r.error}`, true);
+      await openProject(node, r.project); // like 📂 Load: the board it replaces is not saved for you
+      const parts = [`${r.pictures} picture${r.pictures === 1 ? "" : "s"} added`];
+      if (r.already_here) parts.push(`${r.already_here} already here`);
+      if (r.renamed?.length) parts.push(`${r.renamed.length} renamed (another picture had the name)`);
+      const msg = `Imported "${r.project}": ${parts.join(", ")}.${r.missing?.length ? ` ⚠ ${r.missing.length} missing.` : ""}`;
+      status(node, msg, !!r.missing?.length);
+      toast(r.missing?.length ? "warn" : "success", msg);
+    };
+    status(node, `Importing ${file.name}…`);
+    const r = await send();
+    if (r.status !== 409) return done(r);
+    status(node, `A project called "${r.exists}" is already here.`, true);
+    const { menu, close } = openMenu(anchor, `<div class="lcst-tip" style="max-width:300px">A project called <b>${esc(r.exists)}</b> is
+        already on this computer. Replace keeps the old folder in output/LC_H3/_replaced, nothing is deleted.</div>
+      <div class="lcst-row"><button class="lcst-b pri" data-new>Import as ${esc(r.suggest)}</button>
+        <button class="lcst-b" data-rep>Replace ${esc(r.exists)}</button></div>`);
+    menu.querySelector("[data-new]").onclick = async () => (close(), done(await send(r.suggest)));
+    menu.querySelector("[data-rep]").onclick = async () => (close(), done(await send(r.exists, true)));
+  };
+  pick.click();
 }
 
 /** 1248 x 864 -> "13:9"; the usual shapes keep their names (1024 x 576 -> "16:9"). */
@@ -1737,6 +1855,8 @@ function render(node) {
       <button class="lcst-b" data-save title="Save story.json and plan.json now (Run saves too)">💾 Save</button>
       <button class="lcst-b" data-saveas title="Save a variant under a new name: the made shots come along, the original stays as it is">💾 Save as</button>
       <button class="lcst-b" data-new title="Clear the board for a new project. Saved projects stay on disk (📂 Load brings them back)">🆕 New</button>
+      <button class="lcst-b" data-export title="The whole project as one zip (story, plan and every picture it uses) to open on another computer">📦 Export</button>
+      <button class="lcst-b" data-import title="Open a zip from 📦 Export: its pictures go back into the input folder and the project into output/LC_H3">📥 Import</button>
       <span class="lcst-status" data-status></span>
     </div>
     <div class="lcst-row"><span class="lcst-tip" data-size style="flex:1"></span></div>
@@ -2238,6 +2358,8 @@ function render(node) {
   q("[data-save]").forEach((b) => (b.onclick = () => saveProject(node)));
   q("[data-saveas]").forEach((b) => (b.onclick = () => saveProjectAs(node, b)));
   q("[data-new]").forEach((b) => (b.onclick = () => newProject(node)));
+  q("[data-export]").forEach((b) => (b.onclick = () => exportProject(node, b)));
+  q("[data-import]").forEach((b) => (b.onclick = () => importProject(node, b)));
   q("[data-p360]").forEach((b) => (b.onclick = () => pano360FromRoom(node, Number(b.dataset.p360))));
 
   q("[data-pic],[data-pano],[data-start],[data-end]").forEach((el) => decorateSlot(node, d, el, save));
@@ -2286,6 +2408,7 @@ function ensureIds(node) {
 app.registerExtension({
   name: "LC.AV.H3Story",
   setup() {
+    setInterval(pollLoraFits, 2000); // ⚠️ on shot LoRAs that don't fit Make's model (needs LC123)
     // a finished run may have made a shot: every Story node looks for new takes
     api.addEventListener("execution_success", () => {
       for (const n of app.graph?._nodes || []) if (n.type === NODE && n.__lcst) refreshBoard(n);
