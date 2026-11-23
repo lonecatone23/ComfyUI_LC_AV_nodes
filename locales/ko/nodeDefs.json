@@ -110,10 +110,10 @@
         "tooltip": "VHS Video Combine의 crf와 같은 의미."
       },
       "save_metadata": {
-        "tooltip": "사이드카 JSON + mp4 comment/description + Civitai용 정지 PNG(parameters + civitaiResources)."
+        "tooltip": "비디오 안에 prompt + workflow 태그(CivitAI 링크 포함)와 설정 주석을 씁니다."
       },
-      "civitai_still": {
-        "tooltip": "A1111 parameters / civitaiResources가 담긴 첫 프레임 PNG를 기록합니다. Civitai는 mp4 comment를 읽지 않습니다."
+      "civitai_lookup": {
+        "tooltip": "사용한 모델과 LoRA의 CivitAI 페이지를 찾아 비디오에 연결합니다(CivitAI는 비디오에서 해시를 읽지 않습니다). 파일마다 해시를 civitai.com에 한 번만 보내고 결과는 캐시됩니다. LC123 팩이 필요합니다."
       },
       "pingpong": {
         "tooltip": "깔끔한 루프를 위해 역방향 프레임을 덧붙입니다(양 끝 제외)."
@@ -122,7 +122,7 @@
         "tooltip": "True = Comfy output 폴더. False = temp 폴더."
       },
       "prune_outputs": {
-        "tooltip": "중간/유틸리티 프레임 PNG나 미리보기 GIF를 쓰지 않습니다. 비디오 파일(과 선택적 sidecar json)만 저장됩니다. 원시 인코딩 파일은 임시 폴더에 두었다가 ffmpeg 후에 삭제됩니다."
+        "tooltip": "중간/유틸리티 프레임 PNG나 미리보기 GIF를 쓰지 않습니다. 비디오 파일만 저장됩니다. 원시 인코딩 파일은 임시 폴더에 두었다가 ffmpeg 후에 삭제됩니다."
       },
       "images": {
         "tooltip": "프레임 배치. av_pipe에 비디오가 없을 때 사용됩니다."
@@ -187,7 +187,7 @@
         "tooltip": "모델 이름. 하나의 필드에 쉼표로 구분. 두 번째 widget이 아닙니다."
       },
       "civitai_air": {
-        "tooltip": "정확한 Civitai AIR URN 붙여넣기 또는 모델 URL. 선택 사항. 버전/파일 id를 지어내지 마세요. 입력하면 내 워크플로/모델이 Civitai에 연결됩니다. 단점: 그러면 Civitai가 이미지를 \"made on-site\"로 표시합니다. 비워두면 외부 생성기로 인식됩니다."
+        "tooltip": "CivitAI AIR 또는 모델 URL. 여러 개는 쉼표로 구분합니다(예: 모델과 워크플로 페이지). 채우면 CivitAI의 워크플로/모델에 연결됩니다. 이미지와 비디오는 계속 외부 생성기로 읽힙니다. 이미지의 모델과 LoRA는 채우지 않아도 해시로 일치합니다."
       },
       "extra_params": {
         "tooltip": "parameters 줄 뒤에 추가됩니다."

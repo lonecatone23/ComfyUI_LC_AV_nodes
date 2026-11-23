@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 
 # Same type string as LC123 LC Save Metadata so one metadata node feeds
@@ -103,6 +104,10 @@ def build_parameters(meta: dict, width: int = 0, height: int = 0, fps=None, dura
     if air:
         resources = civitai_resources_payload(air)
         if resources:
+            # CivitAI calls an image "made on-site" when it has civitaiResources and no Version key;
+            # Version marks it as an external (ComfyUI) image and keeps the resource links
+            if not re.search(r"(^|,\s*)Version:", extra or ""):
+                bits.append("Version: ComfyUI")
             bits.append("Civitai resources: " + json.dumps(resources, separators=(",", ":")))
     if extra:
         bits.append(extra.lstrip(", "))

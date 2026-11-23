@@ -110,10 +110,10 @@
         "tooltip": "VHS Video Combine の crf と同じ意味です。"
       },
       "save_metadata": {
-        "tooltip": "サイドカーJSON + mp4 のコメント/説明 + Civitai 用の静止画 PNG（parameters + civitaiResources）。"
+        "tooltip": "動画の中に prompt + workflow タグ（あなたの CivitAI リンク入り）と設定コメントを書き込みます。"
       },
-      "civitai_still": {
-        "tooltip": "最初のフレームを A1111 parameters / civitaiResources 付きの PNG で書き出します。Civitai は mp4 のコメントを読みません。"
+      "civitai_lookup": {
+        "tooltip": "使ったモデルと LoRA の CivitAI ページを調べ、動画からリンクできるようにします（CivitAI は動画からハッシュを読みません）。各ファイルのハッシュを civitai.com に一度だけ送り、結果はキャッシュされます。LC123 パックが必要です。"
       },
       "pingpong": {
         "tooltip": "きれいなループのために、逆再生したフレームを追加します（両端はスキップ）。"
@@ -122,7 +122,7 @@
         "tooltip": "True = Comfy output フォルダー。False = temp フォルダー。"
       },
       "prune_outputs": {
-        "tooltip": "中間/補助フレームの PNG やプレビュー GIF は一切書き出しません。保存されるのは動画ファイル(と任意のサイドカー json)のみです。生のエンコードファイルは一時フォルダーに置かれ、ffmpeg の後で削除されます。"
+        "tooltip": "中間/補助フレームの PNG やプレビュー GIF は一切書き出しません。保存されるのは動画ファイルのみです。生のエンコードファイルは一時フォルダーに置かれ、ffmpeg の後で削除されます。"
       },
       "images": {
         "tooltip": "フレームバッチ。av_pipe に動画がない場合に使用。"
@@ -187,7 +187,7 @@
         "tooltip": "モデル名。1つのフィールドにカンマ区切りで。2つ目のウィジェットではありません。"
       },
       "civitai_air": {
-        "tooltip": "正確な Civitai の AIR URN の貼り付け、またはモデルの URL。任意です。バージョン/ファイルの ID をでっち上げないでください。入力すると、ワークフロー/モデルを Civitai にリンクできます。トレードオフ:Civitai がその画像を「made on-site」と表示します。空のままにすると、外部ジェネレーターの画像として扱われます。"
+        "tooltip": "CivitAI の AIR またはモデルURL。カンマ区切りで複数指定できます（例：モデルとワークフローのページ）。入力すると CivitAI 上のワークフロー/モデルにリンクします。画像も動画も外部ジェネレーターとして扱われます。画像のモデルと LoRA は入力しなくてもハッシュで照合されます。"
       },
       "extra_params": {
         "tooltip": "パラメーター行の末尾に追加されます。"

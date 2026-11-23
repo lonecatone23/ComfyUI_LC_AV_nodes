@@ -6,7 +6,7 @@ Custom nodes for ComfyUI by lonecatone23.
 * **Image companion:** https://github.com/lonecatone23/ComfyUI_LC123_nodes
 * **CivitAI:** lonecatone23
 * **Support:** https://ko-fi.com/lonecatone
-* **Version:** 0.5.29 · **27 nodes**
+* **Version:** 0.5.30 · **27 nodes**
 
 > Small tools that remove friction: frames, soundtrack, metadata, fewer extra packs.
 
@@ -45,7 +45,7 @@ Optional example graph: `workflows/LC_AV Node Examples.json`
 | LC AV Pipe Out 🎬 | `LCAvPipeOut` | Unpack. In: `pipe` + `av_pipe`. No `LC_PIPE` on the output side. |
 | LC Pipe → AV Pipe 🔌 | `LCPipeToAvPipe` | One `LC_PIPE` in, one `LC_AV_PIPE` out. Shared keys only. |
 | LC Create Video 🎬 | `LCCreateVideo` | IMAGE batch + fps (+ optional AUDIO) → `LC_AV_PIPE`. Does not encode a file. |
-| LC Save Video 💾 | `LCSaveVideo` | ffmpeg encode. Inputs: images, audio, av_pipe, metadata, relay. No `LC_PIPE` socket. **relay** (from LC Relay VSR Upscale, MaskMaker) saves the upscaled video a few frames at a time so it never fills your RAM (5 s at 4x: 0.3 GB instead of about 12 GB); with Relay bypassed, images is saved instead. Writes the ComfyUI prompt + workflow into the mp4 for CivitAI. |
+| LC Save Video 💾 | `LCSaveVideo` | ffmpeg encode. Inputs: images, audio, av_pipe, metadata, relay. No `LC_PIPE` socket. **relay** (from LC Relay VSR Upscale, MaskMaker) saves the upscaled video a few frames at a time so it never fills your RAM (5 s at 4x: 0.3 GB instead of about 12 GB); with Relay bypassed, images is saved instead. Writes the ComfyUI prompt + workflow into the mp4 for CivitAI; **civitai_lookup** links your models and LoRAs too. |
 | LC Load Video 🎞️ | `LCLoadVideo` | A video file in, its frames, sound and frame rate out, exactly as the file has them. Streams with a progress bar; Cancel works. |
 | LC Preview Video 📺 | `LCPreviewVideo` | Plays a video file, or frames with their sound, on the node. Nothing saved to output. |
 | LC Save Video Metadata 🏷️ | `LCSaveVideoMetadata` | `LC_SAVE_META` + A1111 `parameters`. Works with Save Video or LC123 Save Image. |
@@ -93,11 +93,13 @@ Plays a video on the node: a file (path), or a batch of frames with its sound (f
 
 ## Save Video 💾
 
-VHS-style options: frame_rate, loop_count, filename_prefix, format, pix_fmt, crf, pingpong, save_output, prune_outputs.
+VHS-style options: frame_rate, loop_count, filename_prefix, format, pix_fmt, crf, civitai_lookup, pingpong, save_output, prune_outputs.
+
+⚠️ **0.5.30:** `civitai_lookup` takes the slot of the old `civitai_still` (the first-frame PNG, gone along with the sidecar `.json`). Workflows saved with the PNG on open with the lookup **on**: switch it off if you don't want hashes sent to CivitAI.
 
 `prune_outputs` keeps intermediate frame PNGs off disk.
 
-`save_metadata` writes sidecar JSON + container comment. **CivitAI** reads PNG chunks, not the mp4 comment. Keep `civitai_still` on and upload the first-frame PNG (fill `models` + `civitai_air` on the metadata node).
+`save_metadata` writes the prompt + workflow tags and a settings comment into the video. **CivitAI** reads the tags: fill `models` + `civitai_air` on the metadata node and the upload links your workflow page and reads as an external generator. CivitAI reads no file hashes from a video, so models and LoRAs only link when `civitai_lookup` is on: it finds each file's CivitAI page by its hash (one call to civitai.com per file, cached in `user/LC/civitai_air_cache.json`). Needs LC123.
 
 Frames stream into ffmpeg one at a time with a progress bar, so long clips don't fill your RAM, and Cancel stops it (no half-written file is left).
 

@@ -2,17 +2,18 @@
 LC Save Video + LC Save Video Metadata
 --------------------------------------
 Video does not get PNG text chunks. Write container tags when the encoder
-allows it, plus a sidecar .json with the same field names as LC Save Image
-where possible (positive, negative, steps, sampler, seed, models,
-civitai_air, hashes, parameters).
+allows it: prompt + workflow (CivitAI reads these) and the A1111 settings
+comment. No sidecar file.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 import numpy as np
@@ -41,30 +42,6 @@ def _join_path(*parts: str) -> str:
         if s:
             chunks.append(s)
     return "/".join(chunks)
-
-
-def _write_civitai_png(path, frame_u8, meta, params):
-    """First-frame PNG with the same text keys LC Save Image / Civitai read."""
-    from PIL import Image
-    from PIL.PngImagePlugin import PngInfo
-
-    img = Image.fromarray(frame_u8[..., :3], mode="RGB")
-    info = PngInfo()
-    if params:
-        info.add_text("parameters", params)
-    air = txt(meta.get("civitai_air"))
-    resources = civitai_resources_payload(air)
-    if resources:
-        info.add_text("civitaiResources", json.dumps(resources, separators=(",", ":")))
-        info.add_text("civitai_air", air)
-    hashes = meta.get("hashes")
-    if hashes:
-        info.add_text("hashes", hashes if isinstance(hashes, str) else json.dumps(hashes))
-    for key in ("positive", "negative", "models"):
-        val = txt(meta.get(key))
-        if val:
-            info.add_text(key, val)
-    img.save(path, pnginfo=info)
 
 
 class LCSaveVideoMetadata:
@@ -163,7 +140,7 @@ class LCSaveVideoMetadata:
                     "STRING",
                     {
                         "default": "",
-                        "tooltip": "Exact Civitai AIR URN paste or model URL. Optional. Do not invent version/file ids. Fill it to link your workflow/model on Civitai. Trade-off: Civitai then labels the image \"made on-site\". Leave it empty and the image reads as an external generator.",
+                        "tooltip": "CivitAI AIR or model URL, several comma-separated (e.g. your workflow page). Fill it to link your workflow/model on CivitAI. Pictures and videos still read as an external generator.",
                     },
                 ),
                 "extra_params": (
@@ -443,11 +420,100 @@ def _frame_order(n, pingpong, loop_count):
     return order * (max(0, int(loop_count or 0)) + 1)
 
 
-def comfy_tags(prompt=None, extra_pnginfo=None):
+_AIR_RE = re.compile(r"urn:air:[A-Za-z0-9_.:\-]+@\d+|urn:air:[A-Za-z0-9_.:\-]+")
+_STOCK_LOADERS = {"UNETLoader", "UnetLoaderGGUF", "CheckpointLoaderSimple", "CheckpointLoader",
+                  "CheckpointLoaderSimple|pysssss", "CheckpointLoader|pysssss",
+                  "easy fullLoader", "easy a1111Loader", "easy comfyLoader"}
+_MODEL_KEYS = ("unet_name", "ckpt_name", "model_name", "diffusion_model", "model")
+_MODEL_EXT = (".safetensors", ".gguf", ".ckpt", ".sft", ".pt", ".pth", ".bin")
+
+
+def _prompt_airs(prompt):
+    """AIRs typed into a civitai_air widget anywhere in the graph (LC Save Metadata and friends)."""
+    out = []
+    for node in (prompt or {}).values():
+        v = (node.get("inputs") or {}).get("civitai_air") if isinstance(node, dict) else None
+        if isinstance(v, str):
+            out += _AIR_RE.findall(v)
+    return out
+
+
+_NOT_MAIN = re.compile(r"upscal|rife|vfi|interp|esrgan|vae|clip|text_enc|lora|depth|sam|segm|face|vsr|relay", re.I)
+
+
+def _prompt_model(prompt):
+    """The main model a loader in the graph names: unet/ckpt widgets first, then other model widgets. Upscalers,
+    frame interpolation, VAEs, encoders and helpers are left out."""
+    nodes = [n for n in (prompt or {}).values() if isinstance(n, dict)]
+    for keys in (("unet_name", "ckpt_name"), _MODEL_KEYS):
+        for node in nodes:
+            if _NOT_MAIN.search(str(node.get("class_type", ""))):
+                continue
+            inputs = node.get("inputs") or {}
+            for k in keys:
+                v = inputs.get(k)
+                if isinstance(v, str) and v.lower().endswith(_MODEL_EXT) and not _NOT_MAIN.search(os.path.basename(v)):
+                    return v
+    return ""
+
+
+def _prompt_lookup_on(prompt):
+    """True when an LC Save Video in the graph has civitai_lookup switched on (the H3 join reads it from there)."""
+    return any(isinstance(n, dict) and (n.get("inputs") or {}).get("civitai_lookup") is True for n in (prompt or {}).values())
+
+
+def _lookup_links(prompt, extra_pnginfo):
+    """LC123's hash -> CivitAI AIR lookup ([{air, name, kind, strength}]); [] without LC123."""
+    for name, mod in list(sys.modules.items()):
+        if name.endswith("lc_civitai_lookup") and hasattr(mod, "lookup_links"):
+            try:
+                return mod.lookup_links(prompt, extra_pnginfo)
+            except Exception as e:
+                print(f"[LC AV] CivitAI lookup failed: {e}")
+                return []
+    print("[LC AV] civitai_lookup needs the LC123 pack; skipped")
+    return []
+
+
+def civitai_prompt_copy(prompt, air="", model="", links=()):
+    """The prompt as it goes into the video tags, with the CivitAI links added.
+
+    CivitAI reads only the prompt + workflow tags from a video. It links a resource (the workflow page) when an AIR
+    sits in a loader's name widget, and it calls the video "made on-site" when it has linked resources but no Model
+    name. So this copy gets one LoRA-shaped entry per AIR (CivitAI moves those into the resource links) and, when no
+    stock loader is in the graph, a UNETLoader-shaped entry naming the real model. Only this copy changes: the
+    workflow tag (what loads back into ComfyUI) and the run itself are untouched."""
+    if not isinstance(prompt, dict):
+        return prompt
+    rows = [(a, 1.0) for a in dict.fromkeys(_AIR_RE.findall(txt(air)) or _prompt_airs(prompt))]
+    for link in links or ():
+        if link.get("air") and link["air"] not in {a for a, _ in rows}:
+            rows.append((link["air"], float(link.get("strength") or 1.0)))
+    if not rows:
+        return prompt
+    out = dict(prompt)
+    for i, (a, strength) in enumerate(rows):
+        out[f"lc_civitai_link_{i + 1}"] = {"class_type": "LoraLoaderModelOnly",
+                                           "inputs": {"lora_name": a, "strength_model": strength},
+                                           "_meta": {"title": "CivitAI link (LC metadata, not run)"}}
+    has_loader = any(isinstance(n, dict) and n.get("class_type") in _STOCK_LOADERS for n in prompt.values())
+    # no model named anywhere (a post-process-only graph): "ComfyUI" still marks the video as made off-site
+    name = os.path.basename((txt(model).split(",")[0].strip() or _prompt_model(prompt) or "ComfyUI").replace("\\", "/"))
+    if not has_loader:
+        out["lc_civitai_model"] = {"class_type": "UNETLoader", "inputs": {"unet_name": name, "weight_dtype": "default"},
+                                   "_meta": {"title": "Model name for CivitAI (LC metadata, not run)"}}
+    return out
+
+
+def comfy_tags(prompt=None, extra_pnginfo=None, air="", model="", lookup=None):
     """The ComfyUI prompt + workflow as video tags, the way VHS and other video savers write them: CivitAI reads these
-    from an uploaded video to find its models (it ignores the comment)."""
+    from an uploaded video to find its models (it ignores the comment). lookup None = follow the graph's switch."""
     tags = {}
     if prompt is not None:
+        if lookup is None:
+            lookup = _prompt_lookup_on(prompt)
+        links = _lookup_links(prompt, extra_pnginfo) if lookup else ()
+        prompt = civitai_prompt_copy(prompt, air, model, links)
         tags["prompt"] = json.dumps(prompt, separators=(",", ":"), ensure_ascii=False)
     for k, v in (extra_pnginfo or {}).items():
         tags[str(k)] = json.dumps(v, separators=(",", ":"), ensure_ascii=False)
@@ -645,16 +711,16 @@ class LCSaveVideo:
                         "default": True,
                         "label_on": "metadata",
                         "label_off": "no metadata",
-                        "tooltip": "Sidecar JSON + mp4 comment/description + Civitai still PNG (parameters + civitaiResources).",
+                        "tooltip": "Prompt + workflow tags (with your CivitAI links) and the settings comment inside the video.",
                     },
                 ),
-                "civitai_still": (
+                "civitai_lookup": (
                     "BOOLEAN",
                     {
-                        "default": True,
-                        "label_on": "png still",
-                        "label_off": "video only",
-                        "tooltip": "Write first-frame PNG with A1111 parameters / civitaiResources. Civitai does not read mp4 comment.",
+                        "default": False,
+                        "label_on": "look up",
+                        "label_off": "off",
+                        "tooltip": "Find the CivitAI pages of the models and LoRAs you used so the video links them (CivitAI reads no hashes from a video). Sends each file's hash to civitai.com once; answers are cached. Needs the LC123 pack.",
                     },
                 ),
                 "pingpong": (
@@ -681,7 +747,7 @@ class LCSaveVideo:
                         "default": True,
                         "label_on": "prune",
                         "label_off": "keep previews",
-                        "tooltip": "Never write intermediate/utility frame PNGs or preview GIFs. Only the video file (and optional sidecar json) is saved. Raw encode files stay in a temp dir that is deleted after ffmpeg.",
+                        "tooltip": "Never write intermediate/utility frame PNGs or preview GIFs. Only the video file is saved. Raw encode files stay in a temp dir that is deleted after ffmpeg.",
                     },
                 ),
             },
@@ -725,7 +791,7 @@ class LCSaveVideo:
         pix_fmt="yuv420p",
         crf=22,
         save_metadata=True,
-        civitai_still=True,
+        civitai_lookup=False,
         pingpong=False,
         save_output=True,
         prune_outputs=True,
@@ -818,37 +884,12 @@ class LCSaveVideo:
         got = _encode_ffmpeg(
             src, order, dest, fps_f, fmt_key, crf, pix_fmt, stream=stream,
             audio=aud, comment=comment, audio_bitrate="192k",
-            tags=comfy_tags(prompt, extra_pnginfo) if save_metadata else None,
+            tags=comfy_tags(prompt, extra_pnginfo, meta.get("civitai_air"), meta.get("models"),
+                            bool(civitai_lookup)) if save_metadata else None,
         )
 
         if first is None:
             first = got
-        if save_metadata and civitai_still and first is not None:
-            still = os.path.splitext(dest)[0] + ".png"
-            try:
-                _write_civitai_png(still, first, meta, params)
-            except Exception as e:
-                print(f"[LC AV] Civitai still skip: {e}")
-
-        if save_metadata:
-            side = dest + ".json"
-            payload = sidecar_fields(meta, {
-                "hashes": meta.get("hashes"),
-                "civitaiResources": civitai_resources_payload(txt(meta.get("civitai_air"))),
-                "audio_duration": aud_dur or None,
-                "container": ext,
-                "format": fmt_key,
-                "filename": fname,
-                "crf": crf,
-                "pix_fmt": pix_fmt,
-                "pingpong": bool(pingpong),
-                "loop_count": int(loop_count or 0),
-            })
-            try:
-                with open(side, "w", encoding="utf-8") as f:
-                    json.dump(payload, f, indent=2)
-            except OSError as e:
-                print(f"[LC AV] sidecar skip: {e}")
 
         rel = dest
         try:

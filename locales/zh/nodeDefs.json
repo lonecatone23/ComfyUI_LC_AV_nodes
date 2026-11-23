@@ -110,10 +110,10 @@
         "tooltip": "含义与 VHS Video Combine 的 crf 相同。"
       },
       "save_metadata": {
-        "tooltip": "附带的 JSON + mp4 注释/描述 + Civitai 静态 PNG（parameters + civitaiResources）。"
+        "tooltip": "视频内写入 prompt + workflow 标签（含你的 CivitAI 链接）和设置注释。"
       },
-      "civitai_still": {
-        "tooltip": "写出带 A1111 parameters / civitaiResources 的首帧 PNG。CivitAI 不读取 mp4 的 comment。"
+      "civitai_lookup": {
+        "tooltip": "查找你用到的模型和 LoRA 的 CivitAI 页面，让视频链接到它们（CivitAI 不读取视频里的哈希）。每个文件的哈希只发送给 civitai.com 一次，结果会缓存。需要 LC123 节点包。"
       },
       "pingpong": {
         "tooltip": "追加倒序帧（跳过端点），以获得干净的循环。"
@@ -122,7 +122,7 @@
         "tooltip": "True = Comfy output 文件夹。False = temp 文件夹。"
       },
       "prune_outputs": {
-        "tooltip": "绝不写入中间/辅助帧 PNG 或预览 GIF。只保存视频文件（以及可选的附属 json）。原始编码文件留在临时目录里，ffmpeg 运行后即删除。"
+        "tooltip": "绝不写入中间/辅助帧 PNG 或预览 GIF。只保存视频文件。原始编码文件留在临时目录里，ffmpeg 运行后即删除。"
       },
       "images": {
         "tooltip": "帧 batch。av_pipe 没有视频时使用。"
@@ -187,7 +187,7 @@
         "tooltip": "模型名称。一个字段,逗号分隔。不是第二个 widget。"
       },
       "civitai_air": {
-        "tooltip": "精确的 CivitAI AIR URN 或模型 URL，可选。不要自行编造 version/file id。填写后可在 CivitAI 上关联你的工作流/模型。代价：CivitAI 会把图片标记为“站内生成”。留空则图片会被视为外部生成器所生成。"
+        "tooltip": "CivitAI AIR 或模型 URL。可填多个，用逗号分隔（例如模型页和你的工作流页）。填写后可链接到你在 CivitAI 上的工作流/模型。图片和视频仍显示为外部生成器。图片里的模型和 LoRA 不填也会通过哈希匹配。"
       },
       "extra_params": {
         "tooltip": "追加到参数行末尾。"
