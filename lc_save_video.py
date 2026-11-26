@@ -438,7 +438,8 @@ def _prompt_airs(prompt):
     return out
 
 
-_NOT_MAIN = re.compile(r"upscal|rife|vfi|interp|esrgan|vae|clip|text_enc|lora|depth|sam|segm|face|vsr|relay", re.I)
+_NOT_MAIN = re.compile(r"upscal|rife|vfi|interp|esrgan|vae|clip|text_enc|lora|depth|sam|segm|face|vsr|relay|"
+                       r"mmaudio|foley|synchformer|bigvgan|whisper|maya|indextts|umt5|t5xxl", re.I)
 
 
 def _prompt_model(prompt):
@@ -475,7 +476,66 @@ def _lookup_links(prompt, extra_pnginfo):
     return []
 
 
-def civitai_prompt_copy(prompt, air="", model="", links=()):
+_SAMPLER_CLASSES = {"KSampler", "KSamplerAdvanced", "KSampler (Efficient)"}
+_SAMPLER_VALUES = ("seed", "noise_seed", "steps", "cfg", "sampler_name", "scheduler", "denoise")
+
+
+def _literal_samplers(prompt):
+    """CivitAI reads seed / steps / cfg / sampler / scheduler straight off the first KSampler-like node. When one of
+    them is wired in (a pipe, a switch, a show node) it gets a whole node where it expects a value, its schema check
+    fails and the upload loses ALL its metadata. In the tag copy those wired values are left out (CivitAI shows that
+    field empty); literal values and everything else stay. The run and the workflow tag are untouched."""
+    out = None
+    for key, node in prompt.items():
+        if not isinstance(node, dict):
+            continue
+        inputs = node.get("inputs") or {}
+        shaped = all(k in inputs for k in ("positive", "negative", "latent_image", "sampler_name"))
+        if node.get("class_type") not in _SAMPLER_CLASSES and not shaped:
+            continue
+        wired = [k for k in _SAMPLER_VALUES if isinstance(inputs.get(k), list)]
+        if not wired:
+            continue
+        if out is None:
+            out = dict(prompt)
+        out[key] = dict(node, inputs={k: v for k, v in inputs.items() if k not in wired})
+    return prompt if out is None else out
+
+
+def _num(v, kind):
+    try:
+        return kind(v) if v not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _run_summary(prompt, run):
+    """What actually ran (prompt text, seed, steps, cfg, sampler, size from LC Save Video Metadata), as one plain
+    KSampler + text encodes + empty latent in the tag copy. CivitAI picks the KSampler fed by an EmptyLatentImage, so
+    this one is read even when the real samplers get their values through pipes and switches."""
+    run = run if isinstance(run, dict) else {}
+    pos, neg = txt(run.get("positive")), txt(run.get("negative"))
+    vals = {"seed": _num(run.get("seed"), int), "steps": _num(run.get("steps") or run.get("total_steps"), int),
+            "cfg": _num(run.get("cfg"), float), "denoise": _num(run.get("denoise"), float),
+            "sampler_name": txt(run.get("sampler_name") or run.get("sampler")) or None,
+            "scheduler": txt(run.get("scheduler")) or None}
+    if not pos and all(v is None for v in vals.values()):
+        return prompt
+    out = dict(prompt)
+    note = {"title": "Run summary for CivitAI (LC metadata, not run)"}
+    out["lc_civitai_positive"] = {"class_type": "CLIPTextEncode", "inputs": {"text": pos}, "_meta": note}
+    out["lc_civitai_negative"] = {"class_type": "CLIPTextEncode", "inputs": {"text": neg}, "_meta": note}
+    w, h = _num(run.get("width"), int), _num(run.get("height"), int)
+    out["lc_civitai_latent"] = {"class_type": "EmptyLatentImage",
+                                "inputs": {"width": w or 0, "height": h or 0, "batch_size": 1}, "_meta": note}
+    inputs = {k: v for k, v in vals.items() if v is not None}
+    inputs.update({"positive": ["lc_civitai_positive", 0], "negative": ["lc_civitai_negative", 0],
+                   "latent_image": ["lc_civitai_latent", 0]})
+    out["lc_civitai_sampler"] = {"class_type": "KSampler", "inputs": inputs, "_meta": note}
+    return out
+
+
+def civitai_prompt_copy(prompt, air="", model="", links=(), run=None):
     """The prompt as it goes into the video tags, with the CivitAI links added.
 
     CivitAI reads only the prompt + workflow tags from a video. It links a resource (the workflow page) when an AIR
@@ -485,6 +545,7 @@ def civitai_prompt_copy(prompt, air="", model="", links=()):
     workflow tag (what loads back into ComfyUI) and the run itself are untouched."""
     if not isinstance(prompt, dict):
         return prompt
+    prompt = _run_summary(_literal_samplers(prompt), run)
     rows = [(a, 1.0) for a in dict.fromkeys(_AIR_RE.findall(txt(air)) or _prompt_airs(prompt))]
     for link in links or ():
         if link.get("air") and link["air"] not in {a for a, _ in rows}:
@@ -498,14 +559,15 @@ def civitai_prompt_copy(prompt, air="", model="", links=()):
                                            "_meta": {"title": "CivitAI link (LC metadata, not run)"}}
     has_loader = any(isinstance(n, dict) and n.get("class_type") in _STOCK_LOADERS for n in prompt.values())
     # no model named anywhere (a post-process-only graph): "ComfyUI" still marks the video as made off-site
-    name = os.path.basename((txt(model).split(",")[0].strip() or _prompt_model(prompt) or "ComfyUI").replace("\\", "/"))
+    listed = [m.strip() for m in txt(model).split(",") if m.strip() and not _NOT_MAIN.search(os.path.basename(m.strip()))]
+    name = os.path.basename(((listed[0] if listed else "") or _prompt_model(prompt) or "ComfyUI").replace("\\", "/"))
     if not has_loader:
         out["lc_civitai_model"] = {"class_type": "UNETLoader", "inputs": {"unet_name": name, "weight_dtype": "default"},
                                    "_meta": {"title": "Model name for CivitAI (LC metadata, not run)"}}
     return out
 
 
-def comfy_tags(prompt=None, extra_pnginfo=None, air="", model="", lookup=None):
+def comfy_tags(prompt=None, extra_pnginfo=None, air="", model="", lookup=None, run=None):
     """The ComfyUI prompt + workflow as video tags, the way VHS and other video savers write them: CivitAI reads these
     from an uploaded video to find its models (it ignores the comment). lookup None = follow the graph's switch."""
     tags = {}
@@ -513,7 +575,7 @@ def comfy_tags(prompt=None, extra_pnginfo=None, air="", model="", lookup=None):
         if lookup is None:
             lookup = _prompt_lookup_on(prompt)
         links = _lookup_links(prompt, extra_pnginfo) if lookup else ()
-        prompt = civitai_prompt_copy(prompt, air, model, links)
+        prompt = civitai_prompt_copy(prompt, air, model, links, run)
         tags["prompt"] = json.dumps(prompt, separators=(",", ":"), ensure_ascii=False)
     for k, v in (extra_pnginfo or {}).items():
         tags[str(k)] = json.dumps(v, separators=(",", ":"), ensure_ascii=False)
@@ -899,7 +961,7 @@ class LCSaveVideo:
             src, order, dest, fps_f, fmt_key, crf, pix_fmt, stream=stream,
             audio=aud, comment=comment, audio_bitrate="192k",
             tags=comfy_tags(prompt, extra_pnginfo, meta.get("civitai_air"), meta.get("models"),
-                            bool(civitai_lookup)) if save_metadata else None,
+                            bool(civitai_lookup), meta) if save_metadata else None,
         )
 
         if first is None:
