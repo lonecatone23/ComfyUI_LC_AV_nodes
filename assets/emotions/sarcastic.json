@@ -1,0 +1,6 @@
+{
+ "name": "sarcastic",
+ "mix": "disgusted:0.3, happy:0.2",
+ "valence": 0.0,
+ "arousal": 0.0
+}

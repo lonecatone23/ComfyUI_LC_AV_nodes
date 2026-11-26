@@ -1,0 +1,6 @@
+{
+ "name": "smug",
+ "mix": "happy:0.4, disgusted:0.2",
+ "valence": 0.0,
+ "arousal": 0.0
+}

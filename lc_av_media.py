@@ -79,24 +79,90 @@ def audio_duration_sec(audio) -> float:
     return float(wave.shape[-1]) / float(sr)
 
 
-def write_wav(path, wave, sr):
-    """PCM16 WAV. wave is [C, T] float32."""
+def _pcm_bytes(arr, bits):
+    pcm = np.clip(np.asarray(arr, dtype=np.float64), -1.0, 1.0).T.reshape(-1)  # interleaved
+    if bits == 24:
+        v = np.round(pcm * 8388607.0).astype("<i4")
+        return v.view(np.uint8).reshape(-1, 4)[:, :3].tobytes()
+    return np.round(pcm * 32767.0).astype("<i2").tobytes()
+
+
+def write_wav(path, wave, sr, bits=16):
+    """PCM WAV (16 or 24 bit) with the standard library only. wave is [C, T] float32, or a file object as path."""
     import os
     import wave as wavmod
 
     arr = np.asarray(wave)
     if arr.ndim == 1:
         arr = arr[None, :]
-    ch = int(arr.shape[0])
-    pcm = np.clip(arr, -1.0, 1.0)
-    pcm = (pcm * 32767.0).astype(np.int16)
-    interleaved = pcm.T.reshape(-1)
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    if isinstance(path, str):
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with wavmod.open(path, "wb") as w:
-        w.setnchannels(ch)
-        w.setsampwidth(2)
+        w.setnchannels(int(arr.shape[0]))
+        w.setsampwidth(3 if bits == 24 else 2)
         w.setframerate(int(sr))
-        w.writeframes(interleaved.tobytes())
+        w.writeframes(_pcm_bytes(arr, bits))
+
+
+def resample(wave, sr, target):
+    """[C, T] or [T] float audio to a new rate (scipy polyphase, anti-aliased). No torchaudio needed."""
+    import math
+
+    from scipy.signal import resample_poly
+
+    sr, target = int(sr), int(target)
+    x = np.asarray(wave, dtype=np.float32)
+    if sr == target or x.shape[-1] == 0:
+        return x
+    g = math.gcd(sr, target)
+    y = resample_poly(x, target // g, sr // g, axis=-1).astype(np.float32)
+    return y[..., :max(1, x.shape[-1] * target // sr)]  # same length torchaudio gave
+
+
+def read_audio(path):
+    """Any audio (or a video's sound) -> (float32 [C, T], sample_rate). PyAV (a ComfyUI requirement), with a plain
+    WAV reader as the fallback."""
+    errors = []
+    try:
+        import av
+
+        with av.open(path) as f:
+            st = next(s for s in f.streams if s.type == "audio")
+            sr = int(st.rate or st.codec_context.sample_rate)
+            rs = av.AudioResampler(format="fltp", layout=st.codec_context.layout, rate=sr)
+            parts = []
+            for frame in f.decode(st):
+                for out in rs.resample(frame):
+                    parts.append(out.to_ndarray())
+            for out in rs.resample(None):
+                parts.append(out.to_ndarray())
+        if parts:
+            return np.concatenate(parts, axis=1).astype(np.float32), sr
+        errors.append("pyav: no audio frames")
+    except Exception as e:
+        errors.append(f"pyav: {e}")
+    try:
+        import wave as wavmod
+
+        with wavmod.open(path, "rb") as w:
+            sr, ch, sw = w.getframerate(), w.getnchannels(), w.getsampwidth()
+            raw = w.readframes(w.getnframes())
+        if sw == 2:
+            data = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+        elif sw == 3:
+            b = np.frombuffer(raw, dtype=np.uint8).reshape(-1, 3)
+            v = (b[:, 0].astype(np.int32) | (b[:, 1].astype(np.int32) << 8) | (b[:, 2].astype(np.int32) << 16))
+            data = (np.where(v >= 1 << 23, v - (1 << 24), v)).astype(np.float32) / 8388608.0
+        elif sw == 4:
+            data = np.frombuffer(raw, dtype="<i4").astype(np.float32) / 2147483648.0
+        elif sw == 1:
+            data = (np.frombuffer(raw, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
+        else:
+            raise ValueError(f"wav width {sw}")
+        return data.reshape(-1, ch).T.copy(), int(sr)
+    except Exception as e:
+        errors.append(f"wav: {e}")
+    raise RuntimeError(f"Could not decode {path} ({'; '.join(errors)})")
 
 
 def preview_ui(audio, prefix="lc_av"):

@@ -765,6 +765,11 @@ class LCSaveVideo:
                                 "never sits in RAM. Used whenever it arrives. With Relay bypassed, images is saved instead. "
                                 "pingpong and loop_count don't apply to it."},
                 ),
+                "video": (
+                    "VIDEO",
+                    {"tooltip": "A Comfy VIDEO (Load Video, Create Video...). Its frames, sound and fps are used when "
+                                "images, audio or frame_rate (0) are left empty."},
+                ),
             },
             "hidden": {
                 "prompt": "PROMPT",
@@ -802,7 +807,16 @@ class LCSaveVideo:
         prompt=None,
         extra_pnginfo=None,
         relay=None,
+        video=None,
     ):
+        if video is not None and hasattr(video, "get_components"):
+            comp = video.get_components()
+            if images is None:
+                images = comp.images
+            if audio is None and getattr(comp, "audio", None) is not None:
+                audio = comp.audio
+            if not frame_rate and getattr(comp, "frame_rate", None):
+                frame_rate = float(comp.frame_rate)
         pipe = av_pipe if isinstance(av_pipe, dict) else {}
         stream = relay if isinstance(relay, dict) and callable(relay.get("frames")) else None
 

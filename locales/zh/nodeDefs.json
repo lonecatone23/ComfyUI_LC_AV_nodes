@@ -138,6 +138,9 @@
       },
       "relay": {
         "tooltip": "LC Relay VSR Upscale 的 relay 输出：放大后的视频一次几帧地保存，不会全部占用内存。只要有就会使用。旁路 Relay 时改为保存 images。relay 视频不使用 pingpong 和 loop_count。"
+      },
+      "video": {
+        "tooltip": "一个 Comfy VIDEO（Load Video、Create Video...）。当 images、audio 或 frame_rate（0）留空时，使用它的帧、声音和 fps。"
       }
     }
   },
@@ -720,6 +723,503 @@
       },
       "14": {
         "tooltip": "Identity Edit 步骤的提示词：完整提示词，加上来自演员表的人脸和按原文描述的服装。"
+      }
+    }
+  },
+  "LCAudioSplit": {
+    "description": "把配乐拆成语音、音效和音乐。三者相加等于输入，所以 LC Audio Mix 可以按各自的音量重新混合，或把其中一部分换成新的（TTS 台词、新的 Foley）。模型用英语语音训练；歌声往往会被分到音乐里。",
+    "inputs": {
+      "audio": {
+        "tooltip": "一段配乐：H3 片段的音频、电影场景等。"
+      },
+      "model": {
+        "tooltip": "TIGER 拆得更干净。BSRNN 在 CPU 上更快。两者都很小（5-20 MB），首次使用时自动下载。"
+      },
+      "keep_stereo": {
+        "tooltip": "关：拆分单声道混音（与模型训练方式一致，最快）。开：每个声道分别拆分并保留立体声（耗时翻倍）。"
+      }
+    }
+  },
+  "LCAudioMix": {
+    "description": "合并语音、音效、音乐和两条额外音轨：每条各有音量和起始时间，可选在语音下压低音乐（ducking），并带限幅器，绝不削波。与 LC Audio Split 搭配使用。",
+    "inputs": {
+      "speech_db": {
+        "tooltip": "speech 的音量（dB）。0 = 原样，-6 = 音量减半，-60 = 静音。"
+      },
+      "speech_start": {
+        "tooltip": "speech 在混音中开始的秒数。"
+      },
+      "sfx_db": {
+        "tooltip": "sfx 的音量（dB）。0 = 原样，-6 = 音量减半，-60 = 静音。"
+      },
+      "sfx_start": {
+        "tooltip": "sfx 在混音中开始的秒数。"
+      },
+      "music_db": {
+        "tooltip": "music 的音量（dB）。0 = 原样，-6 = 音量减半，-60 = 静音。"
+      },
+      "music_start": {
+        "tooltip": "music 在混音中开始的秒数。"
+      },
+      "track_4_db": {
+        "tooltip": "track_4 的音量（dB）。0 = 原样，-6 = 音量减半，-60 = 静音。"
+      },
+      "track_4_start": {
+        "tooltip": "track_4 在混音中开始的秒数。"
+      },
+      "track_5_db": {
+        "tooltip": "track_5 的音量（dB）。0 = 原样，-6 = 音量减半，-60 = 静音。"
+      },
+      "track_5_start": {
+        "tooltip": "track_5 在混音中开始的秒数。"
+      },
+      "duck_music": {
+        "tooltip": "有人说话时压低音乐（dB）。0 = 关。-6 到 -12 能让台词在配乐上保持清晰。需要接 speech 音轨。"
+      },
+      "length": {
+        "tooltip": "混音的长度。'seconds' 使用下方的数值。"
+      },
+      "seconds": {
+        "tooltip": "length = seconds 时的长度。"
+      },
+      "match_loudness": {
+        "tooltip": "在应用各自的 dB 音量之前，把每条音轨统一到相同响度（LUFS），这样全部 0 dB 就一样响。不同引擎生成的人声或 Foley 音量不一时使用。"
+      },
+      "target_lufs": {
+        "tooltip": "成品混音的响度。0 = 关。-14 用于 YouTube 和流媒体，-16 用于网页和播客，-23 用于广播。"
+      },
+      "peak_db": {
+        "tooltip": "混音允许的最高峰值。未设目标时：总和会超出时把整个混音调低。设了目标时：限幅器只压住响的瞬间，保证目标响度不变。"
+      },
+      "speech": {
+        "tooltip": "speech（任意长度、采样率或声道数）"
+      },
+      "sfx": {
+        "tooltip": "sfx（任意长度、采样率或声道数）"
+      },
+      "music": {
+        "tooltip": "music（任意长度、采样率或声道数）"
+      },
+      "track_4": {
+        "tooltip": "track_4（任意长度、采样率或声道数）"
+      },
+      "track_5": {
+        "tooltip": "track_5（任意长度、采样率或声道数）"
+      }
+    }
+  },
+  "LCIndexTTSEngine": {
+    "description": "LC Dialogue 使用的 IndexTTS-2 语音：用一小段音频克隆每位说话人，并按每句台词混合它的 8 种情绪（happy, angry, sad, afraid, disgusted, melancholic, surprised, calm）。内置：模型（连同辅助模型约 8 GB）首次使用时下载到 models/IndexTTS-2。",
+    "inputs": {
+      "model": {
+        "tooltip": "IndexTTS-2 是我们测试过的模型：加上情绪后，克隆的声音仍是同一个人。"
+      },
+      "emotion_alpha": {
+        "tooltip": "情绪混合表现出来的强度。强烈的混合开始让字词含糊时就调低。"
+      },
+      "temperature": {
+        "tooltip": "0.8 是模型自身的设置。越高 = 读法越多变，错误也越多。"
+      },
+      "low_vram": {
+        "tooltip": "在步骤之间把模型的部分内容移出 GPU。"
+      }
+    }
+  },
+  "LCDialogue": {
+    "description": "朗读剧本：每位说话人一个声音（models/voices/<name>.wav），每句一个情绪混合，句中也能切换情绪。transcript = 谁在何时说了什么；timings = 同样内容的 JSON。",
+    "inputs": {
+      "engine": {
+        "tooltip": "语音引擎（LC IndexTTS Engine）。"
+      },
+      "script": {
+        "tooltip": "[说话人|情绪:权重,...] 台词。[Haley|bitter] 优先使用保存的情绪 'Haley bitter'（LC Emotion Mix），其次是 'bitter'。台词中的情绪标签会从那里开始切换情绪。[pause:600ms] 加一个停顿。以 # 开头的行会被跳过。"
+      },
+      "default_voice": {
+        "tooltip": "没有 [Speaker] 的台词，以及在 models/voices 中没有音频的说话人，都使用这个声音。"
+      },
+      "gap": {
+        "tooltip": "台词之间的静音（秒）。"
+      },
+      "seed": {
+        "tooltip": "每一段使用 seed + 它的编号，所以可以单独重做某一句。"
+      },
+      "even_lines": {
+        "tooltip": "拼接前把每句统一到相同响度，避免喊出来的台词比悲伤的台词响一倍。最终音量用 LC Audio Leveler 收尾。"
+      },
+      "voice_1": {
+        "tooltip": "要克隆的声音片段（一个人说话 10 到 20 s）。name_1 中填写的说话人的台词会使用它。"
+      },
+      "name_1": {
+        "tooltip": "voice_1 的说话人名字，与剧本中写法一致：[Haley]。留空 = Voice1。优先于 models/voices 中同名的文件。"
+      },
+      "voice_2": {
+        "tooltip": "要克隆的声音片段（一个人说话 10 到 20 s）。name_2 中填写的说话人的台词会使用它。"
+      },
+      "name_2": {
+        "tooltip": "voice_2 的说话人名字，与剧本中写法一致：[Sam]。留空 = Voice2。优先于 models/voices 中同名的文件。"
+      },
+      "voice_3": {
+        "tooltip": "要克隆的声音片段（一个人说话 10 到 20 s）。name_3 中填写的说话人的台词会使用它。"
+      },
+      "name_3": {
+        "tooltip": "voice_3 的说话人名字，与剧本中写法一致：[Name]。留空 = Voice3。优先于 models/voices 中同名的文件。"
+      },
+      "voice_4": {
+        "tooltip": "要克隆的声音片段（一个人说话 10 到 20 s）。name_4 中填写的说话人的台词会使用它。"
+      },
+      "name_4": {
+        "tooltip": "voice_4 的说话人名字，与剧本中写法一致：[Name]。留空 = Voice4。优先于 models/voices 中同名的文件。"
+      },
+      "voices": {
+        "tooltip": "来自 LC Load Voice 的角色表：所有声音在一根线上，各自带剧本里的名称。优先于上面的槽位和 models/voices。"
+      }
+    }
+  },
+  "LCAudioLeveler": {
+    "description": "压缩器 + 响度目标（LUFS）+ 峰值限幅器，用于人声和成品混音。",
+    "inputs": {
+      "preset": {
+        "tooltip": "压缩器设置。Custom 使用下方的滑块。"
+      },
+      "target_lufs": {
+        "tooltip": "-16 用于视频和社交平台，-14 用于音乐平台，-23 用于广播。"
+      },
+      "peak_db": {
+        "tooltip": "限幅器的上限。"
+      },
+      "threshold_db": {
+        "tooltip": "仅 Custom。超过此响度的部分会被压缩。"
+      },
+      "ratio": {
+        "tooltip": "仅 Custom。人声用 2-4；10 以上就相当于限幅器。"
+      },
+      "attack_ms": {
+        "tooltip": "仅 Custom。越短越能抓住字头。"
+      },
+      "release_ms": {
+        "tooltip": "仅 Custom。越长听起来越平滑。"
+      }
+    }
+  },
+  "LCTranscribe": {
+    "description": "说了什么、何时说的：带时间的文字稿（行、字幕或 H3 定时提示词句子），外加每个词的时间。",
+    "inputs": {
+      "model": {
+        "tooltip": "首次使用时下载到 models/stt。whisper-small（970 MB）速度快；large-v3-turbo（1.6 GB）更准确。models/stt 里的其他 Whisper 文件夹也会显示在这里。"
+      },
+      "language": {
+        "tooltip": "两个字母的语言代码，留空则自动检测。"
+      },
+      "format": {
+        "tooltip": "lines：0:01.20 - 0:03.40  text。srt：字幕。H3 prompt：'At 1.2 seconds they say, \"...\"' 形式的句子，可粘贴进定时提示词。"
+      },
+      "device": {
+        "tooltip": "auto = 有 GPU 时用 GPU。"
+      }
+    }
+  },
+  "LCVoiceDesign": {
+    "description": "根据描述设计一个声音（Maya1），并保存为 LC Dialogue 的说话人。",
+    "inputs": {
+      "description": {
+        "tooltip": "年龄、性别、口音、音高、音色、语速。不要写情绪：情绪之后按台词再加。"
+      },
+      "sample_text": {
+        "tooltip": "这个声音朗读的内容。10 到 20 秒平稳、平静的语音最适合克隆。"
+      },
+      "seed": {
+        "tooltip": "同一描述下，每个 seed 是不同的人。"
+      },
+      "check": {
+        "tooltip": "逐条试听每次生成（Whisper，models/stt）。如果 Maya 把描述读了出来或胡乱发声，就换下一个 seed（最多 4 次）。信息行会显示通过的 seed。"
+      },
+      "voice_name": {
+        "tooltip": "LC Dialogue 中使用的说话人名称。把 voice_name 和 audio 接到 LC Save Audio 来保存为 models/voices/<名称>.wav，或接到 LC Load Voice 只用于这次运行。"
+      }
+    },
+    "outputs": {
+      "2": {
+        "tooltip": "名称：和 audio 一起接到 LC Save Audio（保存）或 LC Load Voice（本次运行）。"
+      }
+    }
+  },
+  "LCEmotionMix": {
+    "description": "构建一种情绪（效价 / 唤醒度面板加上命名情绪），用测试声音播放。save emotion 按名字把它保存为素材：'bitter' 在 LC Dialogue 里对所有人有效，'Haley bitter' 只对 Haley 有效。保存的和预设的情绪显示为紫色按钮：点击即可载入。",
+    "inputs": {
+      "mix": {
+        "tooltip": "带权重的情绪名：happy, angry, sad, afraid, disgusted, melancholic, surprised, calm。点击面板下方的名字即可添加。权重是占比：IndexTTS-2 会把整个混合限制在 0.8 或以下。"
+      },
+      "valence": {
+        "tooltip": "不愉快（-1）到愉快（+1）。拖动面板。"
+      },
+      "arousal": {
+        "tooltip": "平静（-1）到兴奋（+1）。拖动面板。"
+      },
+      "engine": {
+        "tooltip": "LC IndexTTS Engine。"
+      },
+      "line": {
+        "tooltip": "测试声音说的话，用来听情绪效果。"
+      },
+      "seed": {
+        "tooltip": "每个种子都是同一情绪的不同一次演绎。"
+      },
+      "voice_name": {
+        "tooltip": "save emotion 保存时用的名字。'bitter' 对所有人有效（[Alice|bitter]、[Bob|bitter]）；'Haley bitter' 是 Haley 专属，对她优先。"
+      },
+      "voices": {
+        "tooltip": "来自 LC Load Voice 的测试声音，只用来听情绪效果。保存的情绪不包含这个声音的任何东西。线上有多个时，由最后一个说话。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "同一句话先平读、停顿，再带情绪：听听混合的效果。"
+      },
+      "1": {
+        "tooltip": "混合写成剧本标签：[Haley|sad:0.5,angry:0.3]。"
+      }
+    }
+  },
+  "LCVoiceMatch": {
+    "description": "两个声音有多像（1.0 = 同一个声音），由说话人编码器测量。用来检查克隆和它的原始音频。",
+    "inputs": {
+      "engine": {
+        "tooltip": "LC IndexTTS Engine：由它的说话人模型（CAM++）来听。"
+      },
+      "reference": {
+        "tooltip": "应该听起来像的那个声音（你的音频）。"
+      },
+      "audio": {
+        "tooltip": "生成的结果（克隆、对白台词...）。"
+      }
+    }
+  },
+  "LCSaveAudio": {
+    "description": "将音频保存为 FLAC、WAV、MP3 或 Opus 并内嵌 workflow，文字稿另存为 .txt / .srt。",
+    "inputs": {
+      "filename_prefix": {
+        "tooltip": "output 内的 文件夹/名称。可用 %date:yyyy-MM-dd%。"
+      },
+      "format": {
+        "tooltip": "flac：无损且体积小。wav：24-bit，适合编辑软件。mp3 / opus：用于分享。"
+      },
+      "quality": {
+        "tooltip": "仅 mp3 和 opus。语音用 192k 足够。"
+      },
+      "save_output": {
+        "tooltip": "关：仅预览，不保留任何文件。"
+      },
+      "embed_workflow": {
+        "tooltip": "把 workflow 写入文件（flac / mp3 / opus）：拖进 ComfyUI 即可加载。"
+      },
+      "transcript_file": {
+        "tooltip": "接入文字稿时，把它保存在音频旁边。srt = 供视频编辑软件使用的字幕。"
+      },
+      "transcript": {
+        "tooltip": "LC Dialogue 或 LC Transcribe 的文字稿。"
+      },
+      "voice_name": {
+        "tooltip": "来自 LC Voice Shape：同时把声音保存为 models/voices/<名称>.wav，作为 LC Dialogue 的说话人（同名会被替换）。留空 = 不保存为声音。"
+      }
+    }
+  },
+  "LCVoiceShape": {
+    "description": "调整语音的音高、嗓音体型、生动度、语速、温暖度、柔和度和空气感：让男声更低沉，让女声更柔和明亮，让声音更年轻或更苍老。",
+    "inputs": {
+      "audio": {
+        "tooltip": "语音。先把音乐和音效分离出去（LC Audio Split）。"
+      },
+      "preset": {
+        "tooltip": "起点。选中后会设置它用到的滑块；Custom 使用滑块。"
+      },
+      "pitch": {
+        "tooltip": "半音。-3 到 -6 让男声向男中音 / 男低音靠近，+2 到 +4 让声音变高。超过 6 开始听起来有处理感。"
+      },
+      "voice_size": {
+        "tooltip": "人的体型：小于 1 = 胸腔和喉咙更大（更低沉、更饱满），大于 1 = 更小（更轻、更年轻）。0.9 到 1.1 听起来自然。与 pitch 搭配：音高降低 + 小于 1。"
+      },
+      "liveliness": {
+        "tooltip": "音高起伏的幅度：0 = 平板的机器人，1 = 原样，1.5 = 更有表现力。"
+      },
+      "speed": {
+        "tooltip": "改变语速而不改变音高。0.9 = 稍慢一点。"
+      },
+      "warmth_db": {
+        "tooltip": "200 Hz 附近的低频：+ 更饱满温暖，- 更单薄。"
+      },
+      "softness_db": {
+        "tooltip": "压低刺耳的 3-5 kHz 频段：+ 更柔和。"
+      },
+      "air_db": {
+        "tooltip": "8 kHz 以上的高频：+ 更有气声、更明亮，- 更闷。"
+      },
+      "tremble": {
+        "tooltip": "老年人声音里的颤抖。0.3 到 0.5 表现老年，1 是受惊时的颤音。"
+      },
+      "breathiness": {
+        "tooltip": "声音里的气息。0.6 以下很轻微，1.0 时明显。低沉的嗓音需要调高。"
+      },
+      "voice_name": {
+        "tooltip": "LC Dialogue 中使用的说话人名称。把 voice_name 接到 LC Save Audio：它会把这个声音保存为 models/voices/<名称>.wav（同名会被替换）。"
+      }
+    },
+    "outputs": {
+      "2": {
+        "tooltip": "保存时用的名称：接到 LC Save Audio 的 voice_name。"
+      }
+    }
+  },
+  "LCAudioTrim": {
+    "description": "裁掉开头和结尾的静音，或缩短每个长停顿。剪切处带淡入淡出，没有爆音。",
+    "inputs": {
+      "mode": {
+        "tooltip": "start + end：只裁两端。every gap：同时缩短片段内的长停顿。"
+      },
+      "threshold_db": {
+        "tooltip": "比最响处低多少算静音。干净人声用 -45；嘈杂房间用 -30。"
+      },
+      "pad_ms": {
+        "tooltip": "在第一个声音之前和最后一个声音之后保留的静音，让呼吸声和字尾不被切掉。"
+      },
+      "max_gap_s": {
+        "tooltip": "仅 every gap。片段内允许的最长停顿。"
+      }
+    }
+  },
+  "LCAudioJoin": {
+    "description": "用间隔或交叉淡化拼接最多六个片段。输出每个片段所在的位置（JSON）。",
+    "inputs": {
+      "audio_1": {
+        "tooltip": "第一个片段。决定结果的采样率和声道。"
+      },
+      "gap_s": {
+        "tooltip": "片段之间的静音（秒）。负值 = 片段重叠这么长，并平滑交叉淡化。"
+      },
+      "audio_2": {
+        "tooltip": "片段 2。留空则跳过。"
+      },
+      "audio_3": {
+        "tooltip": "片段 3。留空则跳过。"
+      },
+      "audio_4": {
+        "tooltip": "片段 4。留空则跳过。"
+      },
+      "audio_5": {
+        "tooltip": "片段 5。留空则跳过。"
+      },
+      "audio_6": {
+        "tooltip": "片段 6。留空则跳过。"
+      }
+    }
+  },
+  "LCAudioSpeed": {
+    "description": "加快或放慢音频，音高不变（0.5x 到 2x）。",
+    "inputs": {
+      "speed": {
+        "tooltip": "1 = 不变。1.25 = 快 25%（更短），0.8 = 更慢（更长）。音高保持不变。"
+      },
+      "quality": {
+        "tooltip": "speech：人声更平滑。music：鼓点更清脆。"
+      }
+    }
+  },
+  "LCVoiceClean": {
+    "description": "人声录音的降噪、去齿音和柔和噪声门。每一级都有单独的强度。",
+    "inputs": {
+      "noise_reduction": {
+        "tooltip": "去除稳定噪声（嘶声、嗡声、风扇、雨声）。0 = 关，0.5 = 最多 -12 dB，1 = 最多 -25 dB。太高会有水声感。"
+      },
+      "deess": {
+        "tooltip": "抑制刺耳的 S 和 SH 音。0 = 关。0.3 较轻，1 较强。"
+      },
+      "gate_threshold_db": {
+        "tooltip": "噪声门：词与词之间低于此值（dBFS）的声音会被压低。"
+      },
+      "gate_floor_db": {
+        "tooltip": "噪声门把间隙压低多少。0 = 关闭噪声门。-30 保留自然的房间底噪。"
+      }
+    }
+  },
+  "LCAudioSpace": {
+    "description": "为干声添加房间混响和设备音效（电话、收音机、对讲机、扩音器）。",
+    "inputs": {
+      "preset": {
+        "tooltip": "场所或设备。Custom 使用下方的滑块。"
+      },
+      "keep_length": {
+        "tooltip": "开：长度与输入相同（保持视频同步）。关：让结尾的回声自然消散。"
+      },
+      "decay_s": {
+        "tooltip": "仅 Custom。回声持续多久（房间大小）。"
+      },
+      "wet": {
+        "tooltip": "仅 Custom。回声相对干声的比例。"
+      },
+      "predelay_ms": {
+        "tooltip": "仅 Custom。回声开始前的间隔。越大感觉房间越大。"
+      },
+      "brightness": {
+        "tooltip": "仅 Custom。回声的低通（Hz）。低 = 柔软的房间，高 = 瓷砖和玻璃。"
+      }
+    }
+  },
+  "LCAudioBeats": {
+    "description": "歌曲的速度、节拍和起音点，以秒和视频帧号给出，外加响度包络。",
+    "inputs": {
+      "fps": {
+        "tooltip": "视频的帧率，用于 beat_frames 和 envelope。"
+      },
+      "sensitivity": {
+        "tooltip": "仅用于起音点。越高越能找到较轻的敲击；越低只保留强的。"
+      }
+    }
+  },
+  "LCAudioToMidi": {
+    "description": "把单一旋律线转成 MIDI 音符，保存为 .mid 文件。一次只处理一种乐器或一个人声。",
+    "inputs": {
+      "fmin": {
+        "tooltip": "检测的最低音，写音名（C2、A3）或 Hz。C2 = 65 Hz，低沉男声和贝斯。"
+      },
+      "fmax": {
+        "tooltip": "检测的最高音。C6 = 1047 Hz，覆盖人声和大多数主旋律。"
+      },
+      "min_note_ms": {
+        "tooltip": "更短的音会被丢弃。如果出现很多细碎音符就调高。"
+      },
+      "tempo": {
+        "tooltip": "写入 .mid 文件的速度。无论怎么设，音符都保持真实时间；与歌曲匹配，DAW 中的网格才能对齐。"
+      },
+      "filename_prefix": {
+        "tooltip": "output 文件夹内的 文件夹/名称。"
+      }
+    }
+  },
+  "LCLoadVoice": {
+    "display_name": "LC Load Voice 🎙️",
+    "description": "载入一段声音并为剧本起名（默认用文件名，也可自己输入）。串联多个，就能用一根线把整个角色表接入 LC Dialogue。",
+    "inputs": {
+      "voice_name": {
+        "tooltip": "说话人名称，与剧本写法一致：[Haley] 使用这个声音。选择文件时会自动填入文件名；直接输入可改名。留空 = 文件名。"
+      },
+      "voices": {
+        "tooltip": "目前的角色表，来自另一个 LC Load Voice。这个声音会加进去（同名的会被替换）。"
+      },
+      "audio": {
+        "tooltip": "声音片段：models/voices 里的预制声音和 input 文件夹里的文件。上传可从任何位置导入文件（放到 input 文件夹）。单人说话 10 到 20 秒克隆效果最好。"
+      },
+      "max_seconds": {
+        "tooltip": "更长的片段会被截到这个长度。超过约 30 秒，声音引擎会出问题。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "角色表：接到 LC Dialogue 的 voices（或下一个 LC Load Voice）。"
+      },
+      "1": {
+        "tooltip": "这个声音的片段。"
+      },
+      "2": {
+        "tooltip": "这个声音的名称：和 audio 一起接到 LC Save Audio，就能保存到 models/voices。"
       }
     }
   }

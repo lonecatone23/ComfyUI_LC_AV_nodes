@@ -138,6 +138,9 @@
       },
       "relay": {
         "tooltip": "LC Relay VSR Upscale의 relay 출력: 업스케일된 영상을 몇 프레임씩 저장하므로 RAM에 올라가지 않습니다. 들어오면 항상 사용합니다. Relay를 바이패스하면 images를 대신 저장합니다. relay 영상에는 pingpong과 loop_count가 적용되지 않습니다."
+      },
+      "video": {
+        "tooltip": "Comfy VIDEO(Load Video, Create Video...). images, audio 또는 frame_rate(0)가 비어 있으면 그 프레임, 소리, fps를 씁니다."
       }
     }
   },
@@ -720,6 +723,503 @@
       },
       "14": {
         "tooltip": "Identity Edit 패스용 프롬프트: 전체 프롬프트에 캐스트 시트의 얼굴과 적힌 그대로의 옷을 더한 것."
+      }
+    }
+  },
+  "LCAudioSplit": {
+    "description": "사운드트랙을 대사, 효과음, 음악으로 분리합니다. 셋을 더하면 입력과 같아지므로 LC Audio Mix에서 각각 원하는 볼륨으로 다시 합치거나, 하나를 새것(TTS 대사, 새 Foley)으로 바꿀 수 있습니다. 영어 음성으로 학습해서 노래는 음악 쪽으로 가는 경우가 많습니다.",
+    "inputs": {
+      "audio": {
+        "tooltip": "사운드트랙: H3 클립의 오디오, 영화 장면 등."
+      },
+      "model": {
+        "tooltip": "TIGER가 더 깔끔하게 분리합니다. BSRNN은 CPU에서 더 빠릅니다. 둘 다 작고(5-20 MB) 처음 사용할 때 다운로드됩니다."
+      },
+      "keep_stereo": {
+        "tooltip": "끄기: 모노 믹스를 분리합니다(모델 학습 방식과 같고 가장 빠름). 켜기: 채널마다 따로 분리해 스테레오를 유지합니다(시간 2배)."
+      }
+    }
+  },
+  "LCAudioMix": {
+    "description": "대사, 효과음, 음악과 추가 트랙 2개를 합칩니다. 트랙마다 볼륨과 시작 시간이 있고, 대사 중 음악 덕킹(선택)과 클리핑을 막는 리미터가 있습니다. LC Audio Split과 함께 씁니다.",
+    "inputs": {
+      "speech_db": {
+        "tooltip": "speech 볼륨(dB). 0 = 그대로, -6 = 절반 크기, -60 = 무음."
+      },
+      "speech_start": {
+        "tooltip": "믹스에서 speech 시작 위치(초)."
+      },
+      "sfx_db": {
+        "tooltip": "sfx 볼륨(dB). 0 = 그대로, -6 = 절반 크기, -60 = 무음."
+      },
+      "sfx_start": {
+        "tooltip": "믹스에서 sfx 시작 위치(초)."
+      },
+      "music_db": {
+        "tooltip": "music 볼륨(dB). 0 = 그대로, -6 = 절반 크기, -60 = 무음."
+      },
+      "music_start": {
+        "tooltip": "믹스에서 music 시작 위치(초)."
+      },
+      "track_4_db": {
+        "tooltip": "track_4 볼륨(dB). 0 = 그대로, -6 = 절반 크기, -60 = 무음."
+      },
+      "track_4_start": {
+        "tooltip": "믹스에서 track_4 시작 위치(초)."
+      },
+      "track_5_db": {
+        "tooltip": "track_5 볼륨(dB). 0 = 그대로, -6 = 절반 크기, -60 = 무음."
+      },
+      "track_5_start": {
+        "tooltip": "믹스에서 track_5 시작 위치(초)."
+      },
+      "duck_music": {
+        "tooltip": "누군가 말할 때 음악을 낮춥니다(dB). 0 = 끄기. -6에서 -12면 배경음악 위에서도 대사가 또렷합니다. speech 트랙이 필요합니다."
+      },
+      "length": {
+        "tooltip": "믹스 길이. 'seconds'는 아래 값을 씁니다."
+      },
+      "seconds": {
+        "tooltip": "length = seconds일 때의 길이."
+      },
+      "match_loudness": {
+        "tooltip": "dB 볼륨을 적용하기 전에 모든 트랙을 같은 라우드니스(LUFS)로 맞춥니다. 모두 0 dB면 같은 크기입니다. 다른 엔진의 목소리나 Foley 크기가 제각각일 때 쓰세요."
+      },
+      "target_lufs": {
+        "tooltip": "완성된 믹스의 라우드니스. 0 = 끄기. -14는 YouTube와 스트리밍, -16은 웹과 팟캐스트, -23은 방송용."
+      },
+      "peak_db": {
+        "tooltip": "믹스 피크의 최대치. 목표 없음: 합이 넘칠 때 믹스 전체를 낮춥니다. 목표 있음: 리미터가 큰 순간만 잡아 목표를 유지합니다."
+      },
+      "speech": {
+        "tooltip": "speech(길이, 샘플레이트, 채널 수 무관)"
+      },
+      "sfx": {
+        "tooltip": "sfx(길이, 샘플레이트, 채널 수 무관)"
+      },
+      "music": {
+        "tooltip": "music(길이, 샘플레이트, 채널 수 무관)"
+      },
+      "track_4": {
+        "tooltip": "track_4(길이, 샘플레이트, 채널 수 무관)"
+      },
+      "track_5": {
+        "tooltip": "track_5(길이, 샘플레이트, 채널 수 무관)"
+      }
+    }
+  },
+  "LCIndexTTSEngine": {
+    "description": "LC Dialogue용 IndexTTS-2 음성: 짧은 클립으로 화자마다 목소리를 복제하고, 8가지 감정(happy, angry, sad, afraid, disgusted, melancholic, surprised, calm)을 대사마다 섞습니다. 내장: 모델(보조 모델 포함 약 8 GB)은 처음 사용할 때 models/IndexTTS-2에 다운로드됩니다.",
+    "inputs": {
+      "model": {
+        "tooltip": "IndexTTS-2는 저희가 벤치한 모델입니다: 감정을 넣어도 복제한 목소리가 같은 사람으로 유지됩니다."
+      },
+      "emotion_alpha": {
+        "tooltip": "감정 믹스가 얼마나 드러날지. 강한 믹스에서 발음이 뭉개지기 시작하면 낮추세요."
+      },
+      "temperature": {
+        "tooltip": "0.8이 모델 기본 설정입니다. 높을수록 읽는 방식이 다양해지고 실수도 늘어납니다."
+      },
+      "low_vram": {
+        "tooltip": "스텝 사이에 모델 일부를 GPU 밖으로 옮깁니다."
+      }
+    }
+  },
+  "LCDialogue": {
+    "description": "대본을 읽습니다: 화자마다 목소리(models/voices/<name>.wav), 대사마다 감정 믹스, 대사 중간의 감정 변화. transcript = 누가 언제 무엇을 말했는지, timings = 같은 내용의 JSON.",
+    "inputs": {
+      "engine": {
+        "tooltip": "음성 엔진(LC IndexTTS Engine)."
+      },
+      "script": {
+        "tooltip": "[화자|감정:가중치,...] 대사. [Haley|bitter]는 저장된 감정 'Haley bitter'(LC Emotion Mix)가 있으면 그것을, 없으면 'bitter'를 씁니다. 대사 안의 감정 태그는 거기서부터 감정을 바꿉니다. [pause:600ms]는 잠깐 쉽니다. #으로 시작하는 줄은 건너뜁니다."
+      },
+      "default_voice": {
+        "tooltip": "[Speaker]가 없는 대사, 그리고 models/voices에 클립이 없는 화자에 쓰는 목소리."
+      },
+      "gap": {
+        "tooltip": "대사 사이 무음(초)."
+      },
+      "seed": {
+        "tooltip": "각 조각은 seed + 번호를 쓰므로 한 줄만 다시 만들 수 있습니다."
+      },
+      "even_lines": {
+        "tooltip": "이어 붙이기 전에 모든 대사를 같은 라우드니스로 맞춰, 소리치는 대사가 슬픈 대사보다 두 배 크지 않게 합니다. 최종 볼륨은 LC Audio Leveler로 마무리하세요."
+      },
+      "voice_1": {
+        "tooltip": "복제할 목소리 클립(한 사람이 말하는 10에서 20 s). name_1에 입력한 화자의 대사에 쓰입니다."
+      },
+      "name_1": {
+        "tooltip": "voice_1의 화자 이름, 대본에 쓴 그대로: [Haley]. 비어 있음 = Voice1. models/voices의 같은 이름 파일보다 우선합니다."
+      },
+      "voice_2": {
+        "tooltip": "복제할 목소리 클립(한 사람이 말하는 10에서 20 s). name_2에 입력한 화자의 대사에 쓰입니다."
+      },
+      "name_2": {
+        "tooltip": "voice_2의 화자 이름, 대본에 쓴 그대로: [Sam]. 비어 있음 = Voice2. models/voices의 같은 이름 파일보다 우선합니다."
+      },
+      "voice_3": {
+        "tooltip": "복제할 목소리 클립(한 사람이 말하는 10에서 20 s). name_3에 입력한 화자의 대사에 쓰입니다."
+      },
+      "name_3": {
+        "tooltip": "voice_3의 화자 이름, 대본에 쓴 그대로: [Name]. 비어 있음 = Voice3. models/voices의 같은 이름 파일보다 우선합니다."
+      },
+      "voice_4": {
+        "tooltip": "복제할 목소리 클립(한 사람이 말하는 10에서 20 s). name_4에 입력한 화자의 대사에 쓰입니다."
+      },
+      "name_4": {
+        "tooltip": "voice_4의 화자 이름, 대본에 쓴 그대로: [Name]. 비어 있음 = Voice4. models/voices의 같은 이름 파일보다 우선합니다."
+      },
+      "voices": {
+        "tooltip": "LC Load Voice의 출연진: 모든 목소리를 대본 이름과 함께 선 하나로. 위의 슬롯과 models/voices보다 우선합니다."
+      }
+    }
+  },
+  "LCAudioLeveler": {
+    "description": "목소리와 완성 믹스용 컴프레서 + 라우드니스 목표(LUFS) + 피크 리미터.",
+    "inputs": {
+      "preset": {
+        "tooltip": "컴프레서 설정. Custom은 아래 슬라이더를 씁니다."
+      },
+      "target_lufs": {
+        "tooltip": "-16은 영상과 SNS 게시물, -14는 음악 플랫폼, -23은 방송용."
+      },
+      "peak_db": {
+        "tooltip": "리미터의 상한."
+      },
+      "threshold_db": {
+        "tooltip": "Custom 전용. 이보다 큰 소리는 압축됩니다."
+      },
+      "ratio": {
+        "tooltip": "Custom 전용. 목소리는 2-4, 10 이상이면 리미터처럼 동작합니다."
+      },
+      "attack_ms": {
+        "tooltip": "Custom 전용. 짧을수록 단어의 시작을 잡습니다."
+      },
+      "release_ms": {
+        "tooltip": "Custom 전용. 길수록 부드럽게 들립니다."
+      }
+    }
+  },
+  "LCTranscribe": {
+    "description": "무엇을 언제 말했는지: 시간이 붙은 대본(줄, 자막 또는 H3 시간 지정 프롬프트 문장)과 단어별 시간.",
+    "inputs": {
+      "model": {
+        "tooltip": "처음 사용할 때 models/stt에 다운로드됩니다. whisper-small(970 MB)은 빠르고, large-v3-turbo(1.6 GB)는 더 정확합니다. models/stt에 있는 다른 Whisper 폴더도 여기에 표시됩니다."
+      },
+      "language": {
+        "tooltip": "두 글자 언어 코드, 비우면 자동 감지."
+      },
+      "format": {
+        "tooltip": "lines: 0:01.20 - 0:03.40  text. srt: 자막. H3 prompt: 시간 지정 프롬프트에 붙여 넣을 'At 1.2 seconds they say, \"...\"' 형식 문장."
+      },
+      "device": {
+        "tooltip": "auto = GPU가 있으면 GPU를 씁니다."
+      }
+    }
+  },
+  "LCVoiceDesign": {
+    "description": "설명으로 목소리를 디자인하고(Maya1) LC Dialogue 화자로 저장합니다.",
+    "inputs": {
+      "description": {
+        "tooltip": "나이, 성별, 억양, 음높이, 음색, 속도. 감정은 빼세요: 감정은 나중에 대사마다 넣습니다."
+      },
+      "sample_text": {
+        "tooltip": "목소리가 읽을 문장. 10에서 20초의 평범하고 차분한 말이 가장 잘 복제됩니다."
+      },
+      "seed": {
+        "tooltip": "같은 설명이라도 seed마다 다른 사람입니다."
+      },
+      "check": {
+        "tooltip": "테이크마다 들어봅니다(Whisper, models/stt). Maya가 설명을 소리 내어 읽거나 웅얼거리면 다음 seed를 시도합니다(최대 4 테이크). info 줄에 통과한 seed가 표시됩니다."
+      },
+      "voice_name": {
+        "tooltip": "LC Dialogue에서 쓰는 화자 이름입니다. voice_name과 audio를 LC Save Audio에 연결하면 models/voices/<이름>.wav로 저장되고, LC Load Voice에 연결하면 이번 실행에만 씁니다."
+      }
+    },
+    "outputs": {
+      "2": {
+        "tooltip": "이름: audio와 함께 LC Save Audio(저장) 또는 LC Load Voice(이번 실행)에 연결하세요."
+      }
+    }
+  },
+  "LCEmotionMix": {
+    "description": "감정을 만들고(valence / arousal 패드와 이름 있는 감정) 테스트 목소리로 재생합니다. save emotion은 이름으로 에셋으로 저장합니다: 'bitter'는 LC Dialogue에서 모두에게, 'Haley bitter'는 Haley에게만 통합니다. 저장된 감정과 프리셋 감정은 보라색 버튼으로 나오며, 클릭하면 불러옵니다.",
+    "inputs": {
+      "mix": {
+        "tooltip": "가중치가 붙은 감정 이름: happy, angry, sad, afraid, disgusted, melancholic, surprised, calm. 패드 아래 이름을 클릭하면 추가됩니다. 가중치는 비율입니다: IndexTTS-2는 전체 믹스를 0.8 이하로 유지합니다."
+      },
+      "valence": {
+        "tooltip": "불쾌(-1)에서 쾌(+1)까지. 패드를 드래그하세요."
+      },
+      "arousal": {
+        "tooltip": "차분(-1)에서 활기(+1)까지. 패드를 드래그하세요."
+      },
+      "engine": {
+        "tooltip": "LC IndexTTS Engine."
+      },
+      "line": {
+        "tooltip": "테스트 목소리가 말하는 대사. 감정을 들어 보기 위한 것입니다."
+      },
+      "seed": {
+        "tooltip": "시드마다 같은 감정의 다른 테이크가 나옵니다."
+      },
+      "voice_name": {
+        "tooltip": "save emotion이 저장할 때 쓰는 이름. 'bitter'는 모두에게 통합니다([Alice|bitter], [Bob|bitter]). 'Haley bitter'는 Haley 전용이며 그녀에게 우선합니다."
+      },
+      "voices": {
+        "tooltip": "LC Load Voice에서 온 테스트 목소리로, 감정을 들어 보기 위한 것입니다. 저장되는 감정에는 이 목소리가 전혀 들어가지 않습니다. 여러 개를 연결하면 마지막 목소리가 말합니다."
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "같은 대사를 먼저 평범하게, 잠깐 쉬고, 감정을 넣어서: 믹스의 효과를 들어 보는 용도입니다."
+      },
+      "1": {
+        "tooltip": "믹스를 스크립트 태그로 쓴 것: [Haley|sad:0.5,angry:0.3]."
+      }
+    }
+  },
+  "LCVoiceMatch": {
+    "description": "두 목소리가 얼마나 비슷한지(1.0 = 같은 목소리) 화자 인코더로 측정합니다. 복제본을 원본 클립과 비교해 확인합니다.",
+    "inputs": {
+      "engine": {
+        "tooltip": "LC IndexTTS Engine: 그 화자 모델(CAM++)이 듣고 비교합니다."
+      },
+      "reference": {
+        "tooltip": "목표로 하는 목소리(내 클립)."
+      },
+      "audio": {
+        "tooltip": "나온 결과(복제본, 대화 대사...)."
+      }
+    }
+  },
+  "LCSaveAudio": {
+    "description": "오디오를 FLAC, WAV, MP3 또는 Opus로 workflow를 담아 저장하고, 대본도 .txt / .srt로 저장합니다.",
+    "inputs": {
+      "filename_prefix": {
+        "tooltip": "output 안의 폴더/이름. %date:yyyy-MM-dd% 사용 가능."
+      },
+      "format": {
+        "tooltip": "flac: 무손실에 작음. wav: 편집기용 24-bit. mp3 / opus: 공유용."
+      },
+      "quality": {
+        "tooltip": "mp3와 opus 전용. 음성은 192k면 충분합니다."
+      },
+      "save_output": {
+        "tooltip": "끄기: 미리보기만, 아무것도 남기지 않음."
+      },
+      "embed_workflow": {
+        "tooltip": "파일에 workflow를 넣습니다(flac / mp3 / opus): ComfyUI에 드래그하면 불러옵니다."
+      },
+      "transcript_file": {
+        "tooltip": "대본이 연결되어 있으면 오디오 옆에 저장합니다. srt = 영상 편집기용 자막."
+      },
+      "transcript": {
+        "tooltip": "LC Dialogue 또는 LC Transcribe의 대본."
+      },
+      "voice_name": {
+        "tooltip": "LC Voice Shape에서: 소리를 models/voices/<이름>.wav로도 저장해 LC Dialogue의 화자로 만듭니다(같은 이름은 교체). 비우면 목소리로 저장하지 않습니다."
+      }
+    }
+  },
+  "LCVoiceShape": {
+    "description": "음성의 음높이, 목소리 체격, 생동감, 속도, 따뜻함, 부드러움, 공기감을 조절합니다: 남자 목소리를 더 굵게, 여자 목소리를 부드럽고 밝게, 목소리를 더 젊게 또는 나이 들게 만듭니다.",
+    "inputs": {
+      "audio": {
+        "tooltip": "음성. 음악과 효과음은 먼저 분리하세요(LC Audio Split)."
+      },
+      "preset": {
+        "tooltip": "출발점. 고르면 그 프리셋이 쓰는 슬라이더가 설정됩니다. Custom은 슬라이더를 씁니다."
+      },
+      "pitch": {
+        "tooltip": "반음 단위. -3에서 -6이면 남자 목소리가 바리톤 / 베이스 쪽으로 굵어지고, +2에서 +4면 목소리가 높아집니다. 6을 넘으면 가공된 소리가 나기 시작합니다."
+      },
+      "voice_size": {
+        "tooltip": "사람의 체격: 1 미만 = 가슴과 목이 큼(더 굵고 풍성), 1 초과 = 작음(더 가볍고 젊음). 0.9에서 1.1이 자연스럽습니다. pitch와 함께 쓰세요: 낮은 pitch + 1보다 작게."
+      },
+      "liveliness": {
+        "tooltip": "음높이가 얼마나 움직이는지: 0 = 평평한 로봇, 1 = 말한 그대로, 1.5 = 더 풍부한 표현."
+      },
+      "speed": {
+        "tooltip": "음높이를 바꾸지 않고 말하는 속도만 바꿉니다. 0.9 = 살짝 느리게."
+      },
+      "warmth_db": {
+        "tooltip": "200 Hz 부근 저음: +는 더 풍성하고 따뜻하게, -는 더 얇게."
+      },
+      "softness_db": {
+        "tooltip": "거친 3-5 kHz 대역을 줄입니다: +는 더 부드럽고 온화하게."
+      },
+      "air_db": {
+        "tooltip": "8 kHz 이상 고음: +는 숨소리가 섞이고 밝게, -는 더 먹먹하게."
+      },
+      "tremble": {
+        "tooltip": "노인 목소리의 떨림. 노년은 0.3에서 0.5, 1은 겁에 질린 떨림."
+      },
+      "breathiness": {
+        "tooltip": "목소리의 숨. 0.6 미만은 미묘하고 1.0에서 뚜렷합니다. 낮은 목소리는 더 높게."
+      },
+      "voice_name": {
+        "tooltip": "LC Dialogue에서 쓰는 화자 이름입니다. voice_name을 LC Save Audio에 연결하면 그 목소리를 models/voices/<이름>.wav로 저장합니다(같은 이름은 교체)."
+      }
+    },
+    "outputs": {
+      "2": {
+        "tooltip": "저장할 이름: LC Save Audio의 voice_name에 연결하세요."
+      }
+    }
+  },
+  "LCAudioTrim": {
+    "description": "시작과 끝의 무음을 잘라내거나, 긴 쉼을 모두 줄입니다. 자른 곳은 페이드 처리되어 클릭 소리가 없습니다.",
+    "inputs": {
+      "mode": {
+        "tooltip": "start + end: 양 끝만 자릅니다. every gap: 클립 안의 긴 쉼도 줄입니다."
+      },
+      "threshold_db": {
+        "tooltip": "가장 큰 순간보다 얼마나 낮으면 무음으로 볼지. 깨끗한 목소리는 -45, 시끄러운 방은 -30."
+      },
+      "pad_ms": {
+        "tooltip": "첫 소리 앞과 마지막 소리 뒤에 남길 무음. 숨소리와 말끝이 잘리지 않게 합니다."
+      },
+      "max_gap_s": {
+        "tooltip": "every gap 전용. 클립 안에서 허용하는 가장 긴 쉼."
+      }
+    }
+  },
+  "LCAudioJoin": {
+    "description": "최대 6개 클립을 간격 또는 크로스페이드로 이어 붙입니다. 각 클립의 위치를 출력합니다(JSON).",
+    "inputs": {
+      "audio_1": {
+        "tooltip": "첫 번째 클립. 결과의 샘플레이트와 채널을 정합니다."
+      },
+      "gap_s": {
+        "tooltip": "클립 사이 무음(초). 음수 = 그 길이만큼 클립을 겹쳐 부드럽게 크로스페이드."
+      },
+      "audio_2": {
+        "tooltip": "클립 2. 건너뛰려면 비워 두세요."
+      },
+      "audio_3": {
+        "tooltip": "클립 3. 건너뛰려면 비워 두세요."
+      },
+      "audio_4": {
+        "tooltip": "클립 4. 건너뛰려면 비워 두세요."
+      },
+      "audio_5": {
+        "tooltip": "클립 5. 건너뛰려면 비워 두세요."
+      },
+      "audio_6": {
+        "tooltip": "클립 6. 건너뛰려면 비워 두세요."
+      }
+    }
+  },
+  "LCAudioSpeed": {
+    "description": "음높이는 그대로 두고 오디오를 빠르게 또는 느리게 합니다(0.5x에서 2x).",
+    "inputs": {
+      "speed": {
+        "tooltip": "1 = 변화 없음. 1.25 = 25% 빠르게(더 짧게), 0.8 = 느리게(더 길게). 음높이는 그대로입니다."
+      },
+      "quality": {
+        "tooltip": "speech: 목소리가 더 매끄럽게. music: 드럼 타격이 더 선명하게."
+      }
+    }
+  },
+  "LCVoiceClean": {
+    "description": "음성 녹음용 노이즈 감소, 디에서, 소프트 게이트. 단계마다 강도를 따로 정합니다.",
+    "inputs": {
+      "noise_reduction": {
+        "tooltip": "일정한 소음(히스, 험, 팬, 비)을 제거합니다. 0 = 끄기, 0.5 = 최대 -12 dB, 1 = 최대 -25 dB. 너무 높으면 물속 같은 소리가 납니다."
+      },
+      "deess": {
+        "tooltip": "거친 S와 SH 소리를 줄입니다. 0 = 끄기. 0.3은 약하게, 1은 강하게."
+      },
+      "gate_threshold_db": {
+        "tooltip": "게이트: 단어 사이에서 이 값(dBFS)보다 작은 소리는 줄입니다."
+      },
+      "gate_floor_db": {
+        "tooltip": "게이트가 빈틈을 얼마나 줄일지. 0 = 게이트 끄기. -30이면 자연스러운 룸톤이 남습니다."
+      }
+    }
+  },
+  "LCAudioSpace": {
+    "description": "드라이한 목소리에 룸 리버브와 기기 소리(전화, 라디오, 무전기, 확성기)를 더합니다.",
+    "inputs": {
+      "preset": {
+        "tooltip": "장소 또는 기기. Custom은 아래 슬라이더를 씁니다."
+      },
+      "keep_length": {
+        "tooltip": "켜기: 입력과 같은 길이(영상 싱크 유지). 끄기: 끝에서 잔향이 울려 퍼지게 둡니다."
+      },
+      "decay_s": {
+        "tooltip": "Custom 전용. 잔향이 울리는 시간(방 크기)."
+      },
+      "wet": {
+        "tooltip": "Custom 전용. 드라이 소리 대비 잔향의 양."
+      },
+      "predelay_ms": {
+        "tooltip": "Custom 전용. 잔향이 시작되기 전 간격. 클수록 더 큰 방처럼 느껴집니다."
+      },
+      "brightness": {
+        "tooltip": "Custom 전용. 잔향에 거는 로우패스(Hz). 낮음 = 부드러운 방, 높음 = 타일과 유리."
+      }
+    }
+  },
+  "LCAudioBeats": {
+    "description": "노래의 템포, 비트, 온셋을 초와 영상 프레임 번호로 내고, 라우드니스 엔벨로프도 냅니다.",
+    "inputs": {
+      "fps": {
+        "tooltip": "영상의 프레임레이트. beat_frames와 envelope에 쓰입니다."
+      },
+      "sensitivity": {
+        "tooltip": "온셋 전용. 높이면 약한 타격도 찾고, 낮추면 강한 것만 남깁니다."
+      }
+    }
+  },
+  "LCAudioToMidi": {
+    "description": "단일 멜로디 라인을 MIDI 노트로 바꿔 .mid 파일로 저장합니다. 한 번에 악기 하나나 목소리 하나만.",
+    "inputs": {
+      "fmin": {
+        "tooltip": "찾을 최저음. 음이름(C2, A3) 또는 Hz. C2 = 65 Hz, 낮은 남자 목소리와 베이스."
+      },
+      "fmax": {
+        "tooltip": "찾을 최고음. C6 = 1047 Hz, 목소리와 대부분의 리드를 커버합니다."
+      },
+      "min_note_ms": {
+        "tooltip": "이보다 짧은 소리는 버립니다. 작은 노트가 많이 나오면 올리세요."
+      },
+      "tempo": {
+        "tooltip": ".mid 파일에 기록할 템포. 어느 쪽이든 노트는 실제 타이밍을 유지합니다. 노래에 맞추면 DAW에서 그리드가 맞습니다."
+      },
+      "filename_prefix": {
+        "tooltip": "output 폴더 안의 폴더/이름."
+      }
+    }
+  },
+  "LCLoadVoice": {
+    "display_name": "LC Load Voice 🎙️",
+    "description": "목소리 클립을 불러와 대본용 이름을 붙입니다(입력하지 않으면 파일 이름). 여러 개를 이어 붙이면 출연진 전체를 선 하나로 LC Dialogue에 보낼 수 있습니다.",
+    "inputs": {
+      "voice_name": {
+        "tooltip": "대본에 쓰는 화자 이름: [Haley]가 이 목소리를 씁니다. 파일을 고르면 파일 이름이 들어갑니다. 덮어 써서 이름을 바꾸세요. 비우면 파일 이름."
+      },
+      "voices": {
+        "tooltip": "지금까지의 출연진(다른 LC Load Voice에서). 이 목소리를 추가합니다(같은 이름은 교체)."
+      },
+      "audio": {
+        "tooltip": "목소리 클립: models/voices의 미리 만든 목소리와 input 폴더의 파일. 업로드로 어디에 있는 파일이든 input 폴더로 가져옵니다. 한 사람이 말하는 10~20초가 가장 잘 복제됩니다."
+      },
+      "max_seconds": {
+        "tooltip": "이보다 긴 클립은 이 길이로 자릅니다. 약 30초를 넘으면 음성 엔진에 문제가 생깁니다."
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "출연진: LC Dialogue의 voices(또는 다음 LC Load Voice)에 연결하세요."
+      },
+      "1": {
+        "tooltip": "이 목소리의 클립."
+      },
+      "2": {
+        "tooltip": "이 목소리의 이름: audio와 함께 LC Save Audio에 연결하면 models/voices에 저장됩니다."
       }
     }
   }

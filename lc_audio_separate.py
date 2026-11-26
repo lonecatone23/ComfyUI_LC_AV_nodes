@@ -59,20 +59,9 @@ def _get_demucs():
 
 
 def _resample(wave, sr, target):
-    if sr == target:
-        return wave
-    try:
-        import torch
-        import torchaudio
-        t = torch.from_numpy(wave)
-        out = torchaudio.functional.resample(t, sr, target)
-        return out.numpy()
-    except Exception:
-        n = wave.shape[-1]
-        new_n = int(round(n * target / sr))
-        x = np.linspace(0, n - 1, new_n)
-        src = np.arange(n)
-        return np.vstack([np.interp(x, src, wave[c]) for c in range(wave.shape[0])]).astype(np.float32)
+    from .lc_av_media import resample
+
+    return resample(wave, sr, target)
 
 
 def _separate_chunk(model, chunk_2ch):

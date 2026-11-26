@@ -59,6 +59,7 @@ Optional example graph: `workflows/LC_AV Node Examples.json`
 | LC Audio Separate 🎼 | `LCAudioSeparate` | Demucs stems: Bass, Drums, Other, Vocals. |
 | LC Audio EQ 3-Band 🎛️ | `LCAudioEqualizer3Band` | Low shelf, mid peak, high shelf. |
 | LC Audio Volume 🔊 | `LCAudioVolume` | Gain 0–4, soft clip. |
+| LC Foley 🔊 | `LCFoley` | Sound effects in sync with a video (frames + fps), or from a prompt alone. MMAudio, 44.1 kHz. Model files (about 5.6 GB) download to `models/mmaudio` on first use; the same files kijai's ComfyUI-MMAudio uses. Nothing to pip install. About 6 GB VRAM; under about 7.5 GB free it loads one model at a time (about 3 GB, same result). |
 
 ---
 
@@ -221,3 +222,12 @@ Minute-long MiniMax H3 videos made in short pieces, one shot at a time, on the s
 ## License
 
 MIT. See `LICENSE`.
+
+Third-party code inside this pack keeps its own license:
+
+- **`vendor/dbs_split`:** Dynamic Band Splitting (Apache-2.0). See `vendor/dbs_split/UPSTREAM.md`.
+- **`vendor/snac`:** SNAC audio decoder (MIT). See `vendor/snac/UPSTREAM.md`.
+- **`vendor/mmaudio`:** MMAudio inference code (MIT, Sony Research), with BigVGAN v2 (MIT, NVIDIA), Synchformer (MIT) and the CLIP parts of OpenCLIP (MIT), taken from kijai's ComfyUI-MMAudio (MIT). See `vendor/mmaudio/UPSTREAM.md`.
+- **`lc_dsp.py`:** beat, onset, pitch and time-stretch code ported from librosa 0.11 (ISC). Credits are in the file header.
+
+Models download on first use and keep their own licenses: Maya1 (Apache-2.0), SNAC 24 kHz (MIT), Whisper (MIT). LC Foley's MMAudio weights are **CC BY-NC 4.0 (non-commercial)**; its CLIP (Apple DFN5B) has Apple's own license and the BigVGAN v2 vocoder is MIT. They are never bundled with this pack.

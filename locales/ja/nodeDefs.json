@@ -138,6 +138,9 @@
       },
       "relay": {
         "tooltip": "LC Relay VSR Upscale の relay 出力：アップスケールした動画を数フレームずつ保存するので、RAM に載りません。来ていれば必ず使います。Relay をバイパスすると images を保存します。relay の動画では pingpong と loop_count は使われません。"
+      },
+      "video": {
+        "tooltip": "Comfy の VIDEO（Load Video、Create Video...）。images、audio、frame_rate（0）が空のとき、そのフレーム、音声、fps を使います。"
       }
     }
   },
@@ -720,6 +723,503 @@
       },
       "14": {
         "tooltip": "Identity Edit パス用のプロンプト：プロンプト全体に、キャストシートの顔と、書かれたとおりの服を加えたもの。"
+      }
+    }
+  },
+  "LCAudioSplit": {
+    "description": "サウンドトラックをセリフ、効果音、音楽に分離します。3つを足すと入力に戻るので、LC Audio Mix でそれぞれの音量で組み直したり、1つを新しいもの（TTS のセリフ、新しい Foley）に差し替えたりできます。英語の音声で学習しているため、歌は音楽側に入りがちです。",
+    "inputs": {
+      "audio": {
+        "tooltip": "サウンドトラック：H3 クリップの音声、映画のシーンなど。"
+      },
+      "model": {
+        "tooltip": "TIGER の方がきれいに分離します。BSRNN は CPU で速いです。どちらも小さく（5-20 MB）、初回使用時にダウンロードされます。"
+      },
+      "keep_stereo": {
+        "tooltip": "オフ：モノラルのミックスを分離（モデルの学習と同じ方式で最速）。オン：チャンネルごとに分離してステレオを保持（時間は2倍）。"
+      }
+    }
+  },
+  "LCAudioMix": {
+    "description": "セリフ、効果音、音楽と追加の2トラックをまとめます。それぞれに音量と開始時間があり、セリフ中に音楽を下げるダッキング（任意）と、クリップしないためのリミッター付きです。LC Audio Split と組み合わせて使います。",
+    "inputs": {
+      "speech_db": {
+        "tooltip": "speech の音量（dB）。0 = そのまま、-6 = 半分の大きさ、-60 = 無音。"
+      },
+      "speech_start": {
+        "tooltip": "ミックス内で speech が始まる秒数。"
+      },
+      "sfx_db": {
+        "tooltip": "sfx の音量（dB）。0 = そのまま、-6 = 半分の大きさ、-60 = 無音。"
+      },
+      "sfx_start": {
+        "tooltip": "ミックス内で sfx が始まる秒数。"
+      },
+      "music_db": {
+        "tooltip": "music の音量（dB）。0 = そのまま、-6 = 半分の大きさ、-60 = 無音。"
+      },
+      "music_start": {
+        "tooltip": "ミックス内で music が始まる秒数。"
+      },
+      "track_4_db": {
+        "tooltip": "track_4 の音量（dB）。0 = そのまま、-6 = 半分の大きさ、-60 = 無音。"
+      },
+      "track_4_start": {
+        "tooltip": "ミックス内で track_4 が始まる秒数。"
+      },
+      "track_5_db": {
+        "tooltip": "track_5 の音量（dB）。0 = そのまま、-6 = 半分の大きさ、-60 = 無音。"
+      },
+      "track_5_start": {
+        "tooltip": "ミックス内で track_5 が始まる秒数。"
+      },
+      "duck_music": {
+        "tooltip": "誰かが話している間、音楽を下げます（dB）。0 = オフ。-6 から -12 で、BGM の上でもセリフがはっきり聞こえます。speech トラックが必要です。"
+      },
+      "length": {
+        "tooltip": "ミックスの長さ。'seconds' は下の値を使います。"
+      },
+      "seconds": {
+        "tooltip": "length = seconds のときの長さ。"
+      },
+      "match_loudness": {
+        "tooltip": "dB の音量をかける前に、全トラックを同じラウドネス（LUFS）に揃えます。全部 0 dB なら同じ大きさになります。別々のエンジンの声や Foley の音量がバラバラなときに使います。"
+      },
+      "target_lufs": {
+        "tooltip": "完成したミックスのラウドネス。0 = オフ。-14 は YouTube や配信、-16 は Web やポッドキャスト、-23 は放送向け。"
+      },
+      "peak_db": {
+        "tooltip": "ミックスのピークの上限。ターゲットなし：合計が超えそうならミックス全体を下げます。ターゲットあり：リミッターが大きい瞬間だけを抑え、ターゲットを保ちます。"
+      },
+      "speech": {
+        "tooltip": "speech（長さ、サンプルレート、チャンネル数は自由）"
+      },
+      "sfx": {
+        "tooltip": "sfx（長さ、サンプルレート、チャンネル数は自由）"
+      },
+      "music": {
+        "tooltip": "music（長さ、サンプルレート、チャンネル数は自由）"
+      },
+      "track_4": {
+        "tooltip": "track_4（長さ、サンプルレート、チャンネル数は自由）"
+      },
+      "track_5": {
+        "tooltip": "track_5（長さ、サンプルレート、チャンネル数は自由）"
+      }
+    }
+  },
+  "LCIndexTTSEngine": {
+    "description": "LC Dialogue 用の IndexTTS-2 音声：短いクリップから話者ごとに声をクローンし、8つの感情（happy, angry, sad, afraid, disgusted, melancholic, surprised, calm）をセリフごとにミックスします。内蔵：モデル（補助モデル込みで約 8 GB）は初回使用時に models/IndexTTS-2 にダウンロードされます。",
+    "inputs": {
+      "model": {
+        "tooltip": "IndexTTS-2 は私たちがベンチしたモデルです。感情を乗せてもクローンした声が同じ人のままです。"
+      },
+      "emotion_alpha": {
+        "tooltip": "感情ミックスがどれだけ出るか。強いミックスで言葉が不明瞭になり始めたら下げてください。"
+      },
+      "temperature": {
+        "tooltip": "0.8 がモデル本来の設定です。高い = 読み方が多彩になる分、ミスも増えます。"
+      },
+      "low_vram": {
+        "tooltip": "ステップの合間にモデルの一部を GPU から退避します。"
+      }
+    }
+  },
+  "LCDialogue": {
+    "description": "台本を読み上げます：話者ごとの声（models/voices/<name>.wav）、セリフごとの感情ミックス、セリフ途中での感情の切り替え。transcript = 誰がいつ何を言ったか、timings = 同じ内容の JSON。",
+    "inputs": {
+      "engine": {
+        "tooltip": "音声エンジン（LC IndexTTS Engine）。"
+      },
+      "script": {
+        "tooltip": "[話者|感情:重み,...] セリフ。[Haley|bitter] は保存した感情 'Haley bitter'(LC Emotion Mix)があればそれを、なければ 'bitter' を使います。行の中の感情タグはそこから感情を切り替えます。[pause:600ms] で間を入れます。# で始まる行はスキップされます。"
+      },
+      "default_voice": {
+        "tooltip": "[Speaker] のないセリフと、models/voices にクリップがない話者に使う声。"
+      },
+      "gap": {
+        "tooltip": "セリフ間の無音（秒）。"
+      },
+      "seed": {
+        "tooltip": "各パートは seed + 番号を使うので、1行だけ作り直せます。"
+      },
+      "even_lines": {
+        "tooltip": "つなぐ前に全セリフを同じラウドネスに揃えるので、叫ぶセリフが悲しいセリフの2倍の大きさになりません。最終的な音量は LC Audio Leveler で仕上げます。"
+      },
+      "voice_1": {
+        "tooltip": "クローンする声のクリップ（1人が話している 10 から 20 s）。name_1 に入力した話者のセリフで使われます。"
+      },
+      "name_1": {
+        "tooltip": "voice_1 の話者名。台本での表記と同じです：[Haley]。空 = Voice1。models/voices の同名ファイルより優先されます。"
+      },
+      "voice_2": {
+        "tooltip": "クローンする声のクリップ（1人が話している 10 から 20 s）。name_2 に入力した話者のセリフで使われます。"
+      },
+      "name_2": {
+        "tooltip": "voice_2 の話者名。台本での表記と同じです：[Sam]。空 = Voice2。models/voices の同名ファイルより優先されます。"
+      },
+      "voice_3": {
+        "tooltip": "クローンする声のクリップ（1人が話している 10 から 20 s）。name_3 に入力した話者のセリフで使われます。"
+      },
+      "name_3": {
+        "tooltip": "voice_3 の話者名。台本での表記と同じです：[Name]。空 = Voice3。models/voices の同名ファイルより優先されます。"
+      },
+      "voice_4": {
+        "tooltip": "クローンする声のクリップ（1人が話している 10 から 20 s）。name_4 に入力した話者のセリフで使われます。"
+      },
+      "name_4": {
+        "tooltip": "voice_4 の話者名。台本での表記と同じです：[Name]。空 = Voice4。models/voices の同名ファイルより優先されます。"
+      },
+      "voices": {
+        "tooltip": "LC Load Voice のキャスト：全員の声を 1 本の線で、台本の名前付きで。上のスロットや models/voices より優先します。"
+      }
+    }
+  },
+  "LCAudioLeveler": {
+    "description": "声と完成ミックス用のコンプレッサー + ラウドネスターゲット（LUFS）+ ピークリミッター。",
+    "inputs": {
+      "preset": {
+        "tooltip": "コンプレッサーの設定。Custom は下のスライダーを使います。"
+      },
+      "target_lufs": {
+        "tooltip": "-16 は動画や SNS 投稿、-14 は音楽配信、-23 は放送向け。"
+      },
+      "peak_db": {
+        "tooltip": "リミッターの上限。"
+      },
+      "threshold_db": {
+        "tooltip": "Custom のみ。これより大きい音が圧縮されます。"
+      },
+      "ratio": {
+        "tooltip": "Custom のみ。声は 2-4、10 以上はリミッターのように働きます。"
+      },
+      "attack_ms": {
+        "tooltip": "Custom のみ。短いほど言葉の頭を捉えます。"
+      },
+      "release_ms": {
+        "tooltip": "Custom のみ。長いほど滑らかに聞こえます。"
+      }
+    }
+  },
+  "LCTranscribe": {
+    "description": "何がいつ言われたか：タイムスタンプ付きの書き起こし（行、字幕、または H3 のタイム指定プロンプト文）と、各単語の時間。",
+    "inputs": {
+      "model": {
+        "tooltip": "初回使用時に models/stt にダウンロードされます。whisper-small（970 MB）は速く、large-v3-turbo（1.6 GB）はより正確です。models/stt にある他の Whisper フォルダーもここに表示されます。"
+      },
+      "language": {
+        "tooltip": "2文字の言語コード。空なら自動検出。"
+      },
+      "format": {
+        "tooltip": "lines：0:01.20 - 0:03.40  text。srt：字幕。H3 prompt：タイム指定プロンプトに貼り付ける 'At 1.2 seconds they say, \"...\"' 形式の文。"
+      },
+      "device": {
+        "tooltip": "auto = GPU があれば GPU を使います。"
+      }
+    }
+  },
+  "LCVoiceDesign": {
+    "description": "説明文から声をデザインし（Maya1）、LC Dialogue の話者として保存します。",
+    "inputs": {
+      "description": {
+        "tooltip": "年齢、性別、なまり、声の高さ、声質、話す速さ。感情は書かないでください。感情は後からセリフごとに付けます。"
+      },
+      "sample_text": {
+        "tooltip": "声が読み上げる文。10 から 20 秒の落ち着いた普通の話し方が一番クローンしやすいです。"
+      },
+      "seed": {
+        "tooltip": "同じ説明でも seed ごとに別の人になります。"
+      },
+      "check": {
+        "tooltip": "各テイクを聞き取ります（Whisper、models/stt）。Maya が説明文を読み上げたり意味のない声を出したりしたら、次の seed を試します（最大 4 テイク）。info 行に合格した seed が表示されます。"
+      },
+      "voice_name": {
+        "tooltip": "LC Dialogue で使う話者名です。voice_name と audio を LC Save Audio につなぐと models/voices/<名前>.wav として保存し、LC Load Voice につなぐとこの実行だけで使います。"
+      }
+    },
+    "outputs": {
+      "2": {
+        "tooltip": "名前：audio と一緒に LC Save Audio（保存）か LC Load Voice（この実行）につなぎます。"
+      }
+    }
+  },
+  "LCEmotionMix": {
+    "description": "感情を作り(valence / arousal パッドと名前付きの感情)、テスト用の声で再生します。save emotion で名前を付けて素材として保存: 'bitter' は LC Dialogue で全員に、'Haley bitter' は Haley だけに効きます。保存済みとプリセットの感情は紫のボタンで表示され、クリックで読み込めます。",
+    "inputs": {
+      "mix": {
+        "tooltip": "重み付きの感情名：happy, angry, sad, afraid, disgusted, melancholic, surprised, calm。パッドの下の名前をクリックすると追加されます。重みは割合です：IndexTTS-2 はミックス全体を 0.8 以下に抑えます。"
+      },
+      "valence": {
+        "tooltip": "不快（-1）から快（+1）。パッドをドラッグします。"
+      },
+      "arousal": {
+        "tooltip": "落ち着き（-1）から活発（+1）。パッドをドラッグします。"
+      },
+      "engine": {
+        "tooltip": "LC IndexTTS Engine。"
+      },
+      "line": {
+        "tooltip": "テスト用の声が話すセリフ。感情を聞くためのものです。"
+      },
+      "seed": {
+        "tooltip": "シードごとに同じ感情の別テイクになります。"
+      },
+      "voice_name": {
+        "tooltip": "save emotion で保存するときの名前。'bitter' は全員に効きます([Alice|bitter]、[Bob|bitter])。'Haley bitter' は Haley 専用で、Haley には優先されます。"
+      },
+      "voices": {
+        "tooltip": "LC Load Voice からのテスト用の声。感情を聞くためだけのものです。保存される感情にこの声は一切含まれません。複数つないだ場合は最後の声が話します。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "同じセリフをまず平坦に、少し間を置いて感情付きで: ミックスの効果を聞くためのものです。"
+      },
+      "1": {
+        "tooltip": "ミックスをスクリプトのタグにしたもの: [Haley|sad:0.5,angry:0.3]。"
+      }
+    }
+  },
+  "LCVoiceMatch": {
+    "description": "2つの声がどれだけ似ているか（1.0 = 同じ声）を話者エンコーダーで測ります。クローンを元のクリップと比べてチェックします。",
+    "inputs": {
+      "engine": {
+        "tooltip": "LC IndexTTS Engine：その話者モデル（CAM++）が聞き比べます。"
+      },
+      "reference": {
+        "tooltip": "目標とする声（あなたのクリップ）。"
+      },
+      "audio": {
+        "tooltip": "出てきた音声（クローン、ダイアログのセリフ...）。"
+      }
+    }
+  },
+  "LCSaveAudio": {
+    "description": "音声を FLAC、WAV、MP3、Opus で workflow 入りで保存し、書き起こしも .txt / .srt で保存します。",
+    "inputs": {
+      "filename_prefix": {
+        "tooltip": "output 内の フォルダー/名前。%date:yyyy-MM-dd% も使えます。"
+      },
+      "format": {
+        "tooltip": "flac：ロスレスで小さい。wav：編集ソフト向けの 24-bit。mp3 / opus：共有向け。"
+      },
+      "quality": {
+        "tooltip": "mp3 と opus のみ。声なら 192k で十分です。"
+      },
+      "save_output": {
+        "tooltip": "オフ：プレビューのみで、何も残しません。"
+      },
+      "embed_workflow": {
+        "tooltip": "ファイルに workflow を埋め込みます（flac / mp3 / opus）：ComfyUI にドラッグすると読み込めます。"
+      },
+      "transcript_file": {
+        "tooltip": "書き起こしがつながっているとき、音声の隣に保存します。srt = 動画編集ソフト用の字幕。"
+      },
+      "transcript": {
+        "tooltip": "LC Dialogue または LC Transcribe の書き起こし。"
+      },
+      "voice_name": {
+        "tooltip": "LC Voice Shape から：音声を models/voices/<名前>.wav としても保存し、LC Dialogue の話者にします（同じ名前は置き換えます）。空欄 = 声として保存しません。"
+      }
+    }
+  },
+  "LCVoiceShape": {
+    "description": "声の高さ、声の体格、抑揚、速さ、温かみ、柔らかさ、空気感を調整します：男性の声を低く、女性の声を柔らかく明るく、声を若くも年配にもできます。",
+    "inputs": {
+      "audio": {
+        "tooltip": "音声。先に音楽と効果音を分離してください（LC Audio Split）。"
+      },
+      "preset": {
+        "tooltip": "出発点。選ぶとそのプリセットが使うスライダーが設定されます。Custom はスライダーを使います。"
+      },
+      "pitch": {
+        "tooltip": "半音単位。-3 から -6 で男性の声がバリトン / バスに近づき、+2 から +4 で声が高くなります。6 を超えると加工っぽく聞こえ始めます。"
+      },
+      "voice_size": {
+        "tooltip": "人の体格：1 未満 = 胸と喉が大きい（低く、太い）、1 より上 = 小さい（軽く、若い）。0.9 から 1.1 が自然です。pitch と組み合わせます：低い pitch + 1 未満。"
+      },
+      "liveliness": {
+        "tooltip": "ピッチの動きの大きさ：0 = 平坦なロボット、1 = 話したまま、1.5 = より表情豊か。"
+      },
+      "speed": {
+        "tooltip": "ピッチを変えずに話す速さを変えます。0.9 = 少しゆっくり。"
+      },
+      "warmth_db": {
+        "tooltip": "200 Hz 付近の低域：+ で太く温かく、- で細く。"
+      },
+      "softness_db": {
+        "tooltip": "耳障りな 3-5 kHz を抑えます：+ でより柔らかく穏やかに。"
+      },
+      "air_db": {
+        "tooltip": "8 kHz 以上の高域：+ で息っぽく明るく、- でこもった音に。"
+      },
+      "tremble": {
+        "tooltip": "高齢者の声の震え。0.3 から 0.5 で老齢、1 はおびえた震え声。"
+      },
+      "breathiness": {
+        "tooltip": "声の息の量。0.6 未満は控えめ、1.0 ではっきり出ます。低い声は高めに。"
+      },
+      "voice_name": {
+        "tooltip": "LC Dialogue で使う話者名です。voice_name を LC Save Audio につなぐと、その声を models/voices/<名前>.wav として保存します（同じ名前は置き換えます）。"
+      }
+    },
+    "outputs": {
+      "2": {
+        "tooltip": "保存するときの名前：LC Save Audio の voice_name につなぎます。"
+      }
+    }
+  },
+  "LCAudioTrim": {
+    "description": "最初と最後の無音をカットするか、長い間をすべて短くします。カット部分はフェードされ、クリックノイズは出ません。",
+    "inputs": {
+      "mode": {
+        "tooltip": "start + end：両端だけカット。every gap：クリップ内の長い間も短くします。"
+      },
+      "threshold_db": {
+        "tooltip": "一番大きい瞬間からどれだけ下を無音とみなすか。きれいな声なら -45、騒がしい部屋なら -30。"
+      },
+      "pad_ms": {
+        "tooltip": "最初の音の前と最後の音の後に残す無音。息や語尾が切れないようにします。"
+      },
+      "max_gap_s": {
+        "tooltip": "every gap のみ。クリップ内で許す最長の間。"
+      }
+    }
+  },
+  "LCAudioJoin": {
+    "description": "最大6つのクリップを、間隔またはクロスフェードでつなぎます。各クリップの位置を出力します（JSON）。",
+    "inputs": {
+      "audio_1": {
+        "tooltip": "最初のクリップ。結果のサンプルレートとチャンネル数を決めます。"
+      },
+      "gap_s": {
+        "tooltip": "クリップ間の無音（秒）。マイナス = その長さだけクリップを重ね、滑らかにクロスフェード。"
+      },
+      "audio_2": {
+        "tooltip": "クリップ 2。空ならスキップ。"
+      },
+      "audio_3": {
+        "tooltip": "クリップ 3。空ならスキップ。"
+      },
+      "audio_4": {
+        "tooltip": "クリップ 4。空ならスキップ。"
+      },
+      "audio_5": {
+        "tooltip": "クリップ 5。空ならスキップ。"
+      },
+      "audio_6": {
+        "tooltip": "クリップ 6。空ならスキップ。"
+      }
+    }
+  },
+  "LCAudioSpeed": {
+    "description": "ピッチを変えずに音声を速く、または遅くします（0.5x から 2x）。",
+    "inputs": {
+      "speed": {
+        "tooltip": "1 = 変更なし。1.25 = 25% 速く（短く）、0.8 = 遅く（長く）。ピッチは変わりません。"
+      },
+      "quality": {
+        "tooltip": "speech：声がより滑らか。music：ドラムのアタックがよりシャープ。"
+      }
+    }
+  },
+  "LCVoiceClean": {
+    "description": "声の録音用のノイズ除去、ディエッサー、ソフトゲート。各段に個別の強さがあります。",
+    "inputs": {
+      "noise_reduction": {
+        "tooltip": "一定のノイズ（ヒス、ハム、ファン、雨）を除去します。0 = オフ、0.5 = 最大 -12 dB、1 = 最大 -25 dB。強すぎると水っぽい音になります。"
+      },
+      "deess": {
+        "tooltip": "耳障りな S や SH の音を抑えます。0 = オフ。0.3 は控えめ、1 は強め。"
+      },
+      "gate_threshold_db": {
+        "tooltip": "ゲート：言葉の合間でこれ（dBFS）より小さい音を下げます。"
+      },
+      "gate_floor_db": {
+        "tooltip": "ゲートが合間をどれだけ下げるか。0 = ゲートオフ。-30 で自然なルームトーンが残ります。"
+      }
+    }
+  },
+  "LCAudioSpace": {
+    "description": "ドライな声にルームリバーブと機器の音（電話、ラジオ、トランシーバー、メガホン）を加えます。",
+    "inputs": {
+      "preset": {
+        "tooltip": "場所または機器。Custom は下のスライダーを使います。"
+      },
+      "keep_length": {
+        "tooltip": "オン：入力と同じ長さ（動画との同期を保持）。オフ：最後に残響が鳴り終わるまで伸ばします。"
+      },
+      "decay_s": {
+        "tooltip": "Custom のみ。残響が続く長さ（部屋の大きさ）。"
+      },
+      "wet": {
+        "tooltip": "Custom のみ。ドライ音に対する残響の量。"
+      },
+      "predelay_ms": {
+        "tooltip": "Custom のみ。残響が始まるまでの間。大きいほど広い部屋に感じます。"
+      },
+      "brightness": {
+        "tooltip": "Custom のみ。残響にかけるローパス（Hz）。低い = 柔らかい部屋、高い = タイルやガラス。"
+      }
+    }
+  },
+  "LCAudioBeats": {
+    "description": "曲のテンポ、ビート、オンセットを秒と動画のフレーム番号で出力し、ラウドネスのエンベロープも出します。",
+    "inputs": {
+      "fps": {
+        "tooltip": "動画のフレームレート。beat_frames と envelope に使います。"
+      },
+      "sensitivity": {
+        "tooltip": "オンセットのみ。高いと弱い打音も拾い、低いと強いものだけ残します。"
+      }
+    }
+  },
+  "LCAudioToMidi": {
+    "description": "単一のメロディーラインを MIDI ノートにして .mid ファイルで保存します。一度に1つの楽器か声のみ。",
+    "inputs": {
+      "fmin": {
+        "tooltip": "検出する最低音。音名（C2、A3）か Hz で指定。C2 = 65 Hz、低い男性の声やベース。"
+      },
+      "fmax": {
+        "tooltip": "検出する最高音。C6 = 1047 Hz で、声とほとんどのリードをカバーします。"
+      },
+      "min_note_ms": {
+        "tooltip": "これより短い音は捨てます。細かいノートが多すぎるなら上げてください。"
+      },
+      "tempo": {
+        "tooltip": ".mid ファイルに書き込むテンポ。どちらにしてもノートは実際のタイミングのままです。曲に合わせると DAW のグリッドが揃います。"
+      },
+      "filename_prefix": {
+        "tooltip": "output フォルダー内の フォルダー/名前。"
+      }
+    }
+  },
+  "LCLoadVoice": {
+    "display_name": "LC Load Voice 🎙️",
+    "description": "声のクリップを読み込み、台本用の名前を付けます（入力しなければファイル名）。いくつかつなげると、キャスト全員を 1 本の線で LC Dialogue に送れます。",
+    "inputs": {
+      "voice_name": {
+        "tooltip": "台本に書く話者名：[Haley] がこの声を使います。ファイルを選ぶとファイル名が入ります。上書きで名前を変えられます。空欄 = ファイル名。"
+      },
+      "voices": {
+        "tooltip": "これまでのキャスト（別の LC Load Voice から）。この声を加えます（同じ名前は置き換え）。"
+      },
+      "audio": {
+        "tooltip": "声のクリップ：models/voices の作成済みの声と input フォルダーのファイル。アップロードで、どこにあるファイルでも input フォルダーに取り込めます。1 人が話す 10 から 20 秒がいちばんよく複製できます。"
+      },
+      "max_seconds": {
+        "tooltip": "これより長いクリップはこの長さに切ります。約 30 秒を超えると音声エンジンがうまく動きません。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "キャスト：LC Dialogue の voices（または次の LC Load Voice）につなぎます。"
+      },
+      "1": {
+        "tooltip": "この声のクリップ。"
+      },
+      "2": {
+        "tooltip": "この声の名前：audio と一緒に LC Save Audio につなぐと models/voices に保存されます。"
       }
     }
   }

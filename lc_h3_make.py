@@ -40,7 +40,7 @@ def with_shot_loras(model, loras: list):
     for x in loras:
         path = folder_paths.get_full_path("loras", x["lora"])
         if not path:
-            print(f"[LC H3] Make: ⚠️ LoRA not found, made without it: {x['lora']}")
+            print(f"[LC H3] Make: LoRA not found, made without it: {x['lora']}")
             continue
         sd = _LORA_CACHE.get(path)
         if sd is None:

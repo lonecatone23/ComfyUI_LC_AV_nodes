@@ -1,0 +1,6 @@
+{
+ "name": "terrified",
+ "mix": "afraid:0.8, surprised:0.2",
+ "valence": 0.0,
+ "arousal": 0.0
+}

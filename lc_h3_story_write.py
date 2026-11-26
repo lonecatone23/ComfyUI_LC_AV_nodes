@@ -208,7 +208,7 @@ def free_llm(llm) -> None:
 
 
 def _ask(path: str, pitch: str, max_s: float, nsfw: bool = False) -> str:
-    print(f"[LC H3] Story: ✨ writing with {os.path.basename(path)}")
+    print(f"[LC H3] Story: writing with {os.path.basename(path)}")
     llm = load_llm(path)
     try:
         want = _wanted_shots(pitch)
@@ -224,7 +224,7 @@ def _ask(path: str, pitch: str, max_s: float, nsfw: bool = False) -> str:
             try:
                 got = len(_json(text).get("shots") or [])
             except Exception as exc:  # broken JSON (often cut off): tell it what went wrong and ask for the whole thing
-                print(f"[LC H3] Story: ✨ answer was not readable JSON ({exc}), asking again")
+                print(f"[LC H3] Story: answer was not readable JSON ({exc}), asking again")
                 msgs += [{"role": "assistant", "content": text[:4000]},
                          {"role": "user", "content": f"That was not valid JSON ({exc}). Write the COMPLETE JSON again, every "
                                                      f"card, nothing else. Keep it shorter if it got cut off. /no_think"}]
@@ -233,7 +233,7 @@ def _ask(path: str, pitch: str, max_s: float, nsfw: bool = False) -> str:
                 best, best_n = text, got
             if got >= need:
                 break
-            print(f"[LC H3] Story: ✨ wrote {got} shots, asking for {need}")
+            print(f"[LC H3] Story: wrote {got} shots, asking for {need}")
             msgs += [{"role": "assistant", "content": text},
                      {"role": "user", "content": f"That is only {got} shots. Write the full JSON again with all {want or 'the'} shots "
                                                  f"that tell the whole pitch, start to end. /no_think"}]

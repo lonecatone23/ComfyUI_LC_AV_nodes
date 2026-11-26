@@ -106,43 +106,12 @@ def _resolve(name: str) -> str:
 
 
 def _load_file(path: str):
-    errors = []
-    try:
-        import torchaudio
+    from .lc_av_media import read_audio
 
-        wave, sr = torchaudio.load(path)
-        arr = wave.detach().cpu().numpy().astype(np.float32)
-        return arr, int(sr)
-    except Exception as e:
-        errors.append(f"torchaudio: {e}")
     try:
-        import soundfile as sf
-
-        arr, sr = sf.read(path, always_2d=True)
-        return arr.T.astype(np.float32), int(sr)
-    except Exception as e:
-        errors.append(f"soundfile: {e}")
-    try:
-        import wave as wavmod
-
-        with wavmod.open(path, "rb") as w:
-            sr = w.getframerate()
-            ch = w.getnchannels()
-            sw = w.getsampwidth()
-            raw = w.readframes(w.getnframes())
-        if sw == 2:
-            data = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
-        elif sw == 1:
-            data = (np.frombuffer(raw, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
-        else:
-            raise ValueError(f"wav width {sw}")
-        data = data.reshape(-1, ch).T if ch > 1 else data[None, :]
-        return data, int(sr)
-    except Exception as e:
-        errors.append(f"wav: {e}")
-    raise RuntimeError(
-        f"LC Load Audio: could not decode {path}. ({'; '.join(errors)})"
-    )
+        return read_audio(path)
+    except RuntimeError as e:
+        raise RuntimeError(f"LC Load Audio: {e}") from e
 
 
 class LCLoadAudio:

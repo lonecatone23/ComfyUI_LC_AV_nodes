@@ -1,0 +1,6 @@
+dbs/ = Dynamic Band Splitting (https://github.com/JusperLee/Dynamic-Band-Splitting, commit ff526463a58ee0278e7bd05c4b8bce112b743e34),
+Apache License 2.0 (LICENSE), as vendored by ComfyUI-DBS (https://github.com/hiroki-abe-58/ComfyUI-DBS, MIT, LICENSE.ComfyUI-DBS;
+see UPSTREAM.md for its own small files). Third-party notices of the upstream code: THIRD_PARTY.md.
+Copied unchanged on 2026-11-23. LC_AV's lc_audio_split.py adapts ComfyUI-DBS's runtime.py (loader + overlap-add call), MIT.
+Weights (downloaded on first use into models/dbs, SHA-256 checked): JusperLee/DBS-TIGER-DnR rev 22da7d4,
+JusperLee/DBS-BSRNN-DnR rev 5af343f, Apache-2.0, trained on DnR v2 (CC BY 4.0).
