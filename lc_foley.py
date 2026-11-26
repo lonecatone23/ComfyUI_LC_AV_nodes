@@ -346,6 +346,14 @@ def render(prompt, negative_prompt="", images=None, fps=24.0, duration=0.0, step
             mm.soft_empty_cache()
     wave = audio.float().cpu()
     t_run = time.perf_counter() - t1
+    if getattr(mm, "lc_free_after_pass", False):  # LC Dual Model Optimizer's free_after_pass: RAM is tight
+        _cache.clear()
+        del net, fu
+        import gc
+
+        gc.collect()
+        mm.soft_empty_cache()
+        print("[LC Foley] free after pass: MMAudio out of memory (it loads again on the next run)")
     return wave, duration, {"load_s": t_load, "run_s": t_run, "low_vram": low}
 
 

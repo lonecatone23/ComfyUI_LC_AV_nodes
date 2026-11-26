@@ -59,7 +59,7 @@ Optional example graph: `workflows/LC_AV Node Examples.json`
 | LC Audio Separate 🎼 | `LCAudioSeparate` | Demucs stems: Bass, Drums, Other, Vocals. |
 | LC Audio EQ 3-Band 🎛️ | `LCAudioEqualizer3Band` | Low shelf, mid peak, high shelf. |
 | LC Audio Volume 🔊 | `LCAudioVolume` | Gain 0–4, soft clip. |
-| LC Foley 🔊 | `LCFoley` | Sound effects in sync with a video (frames + fps), or from a prompt alone. MMAudio, 44.1 kHz. Model files (about 5.6 GB) download to `models/mmaudio` on first use; the same files kijai's ComfyUI-MMAudio uses. Nothing to pip install. About 6 GB VRAM; under about 7.5 GB free it loads one model at a time (about 3 GB, same result). |
+| LC Foley 🔊 | `LCFoley` | Sound effects in sync with a video (frames + fps), or from a prompt alone. MMAudio, 44.1 kHz. Model files (about 5.6 GB) download to `models/mmaudio` on first use; the same files kijai's ComfyUI-MMAudio uses. Nothing to pip install. About 6 GB VRAM; under about 7.5 GB free it loads one model at a time (about 3 GB, same result). With **free_after_pass** on in LC Dual Model Optimizer (LC123), it lets go of MMAudio after the sound to save RAM. |
 
 ---
 
@@ -101,6 +101,8 @@ VHS-style options: frame_rate, loop_count, filename_prefix, format, pix_fmt, crf
 `prune_outputs` keeps intermediate frame PNGs off disk.
 
 `save_metadata` writes the prompt + workflow tags and a settings comment into the video. **CivitAI** reads the tags: fill `models` + `civitai_air` on the metadata node and the upload links your workflow page and reads as an external generator. CivitAI reads no file hashes from a video, so models and LoRAs only link when `civitai_lookup` is on: it finds each file's CivitAI page by its hash (one call to civitai.com per file, cached in `user/LC/civitai_air_cache.json`). Needs LC123.
+
+**0.6.1:** samplers that get their seed, steps, sampler or scheduler through wires (pipes, switches) made CivitAI drop the whole upload's metadata. The copy of the prompt written for CivitAI now leaves those wired values out and adds a plain summary of the run (prompt, negative, seed, steps, cfg, sampler, size) from Save Video Metadata, so the upload shows the generation data and the workflow link. The workflow tag and the run itself are unchanged.
 
 Frames stream into ffmpeg one at a time with a progress bar, so long clips don't fill your RAM, and Cancel stops it (no half-written file is left).
 
