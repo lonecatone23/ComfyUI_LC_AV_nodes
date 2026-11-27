@@ -30,7 +30,7 @@ MAX_WEIGHT = 1.2  # IndexTTS-2's own ceiling per emotion
 ALIASES = {"fear": "afraid", "scared": "afraid", "fearful": "afraid", "disgust": "disgusted", "surprise": "surprised",
            "anger": "angry", "mad": "angry", "joy": "happy", "sadness": "sad", "excited": "happy", "tired": "melancholic",
            "bitter": "disgusted", "relaxed": "calm"}
-# where each emotion sits on the valence / arousal pad (same spots LC Emotion Mix draws)
+# where each emotion sits on the valence / arousal pad (same spots LC Emotion Editor draws)
 SPOTS = {"happy": (0.65, 0.35), "surprised": (0.3, 0.75), "angry": (-0.45, 0.65), "afraid": (-0.75, 0.3),
          "disgusted": (-0.6, 0.05), "sad": (-0.6, -0.5), "melancholic": (-0.25, -0.8), "calm": (0.45, -0.6)}
 RATE_SPEED = (0.8, 0.9, 1.0, 1.1, 1.2)  # rate 0..4

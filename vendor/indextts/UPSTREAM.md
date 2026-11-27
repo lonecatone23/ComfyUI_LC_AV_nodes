@@ -9,7 +9,7 @@
 
 Any modifications made to the original model in this Derivative Work are not endorsed, warranted, or guaranteed by the original right-holder of the original model, and the original right-holder disclaims all liability related to this Derivative Work.
 
-Used by LC IndexTTS Engine (`lc_tts_engine.py` -> `lc_indextts.py`) so LC Dialogue, LC Emotion Mix and LC Voice Match run
+Used by LC IndexTTS Engine (`lc_tts_engine.py` -> `lc_indextts.py`) so LC Dialogue, LC Emotion Editor and LC Voice Match run
 IndexTTS-2 without TTS-Audio-Suite and without installing anything: only what ComfyUI itself requires (torch, numpy, scipy,
 einops, transformers, sentencepiece, safetensors, pyyaml, tqdm) plus this pack's `lc_dsp.py`.
 

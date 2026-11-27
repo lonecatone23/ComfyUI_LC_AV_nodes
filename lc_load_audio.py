@@ -8,6 +8,7 @@ Duration output is seconds as FLOAT.
 from __future__ import annotations
 
 import os
+import re
 
 import numpy as np
 
@@ -40,6 +41,11 @@ def _list_audio():
     try:
         if "audio" in getattr(folder_paths, "folder_names_and_paths", {}):
             files.extend(folder_paths.get_filename_list("audio") or [])
+    except Exception:
+        pass
+    try:  # what LC Save Audio made (output/audio), with its transcript next to it
+        out = folder_paths.get_output_directory()
+        files.extend(f"audio/{f} [output]" for f in _scan_dir(os.path.join(out, "audio")))
     except Exception:
         pass
     seen = set()
@@ -105,6 +111,59 @@ def _resolve(name: str) -> str:
     raise FileNotFoundError(f"LC Load Audio: not found: {name}")
 
 
+_LINE = re.compile(r"^\s*(\d+):(\d+(?:\.\d+)?)\s*-\s*(\d+):(\d+(?:\.\d+)?)\s+(.*)$")
+_SRT = re.compile(r"(\d+):(\d\d):(\d\d)[,.](\d{3})\s*-->\s*(\d+):(\d\d):(\d\d)[,.](\d{3})")
+
+
+def _clock(t):
+    m, s = divmod(max(0.0, t), 60)
+    return f"{int(m)}:{s:05.2f}"
+
+
+def _srt_to_lines(text):
+    """SRT cues -> the pack's own lines ('0:01.20 - 0:03.40  Alice: hi'), the shape LC Dialogue and LC Transcribe use."""
+    out = []
+    for block in re.split(r"\n\s*\n", text.strip()):
+        rows = [r for r in block.strip().splitlines() if r.strip()]
+        for i, r in enumerate(rows):
+            m = _SRT.search(r)
+            if m:
+                g = [int(x) for x in m.groups()]
+                a = g[0] * 3600 + g[1] * 60 + g[2] + g[3] / 1000
+                b = g[4] * 3600 + g[5] * 60 + g[6] + g[7] / 1000
+                out.append(f"{_clock(a)} - {_clock(b)}  " + " ".join(rows[i + 1:]).strip())
+                break
+    return "\n".join(out)
+
+
+def _transcript(path, start_s, end_s, total):
+    """The transcript LC Save Audio saved next to the clip (.txt first, it is the transcript as made; else the .srt).
+    A cut keeps the lines inside it, timed from the cut's start. Empty when there is no transcript file."""
+    stem = os.path.splitext(path)[0]
+    text = ""
+    for ext in (".txt", ".srt"):
+        if os.path.isfile(stem + ext):
+            with open(stem + ext, encoding="utf-8", errors="replace") as f:
+                text = f.read()
+            if ext == ".srt" or _SRT.search(text):
+                text = _srt_to_lines(text)
+            break
+    text = text.strip()
+    if not text or (start_s <= 0.01 and end_s >= total - 0.01):
+        return text
+    kept = []
+    for ln in text.splitlines():
+        m = _LINE.match(ln)
+        if not m:
+            continue
+        a = int(m.group(1)) * 60 + float(m.group(2))
+        b = int(m.group(3)) * 60 + float(m.group(4))
+        if b <= start_s or a >= end_s:
+            continue
+        kept.append(f"{_clock(a - start_s)} - {_clock(min(b, end_s) - start_s)}  {m.group(5).strip()}")
+    return "\n".join(kept)
+
+
 def _load_file(path: str):
     from .lc_av_media import read_audio
 
@@ -122,7 +181,7 @@ class LCLoadAudio:
                 "audio": (
                     _list_audio(),
                     {
-                        "tooltip": "File in Comfy input/ (also checks output/ and temp/). Use the Load audio button to upload. Combo lists audio and common video containers.",
+                        "tooltip": "File in Comfy input/, plus what LC Save Audio made (output/audio, marked [output]: its transcript comes along). Use the Load audio button to upload. Combo lists audio and common video containers.",
                     },
                 ),
             },
@@ -159,8 +218,11 @@ class LCLoadAudio:
         except Exception:
             return f"{audio}:{start_time}:{end_time}:{duration}"
 
-    RETURN_TYPES = ("AUDIO", "FLOAT")
-    RETURN_NAMES = ("audio", "duration")
+    RETURN_TYPES = ("AUDIO", "FLOAT", "STRING")
+    RETURN_NAMES = ("audio", "duration", "transcript")
+    OUTPUT_TOOLTIPS = ("The audio (the cut, when start / end are set).", "The cut length in seconds.",
+                       "The transcript LC Save Audio saved next to the clip (.txt, else .srt), only the lines inside "
+                       "the cut. Empty when there is none: run LC Transcribe instead.")
     FUNCTION = "load"
     CATEGORY = "LC AV/audio"
     DESCRIPTION = (
@@ -188,7 +250,7 @@ class LCLoadAudio:
         wave = wave[:, start:stop]
         sec = float(wave.shape[-1]) / float(sr) if sr else 0.0
         out = make_audio(wave, sr)
-        return with_preview((out, sec), out, prefix="lc_load")
+        return with_preview((out, sec, _transcript(path, start_s, end_s, total)), out, prefix="lc_load")
 
 
 NODE_CLASS_MAPPINGS = {

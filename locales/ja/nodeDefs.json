@@ -248,13 +248,24 @@
     "description": "Comfy の input/ からオーディオを読み込みます。start_time と end_time でファイルをトリミングします（end_time 0 = ファイル末尾まで）。出力の長さはカットの長さ（秒、FLOAT）です。preview / pause はそのカット部分だけを再生します。最初のプレビュー後に、タイムラインのハンドルをドラッグできます。",
     "inputs": {
       "audio": {
-        "tooltip": "Comfy の input/ にあるファイル（output/ と temp/ も確認します）。Load audio ボタンでアップロードします。Combo にはオーディオと一般的な動画コンテナが一覧表示されます。"
+        "tooltip": "Comfy input/ のファイルと、LC Save Audio が作ったファイル（output/audio、[output] 付き: 書き起こしも一緒に読み込みます）。Load audio ボタンでアップロード。Combo には音声と一般的な動画コンテナが並びます。"
       },
       "start_time": {
         "tooltip": "カットの開始位置(秒)。プレビューと AUDIO 出力は、どちらもここから始まります。ファイルの長さを把握するため、一度プレビューしてから左のタイムラインハンドルをドラッグしてください。"
       },
       "end_time": {
         "tooltip": "カットの終了位置（秒）。0 = ファイルの末尾まで再生。プレビューはここで止まります。出力の長さは end 引く start です。タイムラインの右ハンドルをドラッグします。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "音声（start / end を設定したらその区間）。"
+      },
+      "1": {
+        "tooltip": "区間の長さ（秒）。"
+      },
+      "2": {
+        "tooltip": "LC Save Audio がクリップの隣に保存した書き起こし（.txt、なければ .srt）。区間内の行だけ。無いときは空: LC Transcribe を使ってください。"
       }
     }
   },
@@ -832,7 +843,7 @@
         "tooltip": "音声エンジン（LC IndexTTS Engine）。"
       },
       "script": {
-        "tooltip": "[話者|感情:重み,...] セリフ。[Haley|bitter] は保存した感情 'Haley bitter'(LC Emotion Mix)があればそれを、なければ 'bitter' を使います。行の中の感情タグはそこから感情を切り替えます。[pause:600ms] で間を入れます。# で始まる行はスキップされます。"
+        "tooltip": "[話者|感情:重み,...] セリフ。[Haley|bitter] は保存した感情 'Haley bitter'(LC Emotion Editor)があればそれを、なければ 'bitter' を使います。行の中の感情タグはそこから感情を切り替えます。[pause:600ms] で間を入れます。# で始まる行はスキップされます。"
       },
       "default_voice": {
         "tooltip": "[Speaker] のないセリフと、models/voices にクリップがない話者に使う声。"
@@ -919,13 +930,10 @@
     }
   },
   "LCVoiceDesign": {
-    "description": "説明文から声をデザインし（Maya1）、LC Dialogue の話者として保存します。",
+    "description": "Maya が学習した言葉だけで声をデザインし（Maya1）、感情を動かす 1 テイクで LC Dialogue の話者として保存します。",
     "inputs": {
-      "description": {
-        "tooltip": "年齢、性別、なまり、声の高さ、声質、話す速さ。感情は書かないでください。感情は後からセリフごとに付けます。"
-      },
       "sample_text": {
-        "tooltip": "声が読み上げる文。10 から 20 秒の落ち着いた普通の話し方が一番クローンしやすいです。"
+        "tooltip": "声が 1 テイクで読む文。Maya のタグで感情を動かします（<laugh> <sigh> <angry> <whisper> <gasp> <excited> <cry> <giggle> <chuckle>）。この声からクローンするものはすべてこの幅を受け継ぎます。約 30 秒。"
       },
       "seed": {
         "tooltip": "同じ説明でも seed ごとに別の人になります。"
@@ -935,6 +943,15 @@
       },
       "voice_name": {
         "tooltip": "LC Dialogue で使う話者名です。voice_name と audio を LC Save Audio につなぐと models/voices/<名前>.wav として保存し、LC Load Voice につなぐとこの実行だけで使います。"
+      },
+      "tone": {
+        "tooltip": "その人の元気さ。Energetic がクローンに一番幅を与えます。calm だと平坦な声になります。"
+      },
+      "preset": {
+        "tooltip": "テスト済みの声。下のドロップダウンの代わりに使われます。Custom ならドロップダウンを使います。\nF_American_20yo: high pitch, smooth, energetic, high intensity, fast\nF_British_30yo: normal pitch, warm, happy, medium intensity, conversational\nF_Indian_40yo: normal pitch, smooth, curious, medium intensity, conversational\nF_Australian_50yo: low pitch, raspy, calm, low intensity, slow\nM_American_20yo: normal pitch, smooth, energetic, high intensity, fast\nM_British_30yo: low pitch, warm, happy, medium intensity, conversational\nM_MiddleEastern_40yo: low pitch, gravelly, angry, medium intensity, conversational\nM_American_50yo: low pitch, raspy, calm, low intensity, slow"
+      },
+      "script": {
+        "tooltip": "この声が読む内容。どのスクリプトも1テイクの中でいろいろな感情を通るので、この声のクローンはすべてその幅を受け継ぎます。Custom は下のボックスを読みます: 1〜2文ごとに感情タグを残さないと、声が平坦になります。"
       }
     },
     "outputs": {
@@ -1019,7 +1036,7 @@
         "tooltip": "LC Dialogue または LC Transcribe の書き起こし。"
       },
       "voice_name": {
-        "tooltip": "LC Voice Shape から：音声を models/voices/<名前>.wav としても保存し、LC Dialogue の話者にします（同じ名前は置き換えます）。空欄 = 声として保存しません。"
+        "tooltip": "LC Voice Shaper から：音声を models/voices/<名前>.wav としても保存し、LC Dialogue の話者にします（同じ名前は置き換えます）。空欄 = 声として保存しません。"
       }
     }
   },
@@ -1051,7 +1068,7 @@
         "tooltip": "耳障りな 3-5 kHz を抑えます：+ でより柔らかく穏やかに。"
       },
       "air_db": {
-        "tooltip": "8 kHz 以上の高域：+ で息っぽく明るく、- でこもった音に。"
+        "tooltip": "6 kHz 以上の高域：+ で明るくクリアに、- でこもった音に。"
       },
       "tremble": {
         "tooltip": "高齢者の声の震え。0.3 から 0.5 で老齢、1 はおびえた震え声。"

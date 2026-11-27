@@ -86,7 +86,7 @@ class LCH3Upscale:
                 "upscale_by": (list(SCALES), {"default": "2x", "tooltip": "2x: 960 x 544 becomes 1920 x 1088."}),
                 "steps": ("INT", {"default": 1, "min": 1, "max": 8, "tooltip": "Steps of the light H3 pass after the latent upscaler. 1 is what tested best."}),
                 "denoise": ("FLOAT", {"default": 0.2, "min": 0.05, "max": 0.6, "step": 0.01, "tooltip": "How much the light pass redraws. 0.2 adds real detail and keeps the faces; higher starts to change them."}),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
+                "seed": ("INT", {"default": 8675309, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
                 "brightness_match": ("BOOLEAN", {"default": True, "tooltip": "Keeps every tile and frame at the original brightness, so the upscale doesn't flicker or darken."}),
                 "upscale_model": (models, {"default": DEFAULT_MODEL if DEFAULT_MODEL in models else models[0],
                                            "tooltip": "The MiniMax H3 latent upscaler, in models/latent_upscale_models. LC Model Optimizer Video can download it."}),

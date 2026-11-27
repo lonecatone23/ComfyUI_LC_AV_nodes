@@ -98,7 +98,7 @@ class LCSaveAudio:
             },
             "optional": {
                 "transcript": ("STRING", {"forceInput": True, "tooltip": "LC Dialogue's or LC Transcribe's transcript."}),
-                "voice_name": ("STRING", {"forceInput": True, "tooltip": "From LC Voice Shape: also saves the "
+                "voice_name": ("STRING", {"forceInput": True, "tooltip": "From LC Voice Shaper: also saves the "
                                           "sound as models/voices/<name>.wav, a speaker for LC Dialogue (replaces "
                                           "one with that name). Empty = not saved as a voice."}),
             },

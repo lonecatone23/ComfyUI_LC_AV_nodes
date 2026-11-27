@@ -4,7 +4,7 @@ LC voice design
 LC Voice Design: describe a voice, Maya1 speaks a sample in it, the clip is saved to models/voices/<name>.wav so
 LC Dialogue can use the name as a speaker (save it with LC Save Audio's voice_name).
 
-LC Emotion Mix: a test voice speaks a line in a feeling (valence / arousal pad plus named emotions). Saved with LC
+LC Emotion Editor: a test voice speaks a line in a feeling (valence / arousal pad plus named emotions). Saved with LC
 Save Audio under any name ('bitter', or 'Haley bitter' for Haley only), a script's [Haley|bitter] copies that feeling.
 """
 
@@ -55,21 +55,95 @@ def _trim(w, sr, floor_db=-45.0, pad=0.05):
     return w[:, max(0, on[0] - int(pad * sr)):min(w.shape[-1], on[-1] + int(pad * sr))]
 
 
+# Maya1 only knows the words it was trained on (its README). Anything else ("alluring", "stern") makes it babble, so the
+# description is built from these and nothing more, in Maya's own sentence shape.
+SEXES = ["Female", "Male"]
+AGES = ["20s", "30s", "40s", "50s"]
+ACCENTS = ["American", "British", "Australian", "Indian", "Middle Eastern"]
+PITCHES = ["normal", "high", "low"]
+TIMBRES = ["smooth", "warm", "gravelly", "raspy"]
+PACINGS = ["conversational", "fast", "slow"]
+TONES = ["energetic", "happy", "curious", "calm", "angry"]
+INTENSITIES = ["medium", "high", "low"]
+# The 8 tested voices: between them every word Maya was trained on (sex, age, accent, pitch, timbre, tone, intensity,
+# pacing), each one matched its description.
+PRESETS = {
+    "Custom": None,
+    "F_American_20yo": ("Female", "20s", "American", "high", "smooth", "energetic", "high", "fast"),
+    "F_British_30yo": ("Female", "30s", "British", "normal", "warm", "happy", "medium", "conversational"),
+    "F_Indian_40yo": ("Female", "40s", "Indian", "normal", "smooth", "curious", "medium", "conversational"),
+    "F_Australian_50yo": ("Female", "50s", "Australian", "low", "raspy", "calm", "low", "slow"),
+    "M_American_20yo": ("Male", "20s", "American", "normal", "smooth", "energetic", "high", "fast"),
+    "M_British_30yo": ("Male", "30s", "British", "low", "warm", "happy", "medium", "conversational"),
+    "M_MiddleEastern_40yo": ("Male", "40s", "Middle Eastern", "low", "gravelly", "angry", "medium", "conversational"),
+    "M_American_50yo": ("Male", "50s", "American", "low", "raspy", "calm", "low", "slow"),
+}
+PRESET_TIP = ("A tested voice. It replaces the dropdowns below; Custom uses them.\n"
+              "F_American_20yo: high pitch, smooth, energetic, high intensity, fast\n"
+              "F_British_30yo: normal pitch, warm, happy, medium intensity, conversational\n"
+              "F_Indian_40yo: normal pitch, smooth, curious, medium intensity, conversational\n"
+              "F_Australian_50yo: low pitch, raspy, calm, low intensity, slow\n"
+              "M_American_20yo: normal pitch, smooth, energetic, high intensity, fast\n"
+              "M_British_30yo: low pitch, warm, happy, medium intensity, conversational\n"
+              "M_MiddleEastern_40yo: low pitch, gravelly, angry, medium intensity, conversational\n"
+              "M_American_50yo: low pitch, raspy, calm, low intensity, slow")
+# One take that moves through feelings: the saved voice carries its range into everything cloned from it.
+RANGE_TEXT = ("Okay, okay, I get it. <laugh> No, seriously, that was the funniest thing I have seen all week! <sigh> But "
+              "then she just left. She didn't even say goodbye. <angry> And you know what? I am done waiting for people "
+              "who never show up! <whisper> Come here. Don't tell anyone, but I kept the letter. <gasp> Wait, is that "
+              "them? <excited> They actually came back!")
+# Scripts for the take. Each one moves through feelings with Maya's tags, one every sentence or two: everything cloned
+# from the voice inherits the range of this one take. <scream> is left out (it cracks).
+SCRIPTS = {
+    "Range": RANGE_TEXT,
+    "Storyteller": ("Gather around, this one is true. <whisper> It was late, and the whole house was asleep. Then I heard "
+                    "it. <gasp> A knock at the door, three times, slow. <sigh> I almost didn't answer. <excited> But when I "
+                    "opened it, there was my brother, home after six long years! <cry> I couldn't say a word. <laugh> He "
+                    "just grinned and asked what was for dinner."),
+    "Argument": ("<angry> You told me you would be there, and you weren't! Do you know how long I waited? <sigh> No, don't. "
+                 "I don't want another excuse. <cry> I just wanted you to care, even a little. <whisper> Look at me. Tell "
+                 "me the truth this time. <chuckle> Okay. Okay, fine. That is honestly the worst excuse I have ever heard."),
+    "Good news": ("<excited> I got it! I actually got the job! <giggle> Sorry, I can't stop smiling. <gasp> Wait, they want "
+                  "me to start on Monday? That is three days from now! <sigh> Okay. Breathe. I can do this. <laugh> Who am "
+                  "I kidding, I am going to be a mess. <whisper> But honestly? I have never been this happy."),
+    "Custom": None,
+}
+FEELING_TAGS = ("<laugh>", "<sigh>", "<angry>", "<whisper>", "<gasp>", "<excited>", "<cry>", "<giggle>", "<chuckle>")
+
+
+def maya_description(sex, age, accent, pitch, timbre, tone, intensity, pacing):
+    """'Female voice in her 20s with American accent. High pitch, smooth timbre, energetic tone at high intensity,
+    fast pacing.' (the shape of Maya1's own examples)."""
+    who = "her" if sex == "Female" else "his"
+    return (f"{sex} voice in {who} {age} with {accent} accent. {pitch.capitalize()} pitch, {timbre} timbre, "
+            f"{tone} tone at {intensity} intensity, {pacing} pacing.")
+
+
 class LCVoiceDesign:
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "voice_name": ("STRING", {"default": "Parka", "tooltip": "The speaker name for LC Dialogue. Wire "
+                "voice_name": ("STRING", {"default": "Alita", "tooltip": "The speaker name for LC Dialogue. Wire "
                                           "voice_name and audio into LC Save Audio to keep it as "
                                           "models/voices/<name>.wav, or into LC Load Voice for this run only."}),
-                "description": ("STRING", {"multiline": True, "default":
-                    "Young adult woman, American accent, warm and slightly husky voice, relaxed conversational pace.",
-                    "tooltip": "Age, gender, accent, pitch, timbre, pace. Leave emotions out: those come later, per line."}),
-                "sample_text": ("STRING", {"multiline": True, "default":
-                    "I walked here in the rain again, which was a mistake. Still, the coffee is worth it, and the "
-                    "window seat was free for once. Give me five minutes and I will be human again.",
-                    "tooltip": "What the voice reads. 10 to 20 seconds of plain, calm speech clones best."}),
+                "preset": (list(PRESETS), {"default": "Custom", "tooltip": PRESET_TIP}),
+                "sex": (SEXES, {"default": "Female"}),
+                "age": (AGES, {"default": "20s"}),
+                "accent": (ACCENTS, {"default": "American"}),
+                "pitch": (PITCHES, {"default": "normal"}),
+                "timbre": (TIMBRES, {"default": "smooth"}),
+                "tone": (TONES, {"default": "energetic", "tooltip": "How lively the person is. Energetic gives the "
+                                 "most range to clone from; calm gives a flat voice."}),
+                "intensity": (INTENSITIES, {"default": "medium"}),
+                "pacing": (PACINGS, {"default": "conversational"}),
+                "script": (list(SCRIPTS), {"default": "Range", "tooltip": "What the voice reads. Each script moves "
+                           "through feelings in one take, so every clone of the voice gets that range. Custom reads "
+                           "the box below: keep a feeling tag every sentence or two, or the voice comes out flat."}),
+                "sample_text": ("STRING", {"multiline": True, "default": RANGE_TEXT,
+                    "tooltip": "What the voice reads, in one take. Move through feelings with Maya's tags (<laugh> "
+                               "<sigh> <angry> <whisper> <gasp> <excited> <cry> <giggle> <chuckle>): everything cloned "
+                               "from this voice inherits its range. About 30 seconds."}),
                 "seed": ("INT", {"default": 8675309, "min": 0, "max": 0xFFFFFFFF, "control_after_generate": "fixed",
                                  "tooltip": "Each seed is a different person for the same description."}),
                 "check": ("BOOLEAN", {"default": True, "tooltip": "Listens to each take (Whisper, models/stt). When "
@@ -84,7 +158,8 @@ class LCVoiceDesign:
                        "The name: wire it with the audio into LC Save Audio (keep it) or LC Load Voice (this run).")
     FUNCTION = "design"
     CATEGORY = "LC AV/voice"
-    DESCRIPTION = "Design a voice from a description (Maya1) and save it as a speaker for LC Dialogue."
+    DESCRIPTION = ("Design a voice (Maya1) from the words Maya was trained on, in one take that moves through feelings, "
+                   "and save it as a speaker for LC Dialogue.")
 
     @staticmethod
     def _heard(w, sr, text):
@@ -109,8 +184,8 @@ class LCVoiceDesign:
         x = resample(np.ascontiguousarray(w.mean(0)), sr, 16000)
         words = [(re.sub(r"[^a-z]", "", ww["word"].lower()), ww["start"], ww["end"])
                  for ww in whisper_words(x, names[0], "en", "auto")]
-        words = [t for t in words if t[0]]
-        want = re.sub(r"[^a-z ]", " ", text.lower()).split()
+        words = [("okay" if t[0] == "ok" else t[0], t[1], t[2]) for t in words if t[0]]  # Whisper writes "OK"
+        want = re.sub(r"[^a-z ]", " ", re.sub(r"<[^>]*>", " ", text).lower()).split()  # tags aren't words
         if not want:
             return (1.0, 0.0, w.shape[-1] / sr)
         lo, hi = 0, len(words)
@@ -137,17 +212,20 @@ class LCVoiceDesign:
         end = words[hi - 1][2] if words and hi > 0 else w.shape[-1] / sr
         return (score, start, end)
 
-    def design(self, voice_name="Parka", description="", sample_text="", seed=811, check=True, **_old):
+    def design(self, voice_name="Alita", preset="Custom", sex="Female", age="20s", accent="American", pitch="normal", timbre="smooth",
+               tone="energetic", intensity="medium", pacing="conversational", script="Range", sample_text=RANGE_TEXT, seed=8675309,
+               check=True, **_old):
         import torch
-
 
         from .lc_maya import SR as MAYA_SR
         from .lc_maya import park, speak
 
-        # Maya wraps the description in <description="...">: quotes or line breaks in it make Maya read it out loud
-        desc = " ".join(description.replace('"', "'").split()).rstrip(".")
-        if len(desc.split()) < 10:  # a bare "Young girl, american accent" leaks into the speech most: give Maya its usual shape
-            desc += ". Natural voice, clear audio, conversational pacing"
+        if PRESETS.get(preset):
+            sex, age, accent, pitch, timbre, tone, intensity, pacing = PRESETS[preset]
+        if SCRIPTS.get(script):
+            sample_text = SCRIPTS[script]
+        flat = not any(t in sample_text.lower() for t in FEELING_TAGS)
+        desc = maya_description(sex, age, accent, pitch, timbre, tone, intensity, pacing)
         tries, notes, best = (4 if check else 1), [], None
         for t in range(tries):
             s = int(seed) + t
@@ -187,6 +265,9 @@ class LCVoiceDesign:
         info = f"{w.shape[-1] / sr:.1f} s | " + ", ".join(notes)
         if check and score < 0.8:
             info += f" | no take passed: kept the best (seed {seed}, {score:.0%}). Try another seed or a fuller description"
+        if flat:
+            info += (" | no feeling tags in the script (<laugh> <sigh> <angry> ...): the voice comes out flat, and so "
+                     "does everything cloned from it")
         info += f" | Maya1, seed {seed}: {desc}"  # the recipe, so the voice can be made again
         name = (voice_name or _old.get("name") or "").strip()  # name: the widget before 0.6.0's release
         return ({"waveform": torch.from_numpy(np.ascontiguousarray(w))[None], "sample_rate": sr}, info, name)
@@ -232,7 +313,7 @@ class LCEmotionMix:
                    "emotion keeps it by name as an asset: 'bitter' works for everyone in LC Dialogue, 'Haley bitter' "
                    "only for Haley. Saved and premade emotions show as purple buttons: click one to load it.")
 
-    def mix_it(self, engine, voices=None, voice_name="bitter", mix="", valence=0.0, arousal=0.0, line="", seed=811,
+    def mix_it(self, engine, voices=None, voice_name="bitter", mix="", valence=0.0, arousal=0.0, line="", seed=8675309,
                **_old):
         import torch
 
@@ -242,9 +323,9 @@ class LCEmotionMix:
         tag = self._tag(mix, valence, arousal)
         line = (line or _old.get("test_line") or "").strip()
         if not line:
-            raise ValueError("LC Emotion Mix: give it a line to speak.")
+            raise ValueError("LC Emotion Editor: give it a line to speak.")
         if not voices:
-            raise ValueError("LC Emotion Mix: wire LC Load Voice into voices (any test voice).")
+            raise ValueError("LC Emotion Editor: wire LC Load Voice into voices (any test voice).")
         clip = cap(list(voices.values())[-1]["audio"], MAX_SECONDS)  # the test voice: only to hear the feeling
         feeling = _parse(f"[x|{tag}] {line}", engine.emotions())[0]["pieces"][0][1] if tag else {}
         sr, takes = None, {}
@@ -295,13 +376,19 @@ class LCVoiceMatch:
 
 
 NODE_CLASS_MAPPINGS = {"LCVoiceDesign": LCVoiceDesign, "LCEmotionMix": LCEmotionMix, "LCVoiceMatch": LCVoiceMatch}
-NODE_DISPLAY_NAME_MAPPINGS = {"LCVoiceDesign": "LC Voice Design 🎙️", "LCEmotionMix": "LC Emotion Mix 🎨",
+NODE_DISPLAY_NAME_MAPPINGS = {"LCVoiceDesign": "LC Voice Design 🎙️ (BETA)", "LCEmotionMix": "LC Emotion Editor 🎨",
                               "LCVoiceMatch": "LC Voice Match 🔍"}
 
 
 try:
     from aiohttp import web
     from server import PromptServer
+
+    @PromptServer.instance.routes.get("/lc_av/voice_design_presets")
+    async def _lc_voice_design_presets(request):
+        keys = ("sex", "age", "accent", "pitch", "timbre", "tone", "intensity", "pacing")
+        return web.json_response({"presets": {k: dict(zip(keys, v)) for k, v in PRESETS.items() if v},
+                                  "scripts": {k: v for k, v in SCRIPTS.items() if v}})
 
     @PromptServer.instance.routes.get("/lc_av/emotions")
     async def _lc_emotions(request):

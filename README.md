@@ -52,7 +52,7 @@ Optional example graph: `workflows/LC_AV Node Examples.json`
 | LC Final Frame 🖼️ | `LCFinalFrame` | Last frame of an IMAGE batch. |
 | LC VAE Decode 🧩 | `LCVaeDecode` | Boolean wrapper: core `VAEDecode` or core `VAEDecodeTiled`. |
 | LC Get Latent Size 📐 | `LCGetLatentSize` | Pixel width / height, batch, frames. Optional VAE for compression. |
-| LC Load Audio 📂 | `LCLoadAudio` | Load from input. `start_time` / `end_time` cut, preview / pause, timeline handles. |
+| LC Load Audio 📂 | `LCLoadAudio` | Load from input. `start_time` / `end_time` cut, preview / pause, timeline handles. **transcript** out: the .txt / .srt LC Save Audio saved next to the clip, cut to match. |
 | LC Audio Duration ⏱️ | `LCAudioDuration` | Seconds int + float (and minutes). |
 | LC Audio Crop ✂️ | `LCAudioCrop` | Crop AUDIO with `MM:SS` start / end. |
 | LC Audio Channel 🎚️ | `LCAudioChannel` | Stereo → L / R. |
@@ -130,6 +130,105 @@ Shows a progress bar per tile (also on the MiniMax Video VAE, which tiles itself
 **start_time** / **end_time** (seconds). `end_time` 0 = end of file. Output `duration` is the cut length.
 
 **preview / pause** plays only that cut. Drag the two handles on the timeline (after one preview so file length is known).
+
+What LC Save Audio made shows in the list too, marked `[output]`. **transcript** brings back the .txt / .srt saved next to the clip, only the lines inside the cut. Empty when there is none (run LC Transcribe instead).
+
+---
+
+## Voice and dialogue 🗣️ (BETA)
+
+Make a voice, give it feelings, and have a cast read a script. Everything is built in: no other packs.
+
+### 🛑🚫✋ Read first
+
+- The models download on first use: IndexTTS-2 for LC Dialogue (about 8 GB), Maya1 for LC Voice Design, Whisper for **check** and LC Transcribe.
+- Voices live in `models/voices`. **LC Test Voice** comes with the pack. Saved emotions are small files of their own, no audio:
+
+```
+ComfyUI/
+├── models/
+│   └── voices/
+│       └── Alita.wav           ← a speaker
+└── user/
+    └── LC_AV/
+        └── emotions/
+            └── bitter.json     ← a saved emotion
+```
+
+**LC Voice Design 🎙️ (BETA)**
+- Maya1 makes a voice from the words it was trained on: **sex, age, accent, pitch, timbre, tone, intensity, pacing**. Anything else makes it babble, so those are dropdowns.
+- **preset**: 8 tested voices (F_American_20yo, M_British_30yo, etc.). Hover it for what each one is. Custom uses the dropdowns.
+- **script**: what the voice reads (Range, Storyteller, Argument, Good news). Custom reads the box.
+- Each seed is a different person for the same picks.
+- **check** listens to each take (Whisper) and tries the next seed when Maya babbles or reads the description out loud (up to 4 takes).
+
+**LC Voice Shaper 🦜 (BETA)**
+- Pitch and voice size move on their own, so deeper sounds like a bigger person, not a slowed tape.
+- Presets for baritone, bass, tenor, young girl, young boy, elderly woman and man, etc. Drag a column on the graph to nudge it.
+- **tremble** and **breathiness** are what make a voice old. 0.3 to 0.5 each. Breathiness gets hissy past about 0.6.
+
+**LC Save Audio 💽**
+- Wire **voice_name** in and it also saves the voice as `models/voices/<voice_name>.wav`, a speaker for LC Dialogue.
+
+**LC Emotion Editor 🎨**
+- Build a feeling (valence / arousal pad plus named emotions) and save it by name. The test voice is only there so you can hear it.
+- `bitter` works for every speaker. `Haley bitter` is Haley's own and wins over `bitter` for her.
+- ⚠️ Feed it about 30 seconds of a lively voice. A short flat clip gives very little difference.
+
+**LC Load Voice 🎙️**
+- One speaker per node; **voice_name** is the name the script uses. Chain several for the whole cast on one wire.
+
+**LC Dialogue 🗣️**
+- IndexTTS-2 speaks the script: a voice and an emotion mix per line, and the feeling can change mid-line.
+- Edit one line and only that line renders again. 💡 Keep the seed on **fixed** or every line renders again.
+
+**LC Voice Match 🔍** / **LC Voice Clean 🧽**
+- Match: how alike two voices are (1.0 = the same voice). Clean: noise reduction, de-esser and gate.
+
+### 💡 Writing a Voice Design script
+
+- Pick a **script**, or write your own on **Custom**. About 30 seconds.
+- A feeling tag every sentence or two: `<laugh>` `<sigh>` `<angry>` `<whisper>` `<gasp>` `<excited>` `<cry>` `<giggle>` `<chuckle>`.
+- Every clone of the voice inherits the range of this one take. No tags = a flat voice, and everything made from it stays flat (the info line warns you).
+- Leave `<scream>` out. It cracks.
+- Start from a **preset**, then change one dropdown at a time. **tone** energetic gives the most range.
+
+### 💡 Writing a Dialogue script
+
+```
+[Alice|angry:0.6,sad:0.3] You're late again. I made dinner hours ago.
+[Bob|sad:0.4,arousal:-0.5] I know. [pause:400ms] I know. The meeting ran over.
+[Alice|sad] I'm fine. [angry:0.9] I said I'm fine!
+```
+
+- One line per turn: `[Speaker|emotion:weight] text`. Emotions: happy, angry, sad, afraid, disgusted, melancholic, surprised, calm.
+    - The weights are shares of the mix: IndexTTS-2 holds the whole mix at 0.8 or less, so `sad:0.5,angry:0.3` and `sad:1,angry:0.6` sound the same.
+- `valence` (unpleasant to pleasant) and `arousal` (calm to energetic) go from -1 to 1.
+- `[angry:0.9]` inside a line switches the feeling from that word on. `[neutral]` clears it.
+- `[pause:600ms]` for a beat, `rate:slow` / `rate:fast`. Commas, periods and question marks do the timing too.
+- `[Haley|bitter]` uses a saved emotion from LC Emotion Editor.
+- Lines starting with `#` are skipped (handy for notes to yourself).
+
+**Emotions 🎭**
+
+| Tag | Sounds like | Also accepts |
+|---|---|---|
+| `happy` | bright, smiling | joy |
+| `angry` | sharp, pushed | anger, mad |
+| `sad` | heavy, low | sadness |
+| `afraid` | tight, shaky | fear, scared, fearful |
+| `disgusted` | sneering, contempt | disgust |
+| `melancholic` | tired, wistful | tired |
+| `surprised` | lifted, sudden | surprise |
+| `calm` | relaxed, even | relaxed |
+
+Saved feelings that come with the pack (LC Emotion Editor): bitter, bored, excited, furious, heartbroken, nervous, sarcastic, smug, tender, terrified. A saved name wins over a built-in one.
+
+**Strength limits ⚠️**
+- Each emotion: 0 to 1.2. Anything higher is cut to 1.2.
+- `strength:0.5` scales the whole line's mix (same 1.2 ceiling per emotion).
+- `valence` / `arousal`: -1 to 1.
+- `rate`: 0 to 4 (0.8x to 1.2x speed), or slow / normal / fast.
 
 ---
 

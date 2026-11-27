@@ -1,5 +1,5 @@
 /**
- * LC Voice Shape: one wide graph instead of nine sliders, drawn like the LC LoRA editors. A centerline is "as spoken";
+ * LC Voice Shaper: one wide graph instead of nine sliders, drawn like the LC LoRA editors. A centerline is "as spoken";
  * drag a column up or down to move that part of the voice (shift-click or double-click puts it back). The sliders stay
  * as the saved values (hidden), so workflows, presets and the API work as before.
  * Presets: picking one moves every column to its values; moving a column switches the preset to Custom. On load a

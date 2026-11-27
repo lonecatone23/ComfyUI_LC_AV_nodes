@@ -624,7 +624,7 @@ class LCH3ShotCard:
                 "height": ("INT", {"default": 768, "min": 256, "max": 4096, "step": 16}),
                 # not named "seed": that name gets a control_after_generate widget, and with it ComfyUI's loader drops the
                 # first saved value (it takes it for project_name's old widget slot) and every widget below shifts by one
-                "base_seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF, "tooltip": "Goes out plus the shot number, so each shot gets its own."}),
+                "base_seed": ("INT", {"default": 8675309, "min": 0, "max": 0xFFFFFFFFFFFFFFFF, "tooltip": "Goes out plus the shot number, so each shot gets its own."}),
             },
             "optional": {
                 "style": ("STRING", {"default": "", "multiline": True, "tooltip": "Optional. Added to the Story's look on every frame, word for word."}),

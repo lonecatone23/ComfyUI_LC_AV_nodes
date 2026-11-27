@@ -248,13 +248,24 @@
     "description": "从 Comfy input/ 加载音频。start_time 和 end_time 用于裁剪文件（end_time 0 = 到文件末尾）。输出 duration 是裁剪后的长度，单位秒（FLOAT）。preview / pause 只播放该裁剪段；首次预览后可拖动时间轴手柄。",
     "inputs": {
       "audio": {
-        "tooltip": "Comfy input/ 中的文件（也会检查 output/ 和 temp/）。使用 Load audio 按钮上传。Combo 列出音频和常见视频容器。"
+        "tooltip": "Comfy input/ 中的文件，以及 LC Save Audio 生成的文件（output/audio，标为 [output]：它的文字稿会一起带上）。使用 Load audio 按钮上传。Combo 列出音频和常见视频容器。"
       },
       "start_time": {
         "tooltip": "剪辑的起点，单位为秒。预览和 AUDIO 输出都从这里开始。预览一次后再拖动左侧时间线手柄，以便得知文件长度。"
       },
       "end_time": {
         "tooltip": "剪辑的结束时间（秒）。0 = 播放到文件末尾。预览在此停止；输出 duration 为结束减去开始。拖动右侧时间轴手柄。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "音频（设置了 start / end 时为裁剪段）。"
+      },
+      "1": {
+        "tooltip": "裁剪长度，单位秒。"
+      },
+      "2": {
+        "tooltip": "LC Save Audio 保存在这段音频旁边的文字稿（先找 .txt，没有就用 .srt），只保留裁剪段内的行。没有时为空：改用 LC Transcribe。"
       }
     }
   },
@@ -832,7 +843,7 @@
         "tooltip": "语音引擎（LC IndexTTS Engine）。"
       },
       "script": {
-        "tooltip": "[说话人|情绪:权重,...] 台词。[Haley|bitter] 优先使用保存的情绪 'Haley bitter'（LC Emotion Mix），其次是 'bitter'。台词中的情绪标签会从那里开始切换情绪。[pause:600ms] 加一个停顿。以 # 开头的行会被跳过。"
+        "tooltip": "[说话人|情绪:权重,...] 台词。[Haley|bitter] 优先使用保存的情绪 'Haley bitter'（LC Emotion Editor），其次是 'bitter'。台词中的情绪标签会从那里开始切换情绪。[pause:600ms] 加一个停顿。以 # 开头的行会被跳过。"
       },
       "default_voice": {
         "tooltip": "没有 [Speaker] 的台词，以及在 models/voices 中没有音频的说话人，都使用这个声音。"
@@ -919,13 +930,10 @@
     }
   },
   "LCVoiceDesign": {
-    "description": "根据描述设计一个声音（Maya1），并保存为 LC Dialogue 的说话人。",
+    "description": "用 Maya 训练过的词来设计声音（Maya1），一次录完并带着情绪起伏，保存为 LC Dialogue 的说话人。",
     "inputs": {
-      "description": {
-        "tooltip": "年龄、性别、口音、音高、音色、语速。不要写情绪：情绪之后按台词再加。"
-      },
       "sample_text": {
-        "tooltip": "这个声音朗读的内容。10 到 20 秒平稳、平静的语音最适合克隆。"
+        "tooltip": "这个声音一次读完的内容。用 Maya 的标签切换情绪（<laugh> <sigh> <angry> <whisper> <gasp> <excited> <cry> <giggle> <chuckle>）：从这个声音克隆出的一切都会继承它的起伏。大约 30 秒。"
       },
       "seed": {
         "tooltip": "同一描述下，每个 seed 是不同的人。"
@@ -935,6 +943,15 @@
       },
       "voice_name": {
         "tooltip": "LC Dialogue 中使用的说话人名称。把 voice_name 和 audio 接到 LC Save Audio 来保存为 models/voices/<名称>.wav，或接到 LC Load Voice 只用于这次运行。"
+      },
+      "tone": {
+        "tooltip": "这个人有多活泼。Energetic 给克隆最多的起伏；calm 会得到平淡的声音。"
+      },
+      "preset": {
+        "tooltip": "测试过的声音。它会替换下面的下拉选项；Custom 使用下拉选项。\nF_American_20yo: high pitch, smooth, energetic, high intensity, fast\nF_British_30yo: normal pitch, warm, happy, medium intensity, conversational\nF_Indian_40yo: normal pitch, smooth, curious, medium intensity, conversational\nF_Australian_50yo: low pitch, raspy, calm, low intensity, slow\nM_American_20yo: normal pitch, smooth, energetic, high intensity, fast\nM_British_30yo: low pitch, warm, happy, medium intensity, conversational\nM_MiddleEastern_40yo: low pitch, gravelly, angry, medium intensity, conversational\nM_American_50yo: low pitch, raspy, calm, low intensity, slow"
+      },
+      "script": {
+        "tooltip": "这个声音要读的内容。每个脚本都在一次录音里经历多种情绪，所以这个声音的每个克隆都带有这种起伏。Custom 读下面的文本框：每一两句保留一个情绪标签，否则声音会很平淡。"
       }
     },
     "outputs": {
@@ -1019,7 +1036,7 @@
         "tooltip": "LC Dialogue 或 LC Transcribe 的文字稿。"
       },
       "voice_name": {
-        "tooltip": "来自 LC Voice Shape：同时把声音保存为 models/voices/<名称>.wav，作为 LC Dialogue 的说话人（同名会被替换）。留空 = 不保存为声音。"
+        "tooltip": "来自 LC Voice Shaper：同时把声音保存为 models/voices/<名称>.wav，作为 LC Dialogue 的说话人（同名会被替换）。留空 = 不保存为声音。"
       }
     }
   },
@@ -1051,7 +1068,7 @@
         "tooltip": "压低刺耳的 3-5 kHz 频段：+ 更柔和。"
       },
       "air_db": {
-        "tooltip": "8 kHz 以上的高频：+ 更有气声、更明亮，- 更闷。"
+        "tooltip": "6 kHz 以上的高频：+ 更明亮清脆，- 更闷。"
       },
       "tremble": {
         "tooltip": "老年人声音里的颤抖。0.3 到 0.5 表现老年，1 是受惊时的颤音。"

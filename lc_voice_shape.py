@@ -1,5 +1,5 @@
 """
-LC Voice Shape
+LC Voice Shaper
 --------------
 Basic voice controls for speech: pitch, voice size (formants), how lively the pitch moves, speed, tremble, breathiness,
 plus warmth, softness and air. The WORLD vocoder (pyworld, MIT) splits the voice into its pitch, its vocal tract shape
@@ -25,6 +25,7 @@ NEUTRAL = dict(pitch=0.0, voice_size=1.0, liveliness=1.0, speed=1.0, warmth_db=0
                tremble=0.0, breathiness=0.0)
 PRESETS = {
     "Custom": None,
+    "Flat": dict(NEUTRAL),  # every slider back to the center: the voice as it came in
     "Deeper (baritone)": dict(pitch=-3.0, voice_size=0.92, liveliness=0.9, warmth_db=2.0, air_db=-1.0),
     "Bass": dict(pitch=-6.0, voice_size=0.86, liveliness=0.8, warmth_db=3.0, softness_db=1.0, air_db=-2.0),
     "Tenor (lighter man)": dict(pitch=2.0, voice_size=1.04, liveliness=1.1, warmth_db=-1.0, air_db=1.0),
@@ -56,12 +57,33 @@ def _pitch_range(x64, sr):
     return float(max(40.0, lo * 0.7)), float(min(1100.0, max(hi * 1.5, lo * 3.0)))
 
 
+def _move_pitch(f0, t, pitch, lively):
+    """Pitch moves the speaker's middle; liveliness scales the melody around it. Only the smooth melody (~50 ms) is
+    scaled: the tracker's tiny jumps at word starts and ends stay as spoken, or scaling them turns them into clicks.
+    The melody gets bridged across unvoiced gaps so a word picks up where the last one ended, and stays within about
+    an octave of the middle (a dive far below that turns the voice into single pulses you can hear)."""
+    v = f0 > 0
+    lf = np.log(np.where(v, f0, 1.0))
+    mid = float(np.median(lf[v]))
+    idx = np.arange(len(f0))
+    cont = np.interp(idx, idx[v], lf[v])  # continuous melody through the gaps
+    k = 11
+    pad = np.pad(cont, k // 2, mode="edge")
+    smooth = np.convolve(pad, np.ones(k) / k, mode="valid")
+    detail = np.clip(lf - smooth, -0.12, 0.12)  # micro movement, kept as spoken (+-2 semitones max)
+    melody = np.clip((smooth - mid) * float(lively), -0.6, 0.6)  # +-10 semitones around the middle
+    new = np.exp(mid + melody + detail + math.log(2) * float(pitch) / 12.0)
+    out = f0.copy()
+    out[v] = np.maximum(new[v], 45.0)
+    return out
+
+
 def _world(x, sr, pitch, size, lively, speed, tremble, breath):
     """One channel through WORLD: analyse, move pitch / vocal tract / breath / timing, then synthesize."""
     try:
         import pyworld as pw
     except ImportError as e:
-        raise RuntimeError("LC Voice Shape needs the pyworld package (MIT). Install it in ComfyUI's Python "
+        raise RuntimeError("LC Voice Shaper needs the pyworld package (MIT). Install it in ComfyUI's Python "
                            "(python -m pip install pyworld) and restart.") from e
     x64 = np.ascontiguousarray(x, dtype=np.float64)
     fmin, fmax = _pitch_range(x64, sr)
@@ -70,10 +92,7 @@ def _world(x, sr, pitch, size, lively, speed, tremble, breath):
     ap = pw.d4c(x64, f0, t, sr)
     voiced = f0 > 0
     if voiced.sum() >= 5:
-        logf = np.log(f0[voiced])
-        mid = float(np.median(logf))
-        # liveliness scales the pitch movement around the speaker's middle, pitch moves the middle
-        f0[voiced] = np.exp(mid + (logf - mid) * float(lively) + math.log(2) * float(pitch) / 12.0)
+        f0 = _move_pitch(f0, t, pitch, lively)
     if tremble > 0:  # age tremor: ~5.5 wobbles a second, up to +-4 % at 1, with a slow drift so it isn't a vibrato
         tt = t.astype(np.float64)
         f0[voiced] *= 1.0 + 0.04 * float(tremble) * np.sin(2 * np.pi * 5.5 * tt[voiced] + 0.8 * np.sin(2 * np.pi * 0.7 * tt[voiced]))
@@ -103,6 +122,9 @@ def _world(x, sr, pitch, size, lively, speed, tremble, breath):
     if breath > 0:  # air: noise shaped by the voice's own envelope, only from about 1.2 kHz up (full by 3.5 kHz) and
         # only while the voice sounds. Noise in the low band is what turned into static, so it stays out of there.
         b = float(breath)
+        # first take the voice's own rough noise out of the sounded parts (WORLD resynthesizes it as a hiss/static),
+        # so the added breath is the only air there. Consonants keep theirs. Fully clean from 0.5 up.
+        ap[f0 > 0] *= max(0.0, 1.0 - 2.0 * b)
         f = np.linspace(0.0, sr / 2.0, sp.shape[1])
         w = np.clip((f - 1200.0) / 2300.0, 0.0, 1.0) ** 0.7
         on = (f0 > 0).astype(np.float64)
@@ -110,6 +132,14 @@ def _world(x, sr, pitch, size, lively, speed, tremble, breath):
         sp_n = sp * (w ** 2)[None, :] * on + 1e-16  # WORLD takes the log: never exactly 0
         breath_noise = pw.synthesize(np.zeros_like(f0), np.ascontiguousarray(sp_n), np.ones_like(ap), sr,
                                      frame_period=FRAME_MS) * (1.6 * b)
+        # real breath puffs with every vocal fold cycle: a steady hiss on top reads as a separate noise, so the air is
+        # pulsed at the voice's own pitch (open phase loud, closed phase quiet)
+        hop = sr * FRAME_MS / 1000.0
+        ts = np.arange(len(breath_noise)) / hop
+        fs = np.interp(ts, np.arange(len(f0)), np.where(f0 > 0, f0, 0.0))
+        phase = np.cumsum(2.0 * np.pi * fs / sr)
+        env = 0.25 + 0.75 * (0.5 + 0.5 * np.cos(phase)) ** 2
+        breath_noise = breath_noise * np.where(fs > 0, env / 0.53, 1.0)  # 0.53 = mean of env: same loudness
         sp = sp * (1.0 - 0.6 * b * w)[None, :]  # the buzz up top gives way to the air
     y = pw.synthesize(np.ascontiguousarray(f0), np.ascontiguousarray(sp), np.ascontiguousarray(np.clip(ap, 0.0, 1.0)), sr,
                       frame_period=FRAME_MS)
@@ -143,7 +173,7 @@ def _eq(x, sr, warmth_db, softness_db, air_db):
     from scipy.signal import lfilter
 
     for kind, f, g, q in (("lowshelf", 200.0, warmth_db, 0.7), ("peak", 3800.0, -softness_db, 0.8),
-                          ("highshelf", 8000.0, air_db, 0.7)):
+                          ("highshelf", min(6000.0, sr * 0.25), air_db, 0.7)):  # TTS is 22-24 kHz: little above 8 kHz
         if g:
             b, a = _rbj(kind, sr, f, float(g), q)
             x = lfilter(b, a, x, axis=-1)
@@ -156,6 +186,9 @@ class LCVoiceShape:
         return {
             "required": {
                 "audio": ("AUDIO", {"tooltip": "Speech. Split music and effects off first (LC Audio Split)."}),
+                "voice_name": ("STRING", {"default": "", "tooltip": "The speaker name for LC Dialogue. Wire "
+                                          "voice_name into LC Save Audio: it saves the voice as "
+                                          "models/voices/<name>.wav (replaces one with that name)."}),
                 "preset": (list(PRESETS), {"default": "Custom",
                            "tooltip": "A starting point. Picking one sets the sliders it uses; Custom uses the sliders."}),
                 "pitch": ("FLOAT", {"default": 0.0, "min": -12.0, "max": 12.0, "step": 0.5,
@@ -170,23 +203,18 @@ class LCVoiceShape:
                                                     "more expressive."}),
                 "speed": ("FLOAT", {"default": 1.0, "min": 0.5, "max": 1.5, "step": 0.01,
                                     "tooltip": "Talking speed without changing pitch. 0.9 = a touch slower."}),
-                "warmth_db": ("FLOAT", {"default": 0.0, "min": -12.0, "max": 12.0, "step": 0.5,
-                                        "tooltip": "Low end around 200 Hz: + is fuller and warmer, - is thinner."}),
-                "softness_db": ("FLOAT", {"default": 0.0, "min": -6.0, "max": 12.0, "step": 0.5,
-                                          "tooltip": "Turns down the harsh 3-5 kHz edge: + is softer and gentler."}),
-                "air_db": ("FLOAT", {"default": 0.0, "min": -12.0, "max": 12.0, "step": 0.5,
-                                     "tooltip": "Top end above 8 kHz: + is breathier and brighter, - is duller."}),
                 "tremble": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05,
                                       "tooltip": "The shake in an elderly voice. 0.3 to 0.5 for old age, 1 is a "
                                                  "frightened quiver."}),
                 "breathiness": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05,
                                           "tooltip": "Air in the voice. Subtle under 0.6, clear at 1.0. Deep voices "
                                                      "need it higher."}),
-            },
-            "optional": {
-                "voice_name": ("STRING", {"default": "", "tooltip": "The speaker name for LC Dialogue. Wire "
-                                          "voice_name into LC Save Audio: it saves the voice as "
-                                          "models/voices/<name>.wav (replaces one with that name)."}),
+                "warmth_db": ("FLOAT", {"default": 0.0, "min": -12.0, "max": 12.0, "step": 0.5,
+                                        "tooltip": "Low end around 200 Hz: + is fuller and warmer, - is thinner."}),
+                "softness_db": ("FLOAT", {"default": 0.0, "min": -6.0, "max": 12.0, "step": 0.5,
+                                          "tooltip": "Turns down the harsh 3-5 kHz edge: + is softer and gentler."}),
+                "air_db": ("FLOAT", {"default": 0.0, "min": -12.0, "max": 12.0, "step": 0.5,
+                                     "tooltip": "Top end above 6 kHz: + is brighter and crisper, - is duller."}),
             },
         }
 
@@ -231,7 +259,7 @@ class LCVoiceShape:
 
 
 NODE_CLASS_MAPPINGS = {"LCVoiceShape": LCVoiceShape}
-NODE_DISPLAY_NAME_MAPPINGS = {"LCVoiceShape": "LC Voice Shape 🦜"}
+NODE_DISPLAY_NAME_MAPPINGS = {"LCVoiceShape": "LC Voice Shaper 🦜 (BETA)"}
 
 
 try:

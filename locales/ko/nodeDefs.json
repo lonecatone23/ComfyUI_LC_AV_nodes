@@ -248,13 +248,24 @@
     "description": "Comfy input/에서 오디오를 로드합니다. start_time과 end_time으로 파일을 자릅니다(end_time 0 = 파일 끝). 출력 길이는 잘린 구간의 길이(초, FLOAT)입니다. preview / pause는 잘린 구간만 재생하며, 첫 미리보기 후에 타임라인 핸들을 드래그할 수 있습니다.",
     "inputs": {
       "audio": {
-        "tooltip": "Comfy input/의 파일입니다(output/과 temp/도 확인). Load audio 버튼으로 업로드하세요. 콤보에는 오디오와 일반적인 비디오 컨테이너가 나열됩니다."
+        "tooltip": "Comfy input/의 파일과 LC Save Audio가 만든 파일(output/audio, [output] 표시: 대본도 함께 불러옵니다). Load audio 버튼으로 업로드합니다. Combo에는 오디오와 일반 동영상 컨테이너가 나옵니다."
       },
       "start_time": {
         "tooltip": "컷의 시작(초). 미리보기와 AUDIO 출력 모두 여기서 시작합니다. 파일 길이를 알 수 있도록 미리보기를 한 번 한 뒤 왼쪽 타임라인 핸들을 드래그하세요."
       },
       "end_time": {
         "tooltip": "컷의 끝(초)입니다. 0 = 파일 끝까지 재생. 미리보기는 여기서 멈추며, 출력 길이는 end 빼기 start입니다. 오른쪽 타임라인 핸들을 드래그하세요."
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "오디오(start / end를 정하면 그 구간)."
+      },
+      "1": {
+        "tooltip": "구간 길이(초)."
+      },
+      "2": {
+        "tooltip": "LC Save Audio가 클립 옆에 저장한 대본(.txt, 없으면 .srt). 구간 안의 줄만. 없으면 비어 있음: LC Transcribe를 쓰세요."
       }
     }
   },
@@ -832,7 +843,7 @@
         "tooltip": "음성 엔진(LC IndexTTS Engine)."
       },
       "script": {
-        "tooltip": "[화자|감정:가중치,...] 대사. [Haley|bitter]는 저장된 감정 'Haley bitter'(LC Emotion Mix)가 있으면 그것을, 없으면 'bitter'를 씁니다. 대사 안의 감정 태그는 거기서부터 감정을 바꿉니다. [pause:600ms]는 잠깐 쉽니다. #으로 시작하는 줄은 건너뜁니다."
+        "tooltip": "[화자|감정:가중치,...] 대사. [Haley|bitter]는 저장된 감정 'Haley bitter'(LC Emotion Editor)가 있으면 그것을, 없으면 'bitter'를 씁니다. 대사 안의 감정 태그는 거기서부터 감정을 바꿉니다. [pause:600ms]는 잠깐 쉽니다. #으로 시작하는 줄은 건너뜁니다."
       },
       "default_voice": {
         "tooltip": "[Speaker]가 없는 대사, 그리고 models/voices에 클립이 없는 화자에 쓰는 목소리."
@@ -919,13 +930,10 @@
     }
   },
   "LCVoiceDesign": {
-    "description": "설명으로 목소리를 디자인하고(Maya1) LC Dialogue 화자로 저장합니다.",
+    "description": "Maya가 학습한 단어로만 목소리를 디자인하고(Maya1), 감정이 움직이는 한 테이크로 LC Dialogue 화자로 저장합니다.",
     "inputs": {
-      "description": {
-        "tooltip": "나이, 성별, 억양, 음높이, 음색, 속도. 감정은 빼세요: 감정은 나중에 대사마다 넣습니다."
-      },
       "sample_text": {
-        "tooltip": "목소리가 읽을 문장. 10에서 20초의 평범하고 차분한 말이 가장 잘 복제됩니다."
+        "tooltip": "목소리가 한 테이크로 읽을 문장. Maya 태그로 감정을 바꾸세요(<laugh> <sigh> <angry> <whisper> <gasp> <excited> <cry> <giggle> <chuckle>): 이 목소리에서 복제하는 모든 것이 그 폭을 물려받습니다. 약 30초."
       },
       "seed": {
         "tooltip": "같은 설명이라도 seed마다 다른 사람입니다."
@@ -935,6 +943,15 @@
       },
       "voice_name": {
         "tooltip": "LC Dialogue에서 쓰는 화자 이름입니다. voice_name과 audio를 LC Save Audio에 연결하면 models/voices/<이름>.wav로 저장되고, LC Load Voice에 연결하면 이번 실행에만 씁니다."
+      },
+      "tone": {
+        "tooltip": "그 사람이 얼마나 생기 있는지. Energetic이 복제에 가장 넓은 폭을 주고, calm은 밋밋한 목소리가 됩니다."
+      },
+      "preset": {
+        "tooltip": "테스트한 목소리. 아래 드롭다운 대신 쓰입니다. Custom은 드롭다운을 씁니다.\nF_American_20yo: high pitch, smooth, energetic, high intensity, fast\nF_British_30yo: normal pitch, warm, happy, medium intensity, conversational\nF_Indian_40yo: normal pitch, smooth, curious, medium intensity, conversational\nF_Australian_50yo: low pitch, raspy, calm, low intensity, slow\nM_American_20yo: normal pitch, smooth, energetic, high intensity, fast\nM_British_30yo: low pitch, warm, happy, medium intensity, conversational\nM_MiddleEastern_40yo: low pitch, gravelly, angry, medium intensity, conversational\nM_American_50yo: low pitch, raspy, calm, low intensity, slow"
+      },
+      "script": {
+        "tooltip": "이 목소리가 읽을 내용. 모든 스크립트는 한 테이크 안에서 여러 감정을 거치므로, 이 목소리의 모든 클론이 그 폭을 물려받습니다. Custom은 아래 상자를 읽습니다: 한두 문장마다 감정 태그를 남기지 않으면 목소리가 밋밋해집니다."
       }
     },
     "outputs": {
@@ -1019,7 +1036,7 @@
         "tooltip": "LC Dialogue 또는 LC Transcribe의 대본."
       },
       "voice_name": {
-        "tooltip": "LC Voice Shape에서: 소리를 models/voices/<이름>.wav로도 저장해 LC Dialogue의 화자로 만듭니다(같은 이름은 교체). 비우면 목소리로 저장하지 않습니다."
+        "tooltip": "LC Voice Shaper에서: 소리를 models/voices/<이름>.wav로도 저장해 LC Dialogue의 화자로 만듭니다(같은 이름은 교체). 비우면 목소리로 저장하지 않습니다."
       }
     }
   },
@@ -1051,7 +1068,7 @@
         "tooltip": "거친 3-5 kHz 대역을 줄입니다: +는 더 부드럽고 온화하게."
       },
       "air_db": {
-        "tooltip": "8 kHz 이상 고음: +는 숨소리가 섞이고 밝게, -는 더 먹먹하게."
+        "tooltip": "6 kHz 이상 고음: +는 더 밝고 선명하게, -는 더 먹먹하게."
       },
       "tremble": {
         "tooltip": "노인 목소리의 떨림. 노년은 0.3에서 0.5, 1은 겁에 질린 떨림."

@@ -78,7 +78,7 @@ PREMADE_EMOTIONS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ass
 
 
 def user_emotions_dir():
-    """Where LC Emotion Mix saves: <user dir>/LC_AV/emotions, one small file per emotion."""
+    """Where LC Emotion Editor saves: <user dir>/LC_AV/emotions, one small file per emotion."""
     import folder_paths
 
     return os.path.join(folder_paths.get_user_directory(), "LC_AV", "emotions")
@@ -133,7 +133,7 @@ def _seconds(v):
 
 def _parse(script, known):
     """-> list of lines: {speaker, pieces: [(text, mix, strength, rate)], pause_before}.
-    A saved emotion (LC Emotion Mix): [Haley|bitter] uses 'Haley bitter' when there is one, else 'bitter'."""
+    A saved emotion (LC Emotion Editor): [Haley|bitter] uses 'Haley bitter' when there is one, else 'bitter'."""
     known = {k.lower() for k in known}
     presets = _presets()
     tag_re = re.compile(r"\[([^\]]*)\]")
@@ -245,7 +245,7 @@ class LCDialogue:
                     "[Bob|sad:0.4,arousal:-0.5] I know. [pause:400ms] I know. The meeting ran over.\n"
                     "[Alice|sad] I'm fine. [angry:0.9] I said I'm fine!",
                     "tooltip": "[Speaker|emotion:weight,...] line. [Haley|bitter] uses the saved emotion 'Haley "
-                               "bitter' (LC Emotion Mix) when there is one, then 'bitter'. An emotion tag inside a line switches the feeling from "
+                               "bitter' (LC Emotion Editor) when there is one, then 'bitter'. An emotion tag inside a line switches the feeling from "
                                "there. [pause:600ms] adds a pause. Lines starting with # are skipped."}),
                 "default_voice": (["(none)"] + _voice_files(), {"tooltip": "Voice for lines with no [Speaker], and "
                                   "for speakers with no clip in models/voices."}),
@@ -270,7 +270,7 @@ class LCDialogue:
     DESCRIPTION = ("Speaks a script: a voice per speaker (models/voices/<name>.wav), an emotion mix per line, and "
                    "emotion changes mid-line. transcript = who says what, when; timings = the same as JSON.")
 
-    def speak(self, engine, script, default_voice="(none)", gap=0.35, seed=0, even_lines=True, **wired):
+    def speak(self, engine, script, default_voice="(none)", gap=0.35, seed=8675309, even_lines=True, **wired):
         import hashlib
 
         import comfy.model_management as mm

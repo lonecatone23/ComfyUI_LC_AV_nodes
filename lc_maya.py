@@ -138,7 +138,7 @@ def _decode(tokens, snac, device):
     return audio[2048:] if audio.shape[0] > 2048 else audio  # SNAC warm-up samples
 
 
-def speak(description, text, seed=811, max_new_tokens=4000, temperature=0.4, top_p=0.9, repetition_penalty=1.1,
+def speak(description, text, seed=8675309, max_new_tokens=4000, temperature=0.4, top_p=0.9, repetition_penalty=1.1,
           device="auto"):
     """-> float32 mono [T] at 24 kHz. Stop in ComfyUI ends the generation."""
     import comfy.model_management as mm

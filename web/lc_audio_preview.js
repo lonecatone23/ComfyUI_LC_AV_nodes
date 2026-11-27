@@ -261,8 +261,18 @@ function playSelected(node) {
     } catch (_e) {}
     node._lcPlayer = null;
   }
-  const url = viewUrl(String(file).replace(/\\/g, "/"), "input", "");
+  // "audio/Luna_00001.flac [output]": the tag picks the folder, the path before the last / is the subfolder
+  let name = String(file).replace(/\\/g, "/");
+  let type = "input";
+  const tag = name.match(/^(.*?)\s*\[(input|output|temp)\]$/);
+  if (tag) {
+    name = tag[1];
+    type = tag[2];
+  }
+  const cut = name.lastIndexOf("/");
+  const url = viewUrl(cut >= 0 ? name.slice(cut + 1) : name, type, cut >= 0 ? name.slice(0, cut) : "");
   const audio = new Audio(url);
+  node._lcPlayerFile = file;
   audio.preload = "auto";
   audio.volume = 1;
   node._lcPlayer = audio;
@@ -300,6 +310,10 @@ function playSelected(node) {
 function togglePreview(node) {
   ensureBar(node);
   const player = node._lcPlayer;
+  if (player && node._lcPlayerFile !== audioCombo(node)?.value) {
+    playSelected(node); // another file was picked since: play that one, not the old clip
+    return;
+  }
   if (player && !player.paused && !player.ended) {
     player.pause();
     setPlaying(node, false);

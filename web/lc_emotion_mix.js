@@ -1,5 +1,5 @@
 /**
- * LC Emotion Mix: a valence / arousal pad (drag the dot) and emotion buttons. A button adds "name:0.5" to the mix and
+ * LC Emotion Editor: a valence / arousal pad (drag the dot) and emotion buttons. A button adds "name:0.5" to the mix and
  * moves the dot to where that feeling sits on the pad; clicking it again takes it back out. Each emotion's spot is
  * drawn faintly on the pad. Purple buttons are saved / premade emotions (click to load one); save emotion keeps the
  * current feeling by voice_name.
@@ -261,9 +261,9 @@ app.registerExtension({
           res = { error: String(e) };
         }
         const toast = app.extensionManager?.toast;
-        if (res.error) toast?.add({ severity: "warn", summary: "LC Emotion Mix", detail: res.error, life: 5000 });
+        if (res.error) toast?.add({ severity: "warn", summary: "LC Emotion Editor", detail: res.error, life: 5000 });
         else {
-          toast?.add({ severity: "success", summary: "LC Emotion Mix", detail: `Saved "${res.name}". Use it as [Name|${res.name}].`, life: 4000 });
+          toast?.add({ severity: "success", summary: "LC Emotion Editor", detail: `Saved "${res.name}". Use it as [Name|${res.name}].`, life: 4000 });
           loadChips();
         }
       });
