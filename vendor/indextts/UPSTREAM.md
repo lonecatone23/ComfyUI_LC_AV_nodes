@@ -3,8 +3,8 @@
 | | |
 | --- | --- |
 | Upstream | https://github.com/index-tts/index-tts (IndexTTS-2 inference code, bilibili) |
-| Taken from | TTS-Audio-Suite 5.11.1, `engines/index_tts/indextts` (https://github.com/diodiogod/TTS-Audio-Suite, commit `59d4cd46d3be74ef1148b97dc512d8b339601417`, 2026-11-24), which bundles index-tts with its own patches |
-| License | IndexTTS code and model: bilibili Model Use License Agreement (`LICENSE.txt`, Chinese text `LICENSE_ZH.txt`). TTS-Audio-Suite wrapper patches: MIT (`LICENSE.TTS-Audio-Suite`). Files adapted by index-tts from other projects keep their own header notices (Apache-2.0: HuggingFace transformers copies, WeNet conformer, 3D-Speaker CAM++, alias-free-torch; MIT: NVIDIA BigVGAN, hifi-gan, snake, Amphion MaskGCT codec; Meta: encodec / gpt-fast). |
+| Taken from | TTS-Audio-Suite 5.11.1 by Shmuel Ronen, `engines/index_tts/indextts` (https://github.com/diodiogod/TTS-Audio-Suite, commit `59d4cd46d3be74ef1148b97dc512d8b339601417`, 2026-11-24), which bundles index-tts with its own patches |
+| License | IndexTTS code and model: bilibili Model Use License Agreement, bilibili (`LICENSE.txt`, Chinese text `LICENSE_ZH.txt`, both verbatim from index-tts commit `d9e41aac89fd00b3d71497fddb287b7f24613712`). TTS-Audio-Suite patches: MIT, Copyright (c) 2025 Shmuel Ronen (`LICENSE.TTS-Audio-Suite`, verbatim). Files adapted by index-tts from other projects keep their own header notices (Apache-2.0: HuggingFace transformers copies, WeNet conformer, 3D-Speaker CAM++, alias-free-torch; MIT: NVIDIA BigVGAN, hifi-gan, snake, Amphion MaskGCT codec; Meta: encodec / gpt-fast). |
 | Weights | `IndexTeam/IndexTTS-2`, `facebook/w2v-bert-2.0`, `amphion/MaskGCT` (semantic codec), `funasr/campplus`, `nvidia/bigvgan_v2_22khz_80band_256x` on Hugging Face, found or downloaded on first use by `lc_indextts.py` (not in this repository) |
 
 Any modifications made to the original model in this Derivative Work are not endorsed, warranted, or guaranteed by the original right-holder of the original model, and the original right-holder disclaims all liability related to this Derivative Work.

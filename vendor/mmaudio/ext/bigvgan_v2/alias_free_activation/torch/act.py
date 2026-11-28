@@ -3,7 +3,7 @@
 
 import torch.nn as nn
 
-from .....ext.bigvgan_v2.alias_free_activation.torch.resample import (DownSample1d, UpSample1d)
+from .resample import (DownSample1d, UpSample1d)
 
 
 class Activation1d(nn.Module):

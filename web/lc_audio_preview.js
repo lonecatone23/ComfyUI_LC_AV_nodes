@@ -270,7 +270,9 @@ function playSelected(node) {
     type = tag[2];
   }
   const cut = name.lastIndexOf("/");
-  const url = viewUrl(cut >= 0 ? name.slice(cut + 1) : name, type, cut >= 0 ? name.slice(0, cut) : "");
+  const url = name.startsWith("voices/") // the pack's test voices
+    ? api.apiURL(`/lc_av/voice_file?name=${encodeURIComponent(name.slice(7))}`)
+    : viewUrl(cut >= 0 ? name.slice(cut + 1) : name, type, cut >= 0 ? name.slice(0, cut) : "");
   const audio = new Audio(url);
   node._lcPlayerFile = file;
   audio.preload = "auto";

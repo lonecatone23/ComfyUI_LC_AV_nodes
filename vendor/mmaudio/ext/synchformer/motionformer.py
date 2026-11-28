@@ -7,7 +7,7 @@ import yaml
 from torch.nn.init import trunc_normal_  # LC_AV: was timm.layers (init only)
 from torch import nn
 
-from ...ext.synchformer.video_model_builder import VisionTransformer
+from .video_model_builder import VisionTransformer
 
 FILE2URL = {
     # cfg

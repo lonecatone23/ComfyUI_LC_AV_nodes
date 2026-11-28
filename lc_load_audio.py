@@ -32,6 +32,18 @@ def _scan_dir(root):
     return found
 
 
+VOICES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "voices")  # the pack's test voices
+
+
+def _voice_path(name: str):
+    """'voices/LC Test Voice.flac' -> the file in the pack's assets/voices, or None."""
+    name = (name or "").replace("\\", "/")
+    if not name.startswith("voices/"):
+        return None
+    path = os.path.join(VOICES, name[len("voices/"):])
+    return path if os.path.isfile(path) and _inside(path, [VOICES]) else None
+
+
 def _list_audio():
     files = []
     try:
@@ -43,6 +55,7 @@ def _list_audio():
             files.extend(folder_paths.get_filename_list("audio") or [])
     except Exception:
         pass
+    files.extend("voices/" + f for f in _scan_dir(VOICES))  # test voices that come with the pack
     try:  # what LC Save Audio made (output/audio), with its transcript next to it
         out = folder_paths.get_output_directory()
         files.extend(f"audio/{f} [output]" for f in _scan_dir(os.path.join(out, "audio")))
@@ -75,6 +88,8 @@ def _resolve(name: str) -> str:
     name = (name or "").strip().replace("\\", "/")
     if not name:
         raise ValueError("LC Load Audio: pick a file.")
+    if _voice_path(name):
+        return _voice_path(name)
     bases = []
     for fn in (
         folder_paths.get_input_directory,
@@ -181,7 +196,7 @@ class LCLoadAudio:
                 "audio": (
                     _list_audio(),
                     {
-                        "tooltip": "File in Comfy input/, plus what LC Save Audio made (output/audio, marked [output]: its transcript comes along). Use the Load audio button to upload. Combo lists audio and common video containers.",
+                        "tooltip": "File in Comfy input/, plus what LC Save Audio made (output/audio, marked [output]: its transcript comes along), and the pack's test voices (voices/...). Use the Load audio button to upload. Combo lists audio and common video containers.",
                     },
                 ),
             },
@@ -275,8 +290,15 @@ def _register_list_route():
     async def _audio_files(_request):
         return web.json_response({"files": _list_audio()})
 
+    async def _voice_file(request):  # preview of a pack test voice (only files inside assets/voices)
+        path = _voice_path("voices/" + request.query.get("name", ""))
+        if not path:
+            return web.Response(status=404)
+        return web.FileResponse(path)
+
     try:
         inst.routes.get("/lc_av/audio_files")(_audio_files)
+        inst.routes.get("/lc_av/voice_file")(_voice_file)
     except Exception as e:
         print(f"[LC AV] audio list route: {e}")
 

@@ -1,1 +1,1 @@
-from ...ext.synchformer.synchformer import Synchformer
+from .synchformer import Synchformer

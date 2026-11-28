@@ -6,9 +6,9 @@ from torchvision.transforms import Normalize
 
 from ...clip.tokenizer import SimpleTokenizer
 
-# LC_AV changes: open_clip.get_tokenizer -> the vendored SimpleTokenizer (same BPE vocab, context 77);
-# MelConverter (librosa mel filters) and encode_audio dropped (generation never encodes audio);
-# the BigVGAN v1 import (16k mode, omegaconf) and compile() dropped.
+# LC_AV: the models come in ready-made (lc_foley.py builds them from local safetensors files) instead of checkpoint
+# paths and the open_clip hub download; the tokenizer is the vendored clip/tokenizer.py; the mel converter,
+# encode_audio() and compile() are left out (generation never encodes audio).
 
 
 def patch_clip(clip_model):
@@ -33,28 +33,28 @@ class FeaturesUtils(nn.Module):
     def __init__(
         self,
         *,
-        vae: None,
-        synchformer: None,
-        clip_model: None,
+        tod: nn.Module,
+        synchformer: nn.Module,
+        clip_model: nn.Module,
         enable_conditions: bool = True,
     ):
         super().__init__()
 
         if enable_conditions:
-            self.clip_model = clip_model
+            self.clip_model = clip_model  # LC_AV: clip/model.py with the DFN5B-CLIP-ViT-H-14-384 weights
             self.clip_preprocess = Normalize(mean=[0.48145466, 0.4578275, 0.40821073],
                                              std=[0.26862954, 0.26130258, 0.27577711])
             self.clip_model = patch_clip(self.clip_model)
 
             self.synchformer = synchformer
 
-            self.tokenizer = SimpleTokenizer(context_length=77)  # 'ViT-H-14-378-quickgelu' uses the plain CLIP BPE
+            self.tokenizer = SimpleTokenizer(context_length=77)  # LC_AV: open_clip's 'ViT-H-14-378-quickgelu' tokenizer
         else:
             self.clip_model = None
             self.synchformer = None
             self.tokenizer = None
 
-        self.tod = vae
+        self.tod = tod
 
     def train(self, mode: bool) -> None:
         return super().train(False)
@@ -73,13 +73,14 @@ class FeaturesUtils(nn.Module):
         for i in range(0, b * t, batch_size):
             outputs.append(self.clip_model.encode_image(x[i:i + batch_size], normalize=True))
         x = torch.cat(outputs, dim=0)
+        # x = self.clip_model.encode_image(x, normalize=True)
         x = rearrange(x, '(b t) d -> b t d', b=b)
         return x
 
     @torch.inference_mode()
     def encode_video_with_sync(self, x: torch.Tensor, batch_size: int = -1) -> torch.Tensor:
         assert self.synchformer is not None, 'Synchformer is not loaded'
-        # x: (B, T, C, H, W) H/W: 224
+        # x: (B, T, C, H, W) H/W: 384
 
         b, t, c, h, w = x.shape
         assert c == 3 and h == 224 and w == 224
@@ -96,9 +97,11 @@ class FeaturesUtils(nn.Module):
         outputs = []
         if batch_size < 0:
             batch_size = b
-        for i in range(0, b, batch_size):
+        x = rearrange(x, 'b s t c h w -> (b s) 1 t c h w')
+        for i in range(0, b * num_segments, batch_size):
             outputs.append(self.synchformer(x[i:i + batch_size]))
-        x = torch.cat(outputs, dim=0).flatten(start_dim=1, end_dim=2)
+        x = torch.cat(outputs, dim=0)
+        x = rearrange(x, '(b s) 1 t d -> b (s t) d', b=b)
         return x
 
     @torch.inference_mode()

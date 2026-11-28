@@ -248,7 +248,7 @@
     "description": "Comfy の input/ からオーディオを読み込みます。start_time と end_time でファイルをトリミングします（end_time 0 = ファイル末尾まで）。出力の長さはカットの長さ（秒、FLOAT）です。preview / pause はそのカット部分だけを再生します。最初のプレビュー後に、タイムラインのハンドルをドラッグできます。",
     "inputs": {
       "audio": {
-        "tooltip": "Comfy input/ のファイルと、LC Save Audio が作ったファイル（output/audio、[output] 付き: 書き起こしも一緒に読み込みます）。Load audio ボタンでアップロード。Combo には音声と一般的な動画コンテナが並びます。"
+        "tooltip": "Comfy input/ のファイルと、LC Save Audio が作ったファイル（output/audio、[output] 付き: 書き起こしも一緒に読み込みます）と、パック付属のテスト音声（voices/...）。Load audio ボタンでアップロード。Combo には音声と一般的な動画コンテナが並びます。"
       },
       "start_time": {
         "tooltip": "カットの開始位置(秒)。プレビューと AUDIO 出力は、どちらもここから始まります。ファイルの長さを把握するため、一度プレビューしてから左のタイムラインハンドルをドラッグしてください。"
@@ -1237,6 +1237,31 @@
       },
       "2": {
         "tooltip": "この声の名前：audio と一緒に LC Save Audio につなぐと models/voices に保存されます。"
+      }
+    }
+  },
+  "LCVoiceChanger": {
+    "description": "録音のセリフ、間、感情はそのままに、声だけ別の人に替えます（ChatterBox VC）。",
+    "inputs": {
+      "audio": {
+        "tooltip": "演技: 何を、どう言っているか。声だけ（音楽や効果音は先に LC Audio Split で外します）。"
+      },
+      "voice": {
+        "tooltip": "誰の声にするか: 1人が話しているクリップ。最初の 10 秒だけ使うので、はっきり話している所から始めてください。LC Load Voice の audio も使えます。"
+      },
+      "passes": {
+        "tooltip": "結果をもう一度通し、そのたびにターゲットの声に近づきます。3 回を超えるとにじみ始めます。"
+      },
+      "seed": {
+        "tooltip": "各パスは seed + その番号を使います。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "同じ演技を新しい声で（24 kHz）。"
+      },
+      "1": {
+        "tooltip": "何をしたか。"
       }
     }
   }

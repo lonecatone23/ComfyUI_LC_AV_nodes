@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 from torch.nn.init import trunc_normal_  # LC_AV: was timm.layers (init only; weights load over it)
 
-from ...ext.synchformer import vit_helper
+from . import vit_helper
 
 
 class VisionTransformer(nn.Module):

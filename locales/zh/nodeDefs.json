@@ -248,7 +248,7 @@
     "description": "从 Comfy input/ 加载音频。start_time 和 end_time 用于裁剪文件（end_time 0 = 到文件末尾）。输出 duration 是裁剪后的长度，单位秒（FLOAT）。preview / pause 只播放该裁剪段；首次预览后可拖动时间轴手柄。",
     "inputs": {
       "audio": {
-        "tooltip": "Comfy input/ 中的文件，以及 LC Save Audio 生成的文件（output/audio，标为 [output]：它的文字稿会一起带上）。使用 Load audio 按钮上传。Combo 列出音频和常见视频容器。"
+        "tooltip": "Comfy input/ 中的文件，以及 LC Save Audio 生成的文件（output/audio，标为 [output]：它的文字稿会一起带上），以及随包附带的测试声音（voices/...）。使用 Load audio 按钮上传。Combo 列出音频和常见视频容器。"
       },
       "start_time": {
         "tooltip": "剪辑的起点，单位为秒。预览和 AUDIO 输出都从这里开始。预览一次后再拖动左侧时间线手柄，以便得知文件长度。"
@@ -1237,6 +1237,31 @@
       },
       "2": {
         "tooltip": "这个声音的名称：和 audio 一起接到 LC Save Audio，就能保存到 models/voices。"
+      }
+    }
+  },
+  "LCVoiceChanger": {
+    "description": "保留一段录音的台词、节奏和情绪，把声音换成另一个人（ChatterBox VC）。",
+    "inputs": {
+      "audio": {
+        "tooltip": "表演：说了什么、怎么说。只要人声（先用 LC Audio Split 去掉音乐和音效）。"
+      },
+      "voice": {
+        "tooltip": "要变成谁的声音：一个人在说话。只用前 10 秒，所以片段要从清楚的说话开始。可以接 LC Load Voice 的 audio。"
+      },
+      "passes": {
+        "tooltip": "把结果再跑一遍，每次都更接近目标声音。超过 3 次会开始发糊。"
+      },
+      "seed": {
+        "tooltip": "每一遍使用 seed + 它的序号。"
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "同样的表演，换成新的声音（24 kHz）。"
+      },
+      "1": {
+        "tooltip": "做了什么。"
       }
     }
   }

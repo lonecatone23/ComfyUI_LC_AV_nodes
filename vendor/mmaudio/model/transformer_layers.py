@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 from einops.layers.torch import Rearrange
-from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from ..ext.rotary_embeddings import apply_rope
 from .low_level import MLP, ChannelLastConv1d, ConvMLP
@@ -65,7 +64,7 @@ class SelfAttention(nn.Module):
             self,
             x: torch.Tensor,  # batch_size * n_tokens * n_channels
     ) -> torch.Tensor:
-        q, v, k = self.pre_attention(x)
+        q, k, v = self.pre_attention(x)
         out = attention(q, k, v)
         return out
 

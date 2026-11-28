@@ -59,7 +59,7 @@ Optional example graph: `workflows/LC_AV Node Examples.json`
 | LC Audio Separate 🎼 | `LCAudioSeparate` | Demucs stems: Bass, Drums, Other, Vocals. |
 | LC Audio EQ 3-Band 🎛️ | `LCAudioEqualizer3Band` | Low shelf, mid peak, high shelf. |
 | LC Audio Volume 🔊 | `LCAudioVolume` | Gain 0–4, soft clip. |
-| LC Foley 🔊 | `LCFoley` | Sound effects in sync with a video (frames + fps), or from a prompt alone. MMAudio, 44.1 kHz. Model files (about 5.6 GB) download to `models/mmaudio` on first use; the same files kijai's ComfyUI-MMAudio uses. Nothing to pip install. About 6 GB VRAM; under about 7.5 GB free it loads one model at a time (about 3 GB, same result). With **free_after_pass** on in LC Dual Model Optimizer (LC123), it lets go of MMAudio after the sound to save RAM. |
+| LC Foley 🔊 | `LCFoley` | Sound effects in sync with a video (frames + fps), or from a prompt alone. MMAudio, 44.1 kHz. Model files (about 5.6 GB) download to `models/mmaudio` on first use (fp16 safetensors from the Kijai/MMAudio_safetensors Hugging Face repo, so files already there are reused). Nothing to pip install. About 6 GB VRAM; under about 7.5 GB free it loads one model at a time (about 3 GB, same result). With **free_after_pass** on in LC Dual Model Optimizer (LC123), it lets go of MMAudio after the sound to save RAM. |
 
 ---
 
@@ -131,7 +131,7 @@ Shows a progress bar per tile (also on the MiniMax Video VAE, which tiles itself
 
 **preview / pause** plays only that cut. Drag the two handles on the timeline (after one preview so file length is known).
 
-What LC Save Audio made shows in the list too, marked `[output]`. **transcript** brings back the .txt / .srt saved next to the clip, only the lines inside the cut. Empty when there is none (run LC Transcribe instead).
+What LC Save Audio made shows in the list too, marked `[output]`. So do the pack's test voices (`voices/...`). **transcript** brings back the .txt / .srt saved next to the clip, only the lines inside the cut. Empty when there is none (run LC Transcribe instead).
 
 ---
 
@@ -181,6 +181,12 @@ ComfyUI/
 **LC Dialogue 🗣️**
 - IndexTTS-2 speaks the script: a voice and an emotion mix per line, and the feeling can change mid-line.
 - Edit one line and only that line renders again. 💡 Keep the seed on **fixed** or every line renders again.
+
+**LC Voice Changer 🔁 (BETA)**
+- Keeps the words, timing and feeling of a recording and swaps the voice (ChatterBox VC). Act a line yourself, then give it a designed voice.
+- **voice**: only its first 10 s are used, so start the clip on clear speech.
+- **passes**: each one runs the result through again, closer to the target. Past 3 it starts to smear.
+- The model (about 1 GB) downloads to `models/TTS/chatterbox/English` on first use; a copy from TTS-Audio-Suite is reused.
 
 **LC Voice Match 🔍** / **LC Voice Clean 🧽**
 - Match: how alike two voices are (1.0 = the same voice). Clean: noise reduction, de-esser and gate.
@@ -306,7 +312,7 @@ Minute-long MiniMax H3 videos made in short pieces, one shot at a time, on the s
 - **scene_cut** holds hard cuts instead of morphing across them (a morph across a cut is a smeared ghost frame). 0 = off.
 - Wire the clip's **audio** and the output is exactly as long as the sound, so picture and audio end together.
 - **model**: rife426.pth (best on AI video in our tests, downloads once, 21 MB) or **crossfade** (no model, fast, soft on motion). Uses `models/rife/` or ComfyUI-Frame-Interpolation's checkpoints if you have them.
-- RIFE code from ComfyUI-Frame-Interpolation (Fannovel16) and Practical-RIFE (hzwer), both MIT.
+- RIFE by hzwer (Practical-RIFE, MIT); the model code is HolyWu's vs-rife (MIT). See `vendor/rife/UPSTREAM.txt`.
 
 💡 **Vision Assistant → Movie** (LC Vision) shows all of it in plain words, with one-click redo and Make all remaining.
 
@@ -328,7 +334,10 @@ Third-party code inside this pack keeps its own license:
 
 - **`vendor/dbs_split`:** Dynamic Band Splitting (Apache-2.0). See `vendor/dbs_split/UPSTREAM.md`.
 - **`vendor/snac`:** SNAC audio decoder (MIT). See `vendor/snac/UPSTREAM.md`.
-- **`vendor/mmaudio`:** MMAudio inference code (MIT, Sony Research), with BigVGAN v2 (MIT, NVIDIA), Synchformer (MIT) and the CLIP parts of OpenCLIP (MIT), taken from kijai's ComfyUI-MMAudio (MIT). See `vendor/mmaudio/UPSTREAM.md`.
+- **`vendor/indextts`:** IndexTTS-2 inference code (bilibili Model Use License Agreement, bilibili), taken from TTS-Audio-Suite by Shmuel Ronen (MIT). See `vendor/indextts/UPSTREAM.md`.
+- **`vendor/chatterbox_vc`:** ChatterBox VC (MIT, Resemble AI) with the S3 tokenizer (Apache-2.0, Xingchen Song), taken from TTS-Audio-Suite by Shmuel Ronen (MIT). See `vendor/chatterbox_vc/UPSTREAM.md`.
+- **`vendor/mmaudio`:** MMAudio inference code (MIT, Sony Research), with BigVGAN v2 (MIT, NVIDIA), Synchformer (MIT, Vladimir Iashin) and the CLIP parts of OpenCLIP (MIT), taken from the original repositories. See `vendor/mmaudio/UPSTREAM.md`.
+- **`vendor/rife`:** RIFE model code (IFNet 4.7, 4.17, 4.26) from vs-rife (MIT, HolyWu), for hzwer's Practical-RIFE models (MIT). See `vendor/rife/UPSTREAM.txt`.
 - **`lc_dsp.py`:** beat, onset, pitch and time-stretch code ported from librosa 0.11 (ISC). Credits are in the file header.
 
-Models download on first use and keep their own licenses: Maya1 (Apache-2.0), SNAC 24 kHz (MIT), Whisper (MIT). LC Foley's MMAudio weights are **CC BY-NC 4.0 (non-commercial)**; its CLIP (Apple DFN5B) has Apple's own license and the BigVGAN v2 vocoder is MIT. They are never bundled with this pack.
+Models download on first use and keep their own licenses: Maya1 (Apache-2.0), SNAC 24 kHz (MIT), Whisper (MIT), ChatterBox (MIT), IndexTTS-2 (bilibili Model Use License Agreement). LC Foley's MMAudio weights are **CC BY-NC 4.0 (non-commercial)**; its CLIP (Apple DFN5B) has Apple's own license and the BigVGAN v2 vocoder is MIT. They are never bundled with this pack.

@@ -8,8 +8,9 @@ Smooth motion: makes in-between frames with RIFE so a 24 fps clip plays at 48, 6
 - Audio match: wire the clip's audio and the output is exactly as long as the sound, so picture and audio end together.
 - Model: RIFE 4.26 by default (the RIFE author's pick for AI video). crossfade needs no model, a quick fallback.
 
-RIFE architecture vendored from ComfyUI-Frame-Interpolation (Fannovel16, MIT), based on Practical-RIFE (hzwer, MIT).
-Weights load from models/rife/ or that pack's ckpts/rife/; a missing rife426.pth downloads once (21 MB).
+RIFE (Zhewei Huang / hzwer, Practical-RIFE, MIT): the IFNet files are vendored unchanged from HolyWu's vs-rife (MIT),
+see vendor/rife/UPSTREAM.txt. Weights (hzwer's RIFE checkpoints) load from models/rife/ or the ckpts/rife/ folder of
+ComfyUI-Frame-Interpolation if installed; a missing rife426.pth downloads once (21 MB).
 """
 from __future__ import annotations
 
@@ -24,9 +25,10 @@ import comfy.model_management as mm
 import comfy.utils
 import folder_paths
 
-VERSIONS = {"rife426.pth": "4.26", "rife417.pth": "4.17", "rife49.pth": "4.7", "rife47.pth": "4.7"}
+VERSIONS = {"rife426.pth": "4.26", "rife417.pth": "4.17", "rife49.pth": "4.7", "rife47.pth": "4.7"}  # 4.9 = 4.7 arch
 DEFAULT = "rife426.pth"
 CROSSFADE = "crossfade (no model)"
+# hzwer's RIFE checkpoints (flownet.pkl), as renamed .pth files on this GitHub release (a file host, not code)
 URL = "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation/releases/download/models/"
 _cache = {}
 
@@ -60,8 +62,14 @@ def _load(name):
         from .lc_first_download import download
 
         download(URL + name, path, f"RIFE {name}", "21 MB")
-    from .vendor.rife.rife_arch import IFNet
-    net = IFNet(arch_ver=VERSIONS[name])
+    ver = VERSIONS[name]
+    if ver == "4.26":
+        from .vendor.rife.IFNet_HDv3_v4_26 import IFNet
+    elif ver == "4.17":
+        from .vendor.rife.IFNet_HDv3_v4_17 import IFNet
+    else:
+        from .vendor.rife.IFNet_HDv3_v4_7 import IFNet
+    net = IFNet()
     sd = torch.load(path, map_location="cpu", weights_only=True)
     # some checkpoints still carry their training-only parts (the distillation teacher, the time encoder)
     sd = {k.replace("module.", "", 1): v for k, v in sd.items() if not k.startswith(("teacher.", "caltime."))}
@@ -70,6 +78,14 @@ def _load(name):
     _cache.clear()
     _cache[name] = net
     return net
+
+
+def _warp_grid(h, w, device):
+    """The sampling grid and flow scale vs-rife's warp() takes, for a padded h x w frame (float32, as vs-rife)."""
+    div = torch.tensor([(w - 1.0) / 2.0, (h - 1.0) / 2.0], dtype=torch.float, device=device)
+    gx = torch.linspace(-1.0, 1.0, w, dtype=torch.float, device=device).view(1, 1, 1, w).expand(-1, -1, h, -1)
+    gy = torch.linspace(-1.0, 1.0, h, dtype=torch.float, device=device).view(1, 1, h, 1).expand(-1, -1, -1, w)
+    return div, torch.cat([gx, gy], 1)
 
 
 def _thumb(frame):
@@ -180,6 +196,8 @@ class LCFrameInterpolate:
             m = int(scales[0] * 16)
             ph, pw = (m - h % m) % m, (m - w % m) % m
             pad = lambda x: torch.nn.functional.pad(x, (0, pw, 0, ph), mode="replicate") if ph or pw else x  # noqa: E731
+            net.scale_list = scales
+            div, grid = _warp_grid(h + ph, w + pw, dev)
             try:
                 with torch.inference_mode():
                     for s in range(0, len(jobs), batch_size):
@@ -188,7 +206,9 @@ class LCFrameInterpolate:
                         a = pad(torch.stack([images[i, ..., :3] for _, i, _ in part]).permute(0, 3, 1, 2).to(dev, dtype))
                         b = pad(torch.stack([images[i + 1, ..., :3] for _, i, _ in part]).permute(0, 3, 1, 2).to(dev, dtype))
                         ts = torch.tensor([t for _, _, t in part], device=dev, dtype=dtype).view(-1, 1, 1, 1)
-                        mid = net(a, b, ts, scales, training=False, fastmode=True, ensemble=False)[:, :, :h, :w]
+                        ts = ts.expand(-1, 1, h + ph, w + pw)
+                        a, b = a.clamp(0.0, 1.0), b.clamp(0.0, 1.0)
+                        mid = net(a, b, ts, div, grid, net.encode(a), net.encode(b))[:, :, :h, :w]
                         mid = mid.clamp(0, 1).permute(0, 2, 3, 1).to("cpu", out.dtype)
                         for j, (k, _, _) in enumerate(part):
                             out[k] = mid[j]

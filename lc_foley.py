@@ -3,8 +3,9 @@ LC Foley
 --------
 Sound effects for a video, in sync with what happens on screen, or from a text prompt alone. MMAudio (Ho Kei Cheng
 et al., Sony, CVPR 2025) through the inference code vendored in vendor/mmaudio: nothing to pip install and no other
-node pack needed. Uses the same model files as kijai's ComfyUI-MMAudio (models/mmaudio), so existing downloads are
-reused; on a fresh install they download on first use (about 5.6 GB in all).
+node pack needed. The model files live in models/mmaudio (the fp16 safetensors files from the Kijai/MMAudio_safetensors
+Hugging Face repo, and NVIDIA's BigVGAN v2 vocoder), so existing downloads are reused; on a fresh install they download
+on first use (about 5.6 GB in all).
 
 The MMAudio weights are CC BY-NC 4.0 (non-commercial). They are never bundled with this pack, only downloaded.
 """
@@ -45,7 +46,7 @@ def _dirs():
 
     out = []
     try:
-        out += folder_paths.get_folder_paths("mmaudio")  # kijai's pack registers this name
+        out += folder_paths.get_folder_paths("mmaudio")  # set when another MMAudio node pack registers the folder
     except Exception:
         pass
     base = os.path.join(folder_paths.models_dir, "mmaudio")
@@ -174,7 +175,6 @@ def _load_net(model_name, dtype):
 def _load_features(device, dtype):
     from .vendor.mmaudio.clip.model import CLIP
     from .vendor.mmaudio.ext.autoencoder import AutoEncoderModule
-    from .vendor.mmaudio.ext.bigvgan_v2.bigvgan import BigVGAN
     from .vendor.mmaudio.ext.synchformer import Synchformer
     from .vendor.mmaudio.model.utils.features_utils import FeaturesUtils
 
@@ -183,8 +183,7 @@ def _load_features(device, dtype):
         sync = Synchformer().eval()
     _set_params(sync, sd, device, dtype)
 
-    vocoder = BigVGAN.from_folder(_fetch_bigvgan()).eval().to(device=device, dtype=dtype)
-    vae = AutoEncoderModule(vae_state_dict=_load_file(_fetch(_VAE)), bigvgan_vocoder=vocoder, mode="44k")
+    vae = AutoEncoderModule(vae_state_dict=_load_file(_fetch(_VAE)), vocoder_folder=_fetch_bigvgan(), mode="44k")
     vae = vae.eval().to(device=device, dtype=dtype)
 
     sd = _load_file(_fetch(_CLIP))
@@ -193,7 +192,7 @@ def _load_features(device, dtype):
     _set_params(clip, sd, device, dtype)
     clip.to(device=device, dtype=dtype)
     del sd
-    return FeaturesUtils(vae=vae, synchformer=sync, enable_conditions=True, clip_model=clip)
+    return FeaturesUtils(tod=vae, synchformer=sync, clip_model=clip, enable_conditions=True)
 
 
 def load(model_name=_DEFAULT_MODEL, device=None, dtype=None):
@@ -218,21 +217,32 @@ def load(model_name=_DEFAULT_MODEL, device=None, dtype=None):
 # ---------------------------------------------------------------- video frames
 
 def _transforms():
+    """MMAudio's own frame transforms (eval_utils.load_video), applied to 8-bit RGB frames as its video reader gives."""
     from torchvision.transforms import v2
 
     import torch
 
     clip_t = v2.Compose([
         v2.Resize((_CLIP_SIZE, _CLIP_SIZE), interpolation=v2.InterpolationMode.BICUBIC),
-        v2.ToPILImage(), v2.ToTensor(), v2.ConvertImageDtype(torch.float32),
+        v2.ToImage(),
+        v2.ToDtype(torch.float32, scale=True),
     ])
     sync_t = v2.Compose([
         v2.Resize(_SYNC_SIZE, interpolation=v2.InterpolationMode.BICUBIC),
         v2.CenterCrop(_SYNC_SIZE),
-        v2.ToPILImage(), v2.ToTensor(), v2.ConvertImageDtype(torch.float32),
+        v2.ToImage(),
+        v2.ToDtype(torch.float32, scale=True),
         v2.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
     ])
     return clip_t, sync_t
+
+
+def _rgb24(frame, device):
+    """IMAGE frame [H, W, C] float 0-1 -> [3, H, W] uint8 on device (what a video decoder hands MMAudio)."""
+    import torch
+
+    x = frame[..., :3].to(device).clamp(0.0, 1.0).mul(255.0).round().to(torch.uint8)
+    return x.permute(2, 0, 1)
 
 
 def _pick(n_frames, fps, target_fps, count):
@@ -240,37 +250,27 @@ def _pick(n_frames, fps, target_fps, count):
     return [min(n_frames - 1, int(math.floor(k * fps / target_fps + 0.5))) for k in range(count)]
 
 
-def video_frames(images, fps, duration, frame_rate_aware=True, device=None):
+def video_frames(images, fps, duration, device=None):
     """IMAGE [N, H, W, 3] -> (clip frames [1, T8, 3, 384, 384], sync frames [1, T25, 3, 224, 224], duration).
 
-    frame_rate_aware=True samples the video at 8 and 25 frames per second using its real fps, the way MMAudio's
-    own demo reads a video file. False takes the first frames as they are, the way kijai's MMAudio Sampler does
-    (it has no fps input), which only lines up for 25 fps video; kept for the parity test."""
+    Samples the video at 8 and 25 frames per second using its real fps, the way MMAudio's own demo reads a video file."""
     import torch
 
     clip_t, sync_t = _transforms()
     n = images.shape[0]
-    if frame_rate_aware:
-        duration = min(duration, n / fps)
-        clip_idx = _pick(n, fps, _CLIP_FPS, int(_CLIP_FPS * duration))
-        sync_idx = _pick(n, fps, _SYNC_FPS, int(_SYNC_FPS * duration))
-    else:
-        if n < int(_CLIP_FPS * duration):
-            duration = n / _CLIP_FPS
-        if n < int(_SYNC_FPS * duration):
-            duration = n / _SYNC_FPS
-        clip_idx = list(range(int(_CLIP_FPS * duration)))
-        sync_idx = list(range(int(_SYNC_FPS * duration)))
+    duration = min(duration, n / fps)
+    clip_idx = _pick(n, fps, _CLIP_FPS, int(_CLIP_FPS * duration))
+    sync_idx = _pick(n, fps, _SYNC_FPS, int(_SYNC_FPS * duration))
     # one frame on the GPU at a time (a whole 1344 x 768 clip at full size is 1.5 GB)
-    clip = torch.stack([clip_t(images[i].to(device).permute(2, 0, 1)) for i in clip_idx])
-    sync = torch.stack([sync_t(images[i].to(device).permute(2, 0, 1)) for i in sync_idx])
+    clip = torch.stack([clip_t(_rgb24(images[i], device)) for i in clip_idx])
+    sync = torch.stack([sync_t(_rgb24(images[i], device)) for i in sync_idx])
     return clip.unsqueeze(0), sync.unsqueeze(0), duration
 
 
 # ---------------------------------------------------------------- generation
 
 def render(prompt, negative_prompt="", images=None, fps=24.0, duration=0.0, steps=25, cfg=4.5, seed=0,
-           model_name=_DEFAULT_MODEL, frame_rate_aware=True, callback=None, offload=True, fast_convs=True,
+           model_name=_DEFAULT_MODEL, callback=None, offload=True, fast_convs=True,
            force_low_vram=None):
     """-> (waveform float32 tensor [1, 1, T] at 44.1 kHz, duration, info dict).
 
@@ -294,8 +294,8 @@ def render(prompt, negative_prompt="", images=None, fps=24.0, duration=0.0, step
     clip_frames = sync_frames = None
     if images is not None:
         if duration <= 0:
-            duration = images.shape[0] / (fps if frame_rate_aware else _SYNC_FPS)
-        clip_frames, sync_frames, duration = video_frames(images, fps, duration, frame_rate_aware, device)
+            duration = images.shape[0] / fps
+        clip_frames, sync_frames, duration = video_frames(images, fps, duration, device)
     if duration <= 0:
         raise ValueError("LC Foley: set a duration (seconds) when no video frames are connected.")
     if sync_frames is not None and sync_frames.shape[1] < 16:
@@ -383,10 +383,10 @@ def _low_vram_steps(clip_video, sync_video, prompt, negative_prompt, fu, net, fm
 
     swap([fu.clip_model, fu.synchformer], [net, fu.tod])
     clip_f = sync_f = None
-    if clip_video is not None:
-        clip_f = fu.encode_video_with_clip(clip_video.to(device, dtype), batch_size=1)
+    if clip_video is not None:  # batch sizes as generate(): 1 x its default multiplier of 40
+        clip_f = fu.encode_video_with_clip(clip_video.to(device, dtype), batch_size=40)
     if sync_video is not None:
-        sync_f = fu.encode_video_with_sync(sync_video.to(device, dtype), batch_size=1)
+        sync_f = fu.encode_video_with_sync(sync_video.to(device, dtype), batch_size=40)
     text_f = fu.encode_text([prompt])
     neg_f = fu.encode_text([negative_prompt])
 

@@ -1,6 +1,25 @@
-rife_arch.py is copied unchanged from
-ComfyUI-Frame-Interpolation by Fannovel16, MIT License (see LICENSE):
-https://github.com/Fannovel16/ComfyUI-Frame-Interpolation  (vfi_models/rife/rife_arch.py)
-which is based on Practical-RIFE by hzwer (MIT): https://github.com/hzwer/Practical-RIFE
-and vs-rife by HolyWu (MIT): https://github.com/HolyWu/vs-rife
-Weights (rife426.pth etc.) are hzwer's RIFE checkpoints, MIT.
+RIFE model code (inference only), used by LC Frame Interpolate (lc_frame_interpolate.py).
+
+Model: RIFE / Practical-RIFE by Zhewei Huang (hzwer), MIT License (LICENSE.Practical-RIFE, Copyright (c) 2021 hzwer):
+  https://github.com/hzwer/Practical-RIFE  (checked at bbfd2ea90910789a860ea3e2b32a240cd577b75e, 2026-08-27)
+  hzwer ships each version's IFNet code with its weights (train_log/IFNet_HDv3.py + flownet.pkl, a download from the
+  README), not in the git tree.
+
+Code: vs-rife by HolyWu, MIT License (LICENSE, Copyright (c) 2021 HolyWu), the git-hosted copy of those IFNet files:
+  https://github.com/HolyWu/vs-rife  revision 3488617283db7c428a83ba4a19382285da698b6a (2026-05-10)
+  Copied unchanged, byte for byte:
+    IFNet_HDv3_v4_26.py    <- vsrife/IFNet_HDv3_v4_26.py   (rife426.pth)
+    IFNet_HDv3_v4_17.py    <- vsrife/IFNet_HDv3_v4_17.py   (rife417.pth)
+    IFNet_HDv3_v4_7.py     <- vsrife/IFNet_HDv3_v4_7.py    (rife47.pth; rife49.pth too: vs-rife's 4.9 file is identical)
+    warplayer.py           <- vsrife/warplayer.py
+    LICENSE                <- LICENSE (vs-rife)
+    LICENSE.Practical-RIFE <- LICENSE (Practical-RIFE)
+
+LC AV code (lc_frame_interpolate.py, not in this folder): loads the checkpoint (strips "module.", drops the training-only
+"teacher." / "caltime." keys), pads each frame to a multiple of 16 x the first flow scale (replicate), builds the warp
+grid and flow divisor vs-rife's warp() takes (_warp_grid), sets scale_list (halved scales above 2048 px), computes the
+encoder features (net.encode) and calls IFNet.forward with a per-frame timestep, so any target fps works.
+
+Weights: hzwer's RIFE checkpoints (flownet.pkl), MIT. rife426.pth downloads on first use from the GitHub release
+https://github.com/Fannovel16/ComfyUI-Frame-Interpolation/releases/download/models/ (a file host for the renamed
+checkpoints; no code from it is used). Existing copies are also found in ComfyUI-Frame-Interpolation's ckpts/rife/.

@@ -248,7 +248,7 @@
     "description": "Comfy input/에서 오디오를 로드합니다. start_time과 end_time으로 파일을 자릅니다(end_time 0 = 파일 끝). 출력 길이는 잘린 구간의 길이(초, FLOAT)입니다. preview / pause는 잘린 구간만 재생하며, 첫 미리보기 후에 타임라인 핸들을 드래그할 수 있습니다.",
     "inputs": {
       "audio": {
-        "tooltip": "Comfy input/의 파일과 LC Save Audio가 만든 파일(output/audio, [output] 표시: 대본도 함께 불러옵니다). Load audio 버튼으로 업로드합니다. Combo에는 오디오와 일반 동영상 컨테이너가 나옵니다."
+        "tooltip": "Comfy input/의 파일과 LC Save Audio가 만든 파일(output/audio, [output] 표시: 대본도 함께 불러옵니다)과 팩에 들어 있는 테스트 목소리(voices/...). Load audio 버튼으로 업로드합니다. Combo에는 오디오와 일반 동영상 컨테이너가 나옵니다."
       },
       "start_time": {
         "tooltip": "컷의 시작(초). 미리보기와 AUDIO 출력 모두 여기서 시작합니다. 파일 길이를 알 수 있도록 미리보기를 한 번 한 뒤 왼쪽 타임라인 핸들을 드래그하세요."
@@ -1237,6 +1237,31 @@
       },
       "2": {
         "tooltip": "이 목소리의 이름: audio와 함께 LC Save Audio에 연결하면 models/voices에 저장됩니다."
+      }
+    }
+  },
+  "LCVoiceChanger": {
+    "description": "녹음의 대사, 타이밍, 감정은 그대로 두고 목소리만 다른 사람으로 바꿉니다(ChatterBox VC).",
+    "inputs": {
+      "audio": {
+        "tooltip": "연기: 무엇을, 어떻게 말하는지. 목소리만(음악과 효과음은 먼저 LC Audio Split으로 뺍니다)."
+      },
+      "voice": {
+        "tooltip": "누구 목소리로 할지: 한 사람이 말하는 클립. 처음 10초만 쓰므로 또렷하게 말하는 부분부터 시작하세요. LC Load Voice의 audio도 됩니다."
+      },
+      "passes": {
+        "tooltip": "결과를 한 번 더 통과시켜 매번 목표 목소리에 더 가까워집니다. 3번을 넘으면 뭉개지기 시작합니다."
+      },
+      "seed": {
+        "tooltip": "각 패스는 seed + 그 번호를 씁니다."
+      }
+    },
+    "outputs": {
+      "0": {
+        "tooltip": "같은 연기를 새 목소리로(24 kHz)."
+      },
+      "1": {
+        "tooltip": "무엇을 했는지."
       }
     }
   }

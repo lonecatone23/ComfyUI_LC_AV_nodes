@@ -4,8 +4,8 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from ...ext.autoencoder.edm2_utils import MPConv1D
-from ...ext.autoencoder.vae_modules import (AttnBlock1D, Downsample1D, ResnetBlock1D,
+from .edm2_utils import MPConv1D
+from .vae_modules import (AttnBlock1D, Downsample1D, ResnetBlock1D,
                                                  Upsample1D, nonlinearity)
 from ...model.utils.distributions import DiagonalGaussianDistribution
 
@@ -75,11 +75,11 @@ class VAE(nn.Module):
         super().__init__()
 
         if data_dim == 80:
-            self.data_mean = nn.Buffer(torch.tensor(DATA_MEAN_80D, dtype=torch.float32))  # LC_AV: no .cuda() (CPU-safe; moved with the module)
-            self.data_std = nn.Buffer(torch.tensor(DATA_STD_80D, dtype=torch.float32))  # LC_AV: no .cuda() (CPU-safe; moved with the module)
+            self.data_mean = nn.Buffer(torch.tensor(DATA_MEAN_80D, dtype=torch.float32))
+            self.data_std = nn.Buffer(torch.tensor(DATA_STD_80D, dtype=torch.float32))
         elif data_dim == 128:
-            self.data_mean = nn.Buffer(torch.tensor(DATA_MEAN_128D, dtype=torch.float32))  # LC_AV: no .cuda() (CPU-safe; moved with the module)
-            self.data_std = nn.Buffer(torch.tensor(DATA_STD_128D, dtype=torch.float32))  # LC_AV: no .cuda() (CPU-safe; moved with the module)
+            self.data_mean = nn.Buffer(torch.tensor(DATA_MEAN_128D, dtype=torch.float32))
+            self.data_std = nn.Buffer(torch.tensor(DATA_STD_128D, dtype=torch.float32))
 
         self.data_mean = self.data_mean.view(1, -1, 1)
         self.data_std = self.data_std.view(1, -1, 1)
